@@ -592,10 +592,13 @@ fn chrono_free_stamp() -> String {
 }
 
 fn main() -> eframe::Result<()> {
+    let icon = eframe::icon_data::from_png_bytes(include_bytes!("../assets/icon-256.png"))
+        .expect("embedded icon must decode");
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title("waX VPN")
             .with_app_id("wax-vpn")
+            .with_icon(icon)
             .with_inner_size([430.0, 760.0])
             .with_min_inner_size([400.0, 700.0])
             .with_resizable(true),

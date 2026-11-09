@@ -67,6 +67,9 @@ jobs:
           Copy-Item "target\release\wax.exe" "installer\payload\wax.exe"
           Copy-Item "vendor\wireguard-nt\wireguard-nt\bin\amd64\wireguard.dll" "installer\payload\wireguard.dll"
           Copy-Item "LICENSE" "installer\payload\LICENSE.txt"
+          Copy-Item "assets\icon.ico" "installer\payload\wax.ico"
+          Copy-Item "assets\installer-wizard.bmp" "installer\payload\installer-wizard.bmp"
+          Copy-Item "assets\installer-header.bmp" "installer\payload\installer-header.bmp"
           Copy-Item "README.md" "installer\payload\README.txt"
           $wgLicense = Get-ChildItem -Recurse vendor\wireguard-nt -Filter "LICENSE*" | Select-Object -First 1
           if ($wgLicense) { Copy-Item $wgLicense.FullName "installer\payload\LICENSE-wireguard-nt.txt" } else { "WireGuardNT prebuilt binaries: see https://git.zx2c4.com/wireguard-nt/about/ (permissive license inside official zip)" | Out-File -Encoding utf8 "installer\payload\LICENSE-wireguard-nt.txt" }

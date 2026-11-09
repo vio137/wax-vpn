@@ -13,6 +13,11 @@ InstallDirRegKey HKLM "Software\waX VPN" "InstallDir"
 RequestExecutionLevel admin
 
 !define MUI_ABORTWARNING
+!define MUI_ICON "payload\wax.ico"
+!define MUI_UNICON "payload\wax.ico"
+!define MUI_WELCOMEFINISHPAGE_BITMAP "payload\installer-wizard.bmp"
+!define MUI_HEADERIMAGE
+!define MUI_HEADERIMAGE_BITMAP "payload\installer-header.bmp"
 !define MUI_FINISHPAGE_RUN "$INSTDIR\waX VPN.exe"
 !define MUI_FINISHPAGE_RUN_TEXT "Launch waX VPN"
 
