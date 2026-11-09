@@ -1442,9 +1442,6 @@ fn rail_button(ui: &mut egui::Ui, tab: Tab, label: &str, active: bool) -> bool {
         egui::FontId::proportional(10.0),
         col,
     );
-    resp.clone().widget_info(move || {
-        egui::WidgetInfo::labeled(egui::accesskit::Role::Button, true, format!("{label} tab"))
-    });
     resp.clone().on_hover_text(label);
     if resp.hovered() {
         ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
