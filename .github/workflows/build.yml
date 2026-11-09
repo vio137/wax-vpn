@@ -519,6 +519,7 @@ jobs:
               $conAfter = [WaxCon]::CountConsoles()
               $conMax = Receive-Job $watcher -Wait -AutoRemoveJob
               if (($conMax -le $conBefore) -and ($conAfter -le $conBefore)) { Note "PASS no console windows observed during GUI connect (polled every ~100ms; windows shorter than the interval could be missed; baseline=$conBefore peak=$conMax end=$conAfter)" } else { Note "FAIL console window observed during GUI connect (baseline=$conBefore peak=$conMax end=$conAfter)" }
+              $mainHwnd = [IntPtr]$win.Current.NativeWindowHandle
               try {
                 $win.GetCurrentPattern([System.Windows.Automation.WindowPattern]::Pattern).Close()
               } catch { Note "WARN window Close pattern failed: $($_.Exception.Message)" }
@@ -532,16 +533,22 @@ jobs:
               # Single instance: a second launch must signal the running instance
               # (window hidden by close-to-tray must reappear), then exit itself.
               $p2 = Start-Process -FilePath "$PWD\bin\wax-vpn.exe" -PassThru
-              # Check visibility by PID: a second same-titled helper window (never
-              # visible) makes FindWindowW-by-title read the wrong window.
+              # Prove the restored window is the actual main UI: find the UIA
+              # window by title and require it on-screen with rail content.
+              # (A second same-titled helper window never becomes visible, and a
+              # bare PID visibility check could pass on a helper.)
               $siVisible = $false
               for ($i = 0; $i -lt 12 -and -not $siVisible; $i++) {
                 Start-Sleep -Seconds 1
-                $siVisible = [WaxCon]::AnyWindowVisibleOfPid($pg.Id)
+                $w2 = [System.Windows.Automation.AutomationElement]::FromHandle($mainHwnd)
+                if ($w2) {
+                  $rail = $w2.FindFirst([System.Windows.Automation.TreeScope]::Descendants, (New-Object System.Windows.Automation.AndCondition((New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, 'Connect')), (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Button)))))
+                  $siVisible = ($null -ne $rail) -and ($w2.Current.ProcessId -eq $pg.Id) -and [WaxCon]::IsWindowVisible($mainHwnd) -and (-not $w2.Current.IsOffscreen)
+                }
               }
               $p2.Refresh(); $pg.Refresh()
               if (-not $pg.HasExited -and $p2.HasExited -and $siVisible) {
-                Note 'PASS single instance: second launch handed off, running instance showed its window, second process exited'
+                Note 'PASS single instance: original main HWND visible, owned by original PID, Connect rail present and on-screen; second process exited'
               } else {
                 Note "FAIL single instance: first-alive=$(-not $pg.HasExited) second-exited=$($p2.HasExited) window-visible=$siVisible"
                 $dbg = Get-Content (Join-Path $env:APPDATA 'wax-vpn\wax-debug.log') -ErrorAction SilentlyContinue
