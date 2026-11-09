@@ -34,6 +34,7 @@ fn path() -> std::path::PathBuf {
 }
 
 /// Path of the small diagnostics log for the cross-instance show path.
+#[cfg(windows)]
 pub fn debug_log_path() -> std::path::PathBuf {
     wax_core::profile::config_dir().join("wax-debug.log")
 }

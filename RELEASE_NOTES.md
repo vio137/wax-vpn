@@ -1,25 +1,15 @@
-# waX VPN v0.1.0-preview
+## waX VPN Windows preview
+Windows x64 installer with the pure-Rust egui interface, per-profile IP-range exclusions, single-instance window reopening, and opt-in Cloudflare WARP registration.
 
-First automated preview build from CI.
+### Checked on the Windows CI runner
+- GUI Connect established a demo WireGuard handshake
+- Packets traversed the demo tunnel; DNS applied and restored on disconnect
+- Scoped split-routing check: 8.8.8.8 excluded, 1.1.1.1 retained in tunnel routes
+- Closing the window kept the demo adapter up
+- A second launch restored the original main window with its Connect rail on-screen, then exited itself
+- --quit after reopening exited the app and removed the adapter
 
-## What's in it
-- `waX VPN.exe` - egui GUI with animated connect orb, profile picker,
-  settings (kill switch, LAN allow, autostart, reduced motion), opt-in
-  Cloudflare WARP panel, drag-and-drop .conf import.
-- `wax.exe` - CLI: keygen, profiles, import/show/remove, connect/disconnect,
-  status, WARP register/account/generate/unregister.
-- Official WireGuardNT `wireguard.dll` (kernel driver) bundled from
-  download.wireguard.com.
+These checks passed for preview.46. Later builds carry their own CI results and screenshots; this baseline is not a guarantee for every Windows environment.
 
-## Verified
-- Unit tests (keys, config round-trip) and a clean Windows CI build.
-
-## NOT yet verified on a real machine
-- Live tunnel traffic, kill switch, DNS restore, WARP registration, GUI on a
-  real display. Treat this build as a work-in-progress preview.
-
-## Known limits
-- Connecting needs administrator rights (the app offers a restart-as-admin
-  button when it is not elevated).
-- The kill switch is firewall-rule based (not WFP yet).
-- Unsigned binaries: SmartScreen may warn.
+### Limits
+Unsigned preview: Windows SmartScreen may warn. Connecting requires administrator rights. Tray-menu interaction still needs a real Windows desktop check. Kill-switch blocking and live WARP registration are not traffic-verified. WARP registration requires explicit acceptance in the app. No third-party public-IP lookup is performed.

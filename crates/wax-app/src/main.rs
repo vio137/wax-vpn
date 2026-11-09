@@ -1226,11 +1226,36 @@ impl WaxApp {
                 }
                 ui.add_space(10.0);
                 theme::section_heading(ui, "Split tunneling", "CIDRs excluded from the tunnel for the selected profile. Applies on next connect.");
-                let resp = ui.add(
-                    egui::TextEdit::singleline(&mut self.split_edit)
-                        .hint_text("192.168.0.0/16, fd00::/8")
-                        .desired_width(f32::INFINITY),
-                );
+                let input_id = ui.make_persistent_id("split-exclusions-input");
+                let focused = ui.memory(|m| m.has_focus(input_id));
+                let invalid = wax_core::split::parse_exclusions(&self.split_edit).is_err();
+                let border = if invalid {
+                    theme::alpha(theme::BAD, 140)
+                } else if focused {
+                    theme::alpha(theme::ACCENT, 140)
+                } else {
+                    theme::alpha(theme::SUB, 45)
+                };
+                let resp = egui::Frame::default()
+                    .fill(theme::PANEL)
+                    .stroke(egui::Stroke::new(1.0, border))
+                    .corner_radius(egui::CornerRadius::same(8))
+                    .inner_margin(egui::Margin::symmetric(12, 8))
+                    .show(ui, |ui| {
+                        ui.add(
+                            egui::TextEdit::singleline(&mut self.split_edit)
+                                .id(input_id)
+                                .font(egui::FontId::monospace(12.0))
+                                .text_color(theme::TEXT)
+                                .frame(egui::Frame::NONE)
+                                .hint_text("192.168.0.0/16, fd00::/8")
+                                .desired_width(f32::INFINITY),
+                        )
+                    })
+                    .inner;
+                resp.widget_info(|| {
+                    egui::WidgetInfo::labeled(egui::Role::TextInput, true, "Excluded IP ranges")
+                });
                 if resp.changed() {
                     if let Some(pr) = self.profiles.get(sel) {
                         let name = pr.name.clone();
@@ -1252,7 +1277,10 @@ impl WaxApp {
                                 .color(theme::MUTE),
                         );
                     }
-                    Ok(_) => {}
+                    Ok(_) => {
+                        ui.add_space(4.0);
+                        ui.label(RichText::new("No exclusions for this profile").size(11.0).color(theme::MUTE));
+                    }
                     Err(e) => {
                         ui.label(RichText::new(format!("{e}")).size(11.0).color(theme::BAD));
                     }
