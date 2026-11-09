@@ -82,15 +82,51 @@ fn set_dns(adapter: &str, dns: &[std::net::IpAddr]) -> Result<(), TunnelError> {
     Ok(())
 }
 
+fn run_out(cmd: &str, args: &[&str]) -> Result<String, TunnelError> {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    let output = Command::new(cmd)
+        .args(args)
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .map_err(|e| TunnelError::Command(format!("{cmd}: {e}")))?;
+    if output.status.success() {
+        Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        Err(TunnelError::Command(format!("{cmd} {} failed: {stderr}", args.join(" "))))
+    }
+}
+
 fn reset_dns(adapter: &str) -> Result<(), TunnelError> {
-    // A missing adapter is already clean: Windows reclaimed it and there is
-    // no DNS entry left to reset. netsh fails with a syntax error on a
-    // nonexistent interface name, so check first instead of reporting noise.
-    let probe = powershell(&format!(
-        "if (Get-NetAdapter -Name '{adapter}' -ErrorAction SilentlyContinue) {{ exit 0 }} else {{ exit 1 }}"
-    ));
-    if probe.is_err() {
-        return Ok(());
+    // A confirmed-absent adapter is already clean: Windows reclaimed it and
+    // there is no DNS entry left to reset (netsh errors on a nonexistent
+    // interface name). Only a confirmed absence skips the reset - a failed
+    // or garbled probe is reported, never treated as clean.
+    let probe = run_out(
+        "powershell",
+        &[
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-Command",
+            &format!("if (Get-NetAdapter -Name '{adapter}' -ErrorAction SilentlyContinue) {{ 'PRESENT' }} else {{ 'ABSENT' }}"),
+        ],
+    );
+    match probe {
+        Ok(s) if s.contains("ABSENT") => return Ok(()),
+        Ok(s) if s.contains("PRESENT") => {}
+        Ok(other) => {
+            return Err(TunnelError::Message(format!(
+                "could not determine adapter presence (unexpected probe output: {other})"
+            )))
+        }
+        Err(e) => {
+            return Err(TunnelError::Message(format!(
+                "could not determine adapter presence: {e}"
+            )))
+        }
     }
     let mut problems = Vec::new();
     if let Err(e) = run("netsh", &["interface", "ipv4", "set", "dnsservers", &format!("name={adapter}"), "dhcp"]) {
