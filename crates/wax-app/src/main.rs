@@ -535,6 +535,45 @@ impl eframe::App for WaxApp {
             }
         }
 
+        // Keyboard shortcuts, only when no text field owns the keyboard.
+        if ctx.memory(|m| m.focused().is_none()) {
+            let (space, esc, q, digits) = ctx.input(|i| {
+                (
+                    i.key_pressed(egui::Key::Space),
+                    i.key_pressed(egui::Key::Escape),
+                    i.modifiers.ctrl && i.key_pressed(egui::Key::Q),
+                    [
+                        i.modifiers.ctrl && i.key_pressed(egui::Key::Num1),
+                        i.modifiers.ctrl && i.key_pressed(egui::Key::Num2),
+                        i.modifiers.ctrl && i.key_pressed(egui::Key::Num3),
+                        i.modifiers.ctrl && i.key_pressed(egui::Key::Num4),
+                        i.modifiers.ctrl && i.key_pressed(egui::Key::Num5),
+                    ],
+                )
+            });
+            for (idx, hit) in digits.iter().enumerate() {
+                if *hit {
+                    self.tab = [Tab::Connect, Tab::Profiles, Tab::Features, Tab::Warp, Tab::About][idx];
+                }
+            }
+            if esc && self.picker_open {
+                self.picker_open = false;
+            }
+            if space {
+                match self.state {
+                    ConnState::Disconnected | ConnState::Failed(_) => self.connect_manual(),
+                    ConnState::Connected { .. } => self.disconnect(),
+                    _ => {}
+                }
+            }
+            #[cfg(windows)]
+            if q {
+                self.quit_app();
+            }
+            #[cfg(not(windows))]
+            let _ = q;
+        }
+
         // Drag & drop .conf import
         let dropped = ctx.input(|i| i.raw.dropped_files.clone());
         for file in dropped {
