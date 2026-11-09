@@ -358,11 +358,15 @@ impl WaxApp {
 
     fn handle_events(&mut self, ctx: &egui::Context) {
         #[cfg(windows)]
-        if let Some(inst) = &self.instance {
-            if inst.take_quit() {
+        {
+            let (want_quit, want_show) = match &self.instance {
+                Some(inst) => (inst.take_quit(), inst.take_show()),
+                None => (false, false),
+            };
+            if want_quit {
                 self.quit_app();
             }
-            if inst.take_show() {
+            if want_show {
                 self.hidden = false;
                 ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
                 ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
