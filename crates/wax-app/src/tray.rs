@@ -57,8 +57,8 @@ impl Tray {
     pub fn set_connected(&self, connected: bool) {
         let _ = self.toggle.set_text(if connected { "Disconnect" } else { "Connect" });
     }
-}
 
     pub fn poll(&self) -> Option<MenuEvent> {
         self.events.try_recv().ok()
     }
+}

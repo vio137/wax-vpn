@@ -138,13 +138,26 @@ fn parse_endpoint(endpoint: &str) -> Result<(String, u16), TunnelError> {
 
 impl Tunnel {
     pub fn connect(profile: &Profile, opts: &ConnectOptions) -> Result<Tunnel, TunnelError> {
+        Self::connect_progress(profile, opts, |_| {})
+    }
+
+    /// Like [`Self::connect`], but reports each stage so callers can show
+    /// honest in-progress UI instead of a dead spinner.
+    pub fn connect_progress(
+        profile: &Profile,
+        opts: &ConnectOptions,
+        mut progress: impl FnMut(&'static str),
+    ) -> Result<Tunnel, TunnelError> {
+        progress("Loading WireGuard driver");
         let wireguard = load_driver()?;
+        progress("Preparing the waX adapter");
         let adapter = match Adapter::open(&wireguard, ADAPTER_NAME) {
             Ok(a) => a,
             Err(_) => Adapter::create(&wireguard, ADAPTER_POOL, ADAPTER_NAME, None)
                 .map_err(|e| TunnelError::Driver(format!("create adapter: {e}")))?,
         };
 
+        progress("Resolving the endpoint");
         let cfg = &profile.config;
         let mut peers = Vec::new();
         for peer in &cfg.peers {
@@ -173,18 +186,22 @@ impl Tunnel {
             private_key: Some(cfg.interface.private_key),
             peers,
         };
+        progress("Configuring the tunnel");
         adapter
             .set_config(&set_if)
             .map_err(|e| TunnelError::Driver(format!("set config: {e}")))?;
+        progress("Setting routes");
         adapter
             .set_default_route(&cfg.interface.addresses, &set_if)
             .map_err(|e| TunnelError::Driver(format!("set routes: {e}")))?;
 
         if !cfg.interface.dns.is_empty() {
+            progress("Applying tunnel DNS");
             set_dns(ADAPTER_NAME, &cfg.interface.dns)?;
         }
 
         if opts.kill_switch {
+            progress("Enabling the kill switch");
             if let Some(first) = cfg.peers.first() {
                 if let Some(ep) = &first.endpoint {
                     let (host, port) = parse_endpoint(ep)?;
@@ -200,6 +217,7 @@ impl Tunnel {
             }
         }
 
+        progress("Starting the tunnel");
         adapter.up().map_err(|e| TunnelError::Driver(format!("bring adapter up: {e}")))?;
         log::info!("tunnel up for profile {}", profile.name);
         Ok(Tunnel { adapter, wireguard, opts: opts.clone() })

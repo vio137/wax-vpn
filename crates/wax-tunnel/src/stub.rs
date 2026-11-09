@@ -10,6 +10,13 @@ impl Tunnel {
     pub fn connect(_profile: &Profile, _opts: &ConnectOptions) -> Result<Tunnel, TunnelError> {
         Err(TunnelError::Message("waX VPN tunnel is Windows-only for now".into()))
     }
+    pub fn connect_progress(
+        _profile: &Profile,
+        _opts: &ConnectOptions,
+        _progress: impl FnMut(&'static str),
+    ) -> Result<Tunnel, TunnelError> {
+        Err(TunnelError::Message("waX VPN tunnel is Windows-only for now".into()))
+    }
     pub fn stats(&self) -> TunnelStats {
         TunnelStats::default()
     }

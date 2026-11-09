@@ -254,6 +254,23 @@ jobs:
             if (-not $rulesCrash) { Note 'PASS no firewall rules after crash cleanup' } else { Note 'FAIL firewall rules left after crash' }
           }
 
+          # 6b. Crash leg with kill switch ON: rules are system objects and
+          #     should PERSIST after the owner dies. This proves rule
+          #     persistence only - not that traffic was still blocked.
+          $proc3 = Start-Process -FilePath "$PWD\bin\wax.exe" -ArgumentList 'connect','demo','--kill-switch' -PassThru -WindowStyle Hidden -RedirectStandardOutput connect3-out.txt -RedirectStandardError connect3-err.txt
+          Start-Sleep -Seconds 12
+          if ($proc3.HasExited) { Note 'WARN crash+kill-switch leg connect exited early' } else {
+            $proc3.Kill()
+            Start-Sleep -Seconds 3
+            $rulesDied = Get-NetFirewallRule -DisplayName 'waX VPN KillSwitch*' -ErrorAction SilentlyContinue
+            $nDied = if ($rulesDied) { $rulesDied.Count } else { 0 }
+            if ($nDied -gt 0) { Note "PASS kill-switch rules persist after owner crash ($nDied rules still in place; traffic blocking itself untested)" } else { Note 'FAIL kill switch rules vanished when owner crashed' }
+            .\bin\wax.exe disconnect | Out-Null
+            Start-Sleep -Seconds 2
+            $rulesAfter = Get-NetFirewallRule -DisplayName 'waX VPN KillSwitch*' -ErrorAction SilentlyContinue
+            if (-not $rulesAfter) { Note 'PASS crash+kill-switch cleanup removed all rules' } else { Note 'FAIL crash+kill-switch cleanup left rules' }
+          }
+
           # 7. Kill switch leg: rules exist while connected, removed on disconnect
           $proc3 = Start-Process -FilePath "$PWD\bin\wax.exe" -ArgumentList 'connect','demo','--kill-switch' -PassThru -WindowStyle Hidden
           Start-Sleep -Seconds 12
@@ -289,7 +306,9 @@ jobs:
           for ($i = 0; $i -lt 25 -and $hwnd -eq [IntPtr]::Zero; $i++) {
             Start-Sleep -Seconds 2
             $hwnd = [WaxWin32]::FindWindowW($null, 'waX VPN')
+            if ($hwnd -eq [IntPtr]::Zero) { $p.Refresh(); $hwnd = $p.MainWindowHandle }
           }
+          Write-Host "window handle: $hwnd (process exited: $($p.HasExited))"
           if ($hwnd -ne [IntPtr]::Zero) {
             [WaxWin32]::SetForegroundWindow($hwnd) | Out-Null
             Start-Sleep -Seconds 2
@@ -366,6 +385,34 @@ jobs:
             if (-not $btn) {
               Note 'FAIL Connect button not found through UI Automation'
             } else {
+              # Watch console windows continuously while connecting: a
+              # before/after count alone would miss a transient flash.
+              $watcher = Start-Job -ScriptBlock {
+                Add-Type -TypeDefinition @"
+                using System;
+                using System.Text;
+                using System.Runtime.InteropServices;
+                public class WaxConW {
+                  [DllImport("user32.dll")] public static extern bool EnumWindows(EnumProc cb, IntPtr l);
+                  public delegate bool EnumProc(IntPtr h, IntPtr l);
+                  [DllImport("user32.dll")] public static extern int GetClassNameW(IntPtr h, StringBuilder s, int n);
+                  [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
+                  public static int CountConsoles() {
+                    int c = 0;
+                    EnumWindows((h,l) => { var sb = new StringBuilder(256); GetClassNameW(h, sb, 256); if (sb.ToString() == "ConsoleWindowClass" && IsWindowVisible(h)) c++; return true; }, IntPtr.Zero);
+                    return c;
+                  }
+                }
+                "@
+                $max = 0
+                $sw = [System.Diagnostics.Stopwatch]::StartNew()
+                while ($sw.Elapsed.TotalSeconds -lt 150) {
+                  $c = [WaxConW]::CountConsoles()
+                  if ($c -gt $max) { $max = $c }
+                  Start-Sleep -Milliseconds 100
+                }
+                return $max
+              }
               $btn.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
               $up = $false
               for ($i = 0; $i -lt 24 -and -not $up; $i++) {
@@ -375,7 +422,8 @@ jobs:
               }
               if ($up) { Note 'PASS GUI-driven connect: handshake after clicking Connect in the app' } else { Note 'FAIL GUI-driven connect: no handshake within 120s of clicking Connect' }
               $conAfter = [WaxCon]::CountConsoles()
-              if ($conAfter -le $conBefore) { Note "PASS no console windows appeared during GUI connect (before=$conBefore after=$conAfter)" } else { Note "FAIL console window appeared during GUI connect (before=$conBefore after=$conAfter)" }
+              $conMax = Receive-Job $watcher -Wait -AutoRemoveJob
+              if (($conMax -le $conBefore) -and ($conAfter -le $conBefore)) { Note "PASS no console windows observed during GUI connect (polled every ~100ms; windows shorter than the interval could be missed; baseline=$conBefore peak=$conMax end=$conAfter)" } else { Note "FAIL console window observed during GUI connect (baseline=$conBefore peak=$conMax end=$conAfter)" }
               try {
                 $win.GetCurrentPattern([System.Windows.Automation.WindowPattern]::Pattern).Close()
               } catch { Note "WARN window Close pattern failed: $($_.Exception.Message)" }

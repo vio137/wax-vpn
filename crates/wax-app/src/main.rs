@@ -39,6 +39,7 @@ enum Tab {
 
 
 enum AppEvent {
+    Stage(&'static str),
     Connected,
     ConnectFailed(String),
     Disconnected,
@@ -66,6 +67,7 @@ pub struct WaxApp {
     import_error: Option<String>,
     tab: Tab,
     hidden: bool,
+    connect_stages: Vec<&'static str>,
     #[cfg(windows)]
     tray: Option<tray::Tray>,
 }
@@ -108,6 +110,7 @@ impl WaxApp {
             import_error: None,
             tab: Tab::Connect,
             hidden: false,
+            connect_stages: Vec::new(),
             #[cfg(windows)]
             tray: tray::Tray::new(&cc.egui_ctx),
         };
@@ -174,6 +177,7 @@ impl WaxApp {
         }
         let Some(profile) = self.profiles.get(idx).cloned() else { return };
         self.state = ConnState::Connecting;
+        self.connect_stages.clear();
         self.status_line = format!("Connecting to {}...", profile.name);
         let opts = ConnectOptions {
             kill_switch: self.settings.kill_switch,
@@ -181,7 +185,10 @@ impl WaxApp {
         };
         let tunnel = self.tunnel.clone();
         let tx = self.events_tx.clone();
-        std::thread::spawn(move || match Tunnel::connect(&profile, &opts) {
+        let tx_stage = tx.clone();
+        std::thread::spawn(move || match Tunnel::connect_progress(&profile, &opts, move |stage| {
+            let _ = tx_stage.send(AppEvent::Stage(stage));
+        }) {
             Ok(t) => {
                 *tunnel.lock().unwrap() = Some(t);
                 let _ = tx.send(AppEvent::Connected);
@@ -278,6 +285,10 @@ impl WaxApp {
                     self.stats = TunnelStats::default();
                 }
                 AppEvent::Stats(s) => self.stats = s,
+                AppEvent::Stage(stage) => {
+                    self.connect_stages.push(stage);
+                    self.status_line = format!("{stage}...");
+                }
                 AppEvent::WarpDone(Ok(msg)) => {
                     self.warp_busy = false;
                     self.status_line = msg;
@@ -586,8 +597,8 @@ impl WaxApp {
             let tx = fmt_bytes(self.stats.tx_bytes);
             ui.horizontal(|ui| {
                 theme::stat_tile(ui, "SESSION", &session, theme::TEXT);
-                theme::stat_tile(ui, "RECEIVED", &rx, theme::ACCENT);
-                theme::stat_tile(ui, "SENT", &tx, theme::ACCENT);
+                theme::stat_tile(ui, "Received", &rx, theme::ACCENT);
+                theme::stat_tile(ui, "Sent", &tx, theme::ACCENT);
             });
             ui.with_layout(Layout::top_down(Align::Center), |ui| {
                 ui.label(
@@ -630,6 +641,49 @@ impl WaxApp {
                 RichText::new(&self.status_line).size(11.0).color(theme::SUB),
             );
         });
+
+        // Live connection progress: each stage the tunnel core reports,
+        // oldest to newest. Completed stages get a check, the current one a
+        // pulsing dot. Honest state, no fake percentages.
+        if matches!(self.state, ConnState::Connecting) && !self.connect_stages.is_empty() {
+            ui.add_space(6.0);
+            theme::card_frame().show(ui, |ui| {
+                ui.label(RichText::new("Setting up").size(12.0).color(theme::MUTE).strong());
+                ui.add_space(2.0);
+                let n = self.connect_stages.len();
+                for (i, stage) in self.connect_stages.iter().enumerate() {
+                    let current = i + 1 == n;
+                    ui.horizontal(|ui| {
+                        let (rect, _) = ui.allocate_exact_size(egui::Vec2::new(16.0, 16.0), egui::Sense::hover());
+                        let c = rect.center();
+                        if current {
+                            let pulse = 0.5 + 0.5 * (t * 3.0).sin();
+                            ui.painter().circle(
+                                c,
+                                3.0 + pulse,
+                                theme::alpha(theme::ACCENT, 140),
+                                egui::Stroke::NONE,
+                            );
+                        } else {
+                            ui.painter().circle(c, 6.0, theme::alpha(theme::GOOD, 40), egui::Stroke::NONE);
+                            ui.painter().add(egui::Shape::line(
+                                vec![
+                                    egui::pos2(c.x - 3.0, c.y + 0.5),
+                                    egui::pos2(c.x - 1.0, c.y + 2.5),
+                                    egui::pos2(c.x + 3.5, c.y - 2.5),
+                                ],
+                                egui::Stroke::new(1.5, theme::GOOD),
+                            ));
+                        }
+                        ui.label(
+                            RichText::new(*stage)
+                                .size(12.0)
+                                .color(if current { theme::TEXT } else { theme::MUTE }),
+                        );
+                    });
+                }
+            });
+        }
 
         ui.add_space(10.0);
         // Connection details card (fills the lower pane, honest facts only)
