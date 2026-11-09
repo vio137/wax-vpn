@@ -61,8 +61,8 @@ pub fn enter(ui: &egui::Ui, id: egui::Id, reduced_motion: bool) -> f32 {
     }
 }
 
-pub fn toggle(ui: &mut egui::Ui, on: &mut bool) -> bool {
-    let (rect, resp) = ui.allocate_exact_size(Vec2::new(38.0, 22.0), Sense::click());
+pub fn toggle(ui: &mut egui::Ui, on: &mut bool, label: &str) -> bool {
+    let (rect, mut resp) = ui.allocate_exact_size(Vec2::new(38.0, 22.0), Sense::click());
     let t = ui.ctx().animate_bool(resp.id, *on);
     let track = Color32::from_rgb(46, 52, 68).lerp_to_gamma(ACCENT, t);
     ui.painter().rect_filled(rect, egui::CornerRadius::same(11), Color32::from(track));
@@ -72,13 +72,21 @@ pub fn toggle(ui: &mut egui::Ui, on: &mut bool) -> bool {
     if resp.hovered() {
         ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
     }
-    if resp.clicked() {
+    let changed = resp.clicked();
+    if changed {
         *on = !*on;
-        ui.ctx().data_mut(|d| d.insert_persisted(resp.id, *on));
-        true
-    } else {
-        false
+        resp.mark_changed();
     }
+    resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::CheckBox, ui.is_enabled(), *on, label));
+    if resp.has_focus() {
+        ui.painter().rect_stroke(
+            rect.expand(3.0),
+            egui::CornerRadius::same(14),
+            Stroke::new(1.0, ACCENT),
+            egui::StrokeKind::Outside,
+        );
+    }
+    changed
 }
 
 /// Settings row: title + description left, control right, hairline below.
@@ -90,7 +98,7 @@ pub fn toggle_row(ui: &mut egui::Ui, on: &mut bool, title: &str, desc: &str) -> 
             ui.label(egui::RichText::new(desc).size(11.0).color(MUTE));
         });
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            changed = toggle(ui, on);
+            changed = toggle(ui, on, title);
         });
     });
     ui.add_space(6.0);
