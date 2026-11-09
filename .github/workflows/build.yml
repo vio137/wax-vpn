@@ -270,7 +270,7 @@ jobs:
             [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
             public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
           }
-"@
+          "@
           $hwnd = [WaxWin32]::FindWindowW($null, 'waX VPN')
           if ($hwnd -ne [IntPtr]::Zero) {
             [WaxWin32]::SetForegroundWindow($hwnd) | Out-Null
