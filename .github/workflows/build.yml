@@ -211,6 +211,12 @@ jobs:
           }
           if ($handshake) { Note "PASS live handshake: $($status -join ' | ')" } else { Note 'FAIL no handshake within 90s' }
 
+          # 3b. Through-tunnel traffic proof: ping the demo server's tunnel-side address
+          if ($handshake) {
+            $ping = ping -n 2 -w 3000 192.168.4.1
+            if ($LASTEXITCODE -eq 0) { Note 'PASS packets traverse the tunnel (ping 192.168.4.1)' } else { Note 'FAIL no traffic through tunnel (ping 192.168.4.1)' }
+          }
+
           # 4. Adapter + DNS state
           $adapter = Get-NetAdapter -Name 'waX VPN' -ErrorAction SilentlyContinue
           if ($adapter -and $adapter.Status -eq 'Up') { Note 'PASS adapter up' } else { Note 'FAIL adapter not up' }
@@ -247,20 +253,46 @@ jobs:
           $results | Out-File -Encoding utf8 verify-results.txt
           if ($results -match '^FAIL') { exit 1 }
 
-      - name: GUI screenshot on the runner desktop
+      - name: GUI screenshot (app window only)
         if: always()
         shell: pwsh
         run: |
           $p = Start-Process -FilePath "$PWD\bin\wax-vpn.exe" -PassThru
-          Start-Sleep -Seconds 8
+          Start-Sleep -Seconds 10
           Add-Type -AssemblyName System.Windows.Forms
           Add-Type -AssemblyName System.Drawing
-          $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
-          $bmp = New-Object System.Drawing.Bitmap $bounds.Width, $bounds.Height
-          $g = [System.Drawing.Graphics]::FromImage($bmp)
-          $g.CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size)
-          $bmp.Save('gui-screenshot.png')
-          $g.Dispose(); $bmp.Dispose()
+          Add-Type -ReferencedAssemblies System.Drawing.Primitives -TypeDefinition @"
+          using System;
+          using System.Runtime.InteropServices;
+          public class WaxWin32 {
+            [DllImport("user32.dll", SetLastError=true)] public static extern IntPtr FindWindowW(string lpClassName, string lpWindowName);
+            [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+            [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
+            public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
+          }
+"@
+          $hwnd = [WaxWin32]::FindWindowW($null, 'waX VPN')
+          if ($hwnd -ne [IntPtr]::Zero) {
+            [WaxWin32]::SetForegroundWindow($hwnd) | Out-Null
+            Start-Sleep -Seconds 2
+            $r = New-Object WaxWin32+RECT
+            [WaxWin32]::GetWindowRect($hwnd, [ref]$r) | Out-Null
+            $w = $r.Right - $r.Left; $h = $r.Bottom - $r.Top
+            Write-Host "window rect: $($r.Left),$($r.Top) ${w}x${h}"
+            $bmp = New-Object System.Drawing.Bitmap $w, $h
+            $g = [System.Drawing.Graphics]::FromImage($bmp)
+            $g.CopyFromScreen($r.Left, $r.Top, 0, 0, (New-Object System.Drawing.Size $w, $h))
+            $bmp.Save('gui-screenshot.png')
+            $g.Dispose(); $bmp.Dispose()
+          } else {
+            Write-Host 'window not found, full-screen fallback'
+            $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+            $bmp = New-Object System.Drawing.Bitmap $bounds.Width, $bounds.Height
+            $g = [System.Drawing.Graphics]::FromImage($bmp)
+            $g.CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size)
+            $bmp.Save('gui-screenshot.png')
+            $g.Dispose(); $bmp.Dispose()
+          }
           if (-not $p.HasExited) { $p.Kill() }
 
       - uses: actions/upload-artifact@v4

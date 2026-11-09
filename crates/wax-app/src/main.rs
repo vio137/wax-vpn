@@ -557,6 +557,54 @@ impl WaxApp {
                 RichText::new(&self.status_line).size(11.0).color(theme::SUB),
             );
         });
+
+        ui.add_space(10.0);
+        // Connection details card (fills the lower pane, honest facts only)
+        let details = self
+            .selected
+            .and_then(|i| self.profiles.get(i))
+            .map(|p| {
+                let addr = p
+                    .config
+                    .interface
+                    .addresses
+                    .iter()
+                    .map(|a| a.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                Some((p.config.peers.first().and_then(|x| x.endpoint.clone()).unwrap_or_else(|| "-".into()), addr))
+            })
+            .flatten();
+        theme::card_frame().show(ui, |ui| {
+            ui.label(RichText::new("Connection details").size(12.0).color(theme::MUTE).strong());
+            ui.add_space(2.0);
+            if let Some((ep, addr)) = details {
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new("Endpoint").size(11.5).color(theme::MUTE));
+                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                        ui.label(RichText::new(ep).size(11.5).color(theme::SUB));
+                    });
+                });
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new("Tunnel address").size(11.5).color(theme::MUTE));
+                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                        ui.label(RichText::new(addr).size(11.5).color(theme::SUB));
+                    });
+                });
+            } else {
+                ui.label(RichText::new("No profile selected").size(11.5).color(theme::MUTE));
+            }
+            ui.horizontal(|ui| {
+                ui.label(RichText::new("Kill switch").size(11.5).color(theme::MUTE));
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    ui.label(
+                        RichText::new(if self.settings.kill_switch { "On" } else { "Off" })
+                            .size(11.5)
+                            .color(if self.settings.kill_switch { theme::GOOD } else { theme::MUTE }),
+                    );
+                });
+            });
+        });
     }
 
     fn tab_profiles(&mut self, ui: &mut egui::Ui) {
@@ -784,8 +832,8 @@ fn main() -> eframe::Result<()> {
             .with_title("waX VPN")
             .with_app_id("wax-vpn")
             .with_icon(icon)
-            .with_inner_size([430.0, 760.0])
-            .with_min_inner_size([400.0, 700.0])
+            .with_inner_size([620.0, 600.0])
+            .with_min_inner_size([560.0, 520.0])
             .with_resizable(true),
         ..Default::default()
     };

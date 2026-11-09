@@ -114,7 +114,7 @@ pub fn paint_orb(
         word_color,
     );
     let sub = match state {
-        ConnState::Disconnected => "tap to secure your traffic",
+        ConnState::Disconnected => "tap to connect",
         ConnState::Connecting => "negotiating tunnel",
         ConnState::Connected { .. } => "tap to disconnect",
         ConnState::Disconnecting => "restoring network",
