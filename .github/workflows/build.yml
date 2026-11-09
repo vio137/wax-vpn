@@ -65,7 +65,7 @@ jobs:
           New-Item -ItemType Directory -Force installer\payload | Out-Null
           Copy-Item "target\release\wax-vpn.exe" "installer\payload\waX VPN.exe"
           Copy-Item "target\release\wax.exe" "installer\payload\wax.exe"
-          Copy-Item "vendor\wireguard-nt\wireguard-nt-1.1\amd64\wireguard.dll" "installer\payload\wireguard.dll"
+          Copy-Item "vendor\wireguard-nt\wireguard-nt\bin\amd64\wireguard.dll" "installer\payload\wireguard.dll"
           Copy-Item "LICENSE" "installer\payload\LICENSE.txt"
           Copy-Item "README.md" "installer\payload\README.txt"
           $wgLicense = Get-ChildItem -Recurse vendor\wireguard-nt -Filter "LICENSE*" | Select-Object -First 1
