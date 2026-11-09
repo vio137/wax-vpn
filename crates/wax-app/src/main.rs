@@ -1112,7 +1112,11 @@ impl WaxApp {
         theme::section_heading(ui, "Profiles", "WireGuard configs on this device. Drop a .conf file anywhere to import.");
         let mut connect_idx: Option<usize> = None;
         let mut delete_idx: Option<usize> = None;
-        let connected = matches!(self.state, ConnState::Connected { .. });
+        let can_manage = matches!(self.state, ConnState::Disconnected | ConnState::Failed(_));
+        if !can_manage {
+            ui.label(RichText::new("Disconnect before switching or deleting profiles").size(11.0).color(theme::MUTE));
+            ui.add_space(8.0);
+        }
         egui::ScrollArea::vertical().max_height(250.0).show(ui, |ui| {
             for (i, p) in self.profiles.iter().enumerate() {
                 let selected = self.selected == Some(i);
@@ -1179,7 +1183,9 @@ impl WaxApp {
                 row_ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     let now = ui.input(|inp| inp.time);
                     let armed = matches!(self.confirm_delete, Some((idx, t0)) if idx == i && now - t0 < 3.0);
-                    if theme::danger_button(ui, if armed { "Confirm delete" } else { "Delete" }) {
+                    if ui.add_enabled_ui(can_manage, |ui| {
+                        theme::danger_button(ui, if armed { "Confirm delete" } else { "Delete" })
+                    }).inner {
                         if armed {
                             delete_idx = Some(i);
                             self.confirm_delete = None;
@@ -1187,7 +1193,7 @@ impl WaxApp {
                             self.confirm_delete = Some((i, now));
                         }
                     }
-                    if !connected
+                    if can_manage
                         && ui
                             .add(egui::Button::new(RichText::new("Connect").size(12.0).color(theme::ACCENT))
                                 .fill(theme::alpha(theme::ACCENT, 18))
@@ -1197,7 +1203,8 @@ impl WaxApp {
                     {
                         connect_idx = Some(i);
                     }
-                    let sel_resp = ui.add(
+                    let sel_resp = ui.add_enabled(
+                        can_manage,
                         egui::Button::new(
                             RichText::new(if selected { "Selected" } else { "Select" })
                                 .size(11.5)
@@ -1207,8 +1214,10 @@ impl WaxApp {
                         .stroke(egui::Stroke::new(1.0, theme::alpha(if selected { theme::ACCENT } else { theme::SUB }, 60)))
                         .corner_radius(egui::CornerRadius::same(8)),
                     );
-                    if sel_resp.clicked() {
+                    if sel_resp.clicked() && can_manage {
                         self.selected = Some(i);
+                        self.split_edit_for = None;
+                        self.confirm_delete = None;
                     }
                 });
                 theme::hairline(ui);
