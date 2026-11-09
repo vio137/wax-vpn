@@ -649,8 +649,6 @@ impl eframe::App for WaxApp {
         egui::CentralPanel::default()
             .frame(egui::Frame::default().fill(theme::BG).inner_margin(egui::Margin::symmetric(18, 12)))
             .show(ui, |ui| {
-                let rect = ui.max_rect();
-
                 // Scene timing. Brightness and rotation speed are fixed moods
                 // per connection state - never tied to measured throughput.
                 let now = Instant::now();
@@ -669,36 +667,25 @@ impl eframe::App for WaxApp {
                 if !self.settings.reduced_motion {
                     self.phase += dt * self.speed;
                 }
-                let t_wall = t;
                 let (phase, twinkle_t) = if self.settings.reduced_motion {
                     (1.5, 4.2)
                 } else {
-                    (self.phase, t_wall)
+                    (self.phase, t)
                 };
 
-                // Split composition: a structured left column, and the scene
-                // owning the right two-thirds at real scale.
-                let col_w = 330.0_f32;
-                let scene_rect = egui::Rect::from_min_max(
-                    egui::pos2(rect.left() + col_w, rect.top()),
-                    rect.max,
-                );
-                let center = egui::pos2(scene_rect.center().x, scene_rect.center().y - 8.0);
-                let r_hole = scene_rect.height().min(scene_rect.width()) * 0.27;
+                // A whisper of starfield, brand-coherent with the site.
                 {
+                    let rect = ui.max_rect();
                     let painter = ui.painter().with_clip_rect(rect);
-                    self.scene.paint_stars(&painter, rect, center, r_hole, twinkle_t, 0.35 + 0.55 * self.energy);
-                }
-                if self.tab != Tab::Connect {
-                    // Scrim keeps cards and text readable over the starfield.
-                    ui.painter().rect_filled(rect, 0, egui::Color32::from_black_alpha(160));
+                    self.scene
+                        .paint_stars(&painter, rect, rect.center(), 30.0, twinkle_t, 0.20);
                 }
 
                 let fade = theme::enter(ui, ui.scope_id().with(("tab", self.tab)), self.settings.reduced_motion);
                 ui.scope(|ui| {
                     ui.set_opacity(fade);
                     match self.tab {
-                        Tab::Connect => self.tab_connect(ui, t, rect, col_w, center, r_hole, phase, twinkle_t),
+                        Tab::Connect => self.tab_connect(ui, t, phase, twinkle_t),
                         Tab::Profiles => self.tab_profiles(ui),
                         Tab::Features => self.tab_features(ui),
                         Tab::Warp => self.tab_warp(ui),
@@ -751,117 +738,37 @@ impl WaxApp {
         std::process::exit(0);
     }
 
-    fn tab_connect(
-        &mut self,
-        ui: &mut egui::Ui,
-        t: f32,
-        rect: egui::Rect,
-        col_w: f32,
-        center: egui::Pos2,
-        r_hole: f32,
-        phase: f32,
-        twinkle_t: f32,
-    ) {
-        let painter = ui.painter().clone();
-
-        // The hole itself is also the connect button.
-        let hole_rect = egui::Rect::from_center_size(center, egui::vec2(r_hole * 3.0, r_hole * 2.6));
-        let resp = ui.interact(hole_rect, ui.scope_id().with("gargantua"), egui::Sense::click());
-        let hov = ui.ctx().animate_bool_responsive(resp.id.with("hov"), resp.hovered());
-        if resp.hovered() {
-            ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
-        }
-        let (action_label, can_act) = match &self.state {
-            ConnState::Disconnected | ConnState::Failed(_) => ("Connect", self.selected.is_some()),
-            ConnState::Connected { .. } => ("Disconnect", true),
-            ConnState::Connecting => ("Connecting", false),
-            ConnState::Disconnecting => ("Disconnecting", false),
-        };
-        resp.clone().widget_info(move || {
-            egui::WidgetInfo::labeled(egui::accesskit::Role::Button, can_act, action_label)
-        });
-        self.scene
-            .paint_hole(&painter, center, r_hole, phase, twinkle_t, self.energy + 0.10 * hov);
-
-        // State word inside the void.
-        let caption = if resp.hovered() && matches!(self.state, ConnState::Connected { .. }) {
-            "Disconnect"
-        } else {
-            match &self.state {
-                ConnState::Disconnected => "Connect",
-                ConnState::Connecting => "Connecting",
-                ConnState::Connected { .. } => "Connected",
-                ConnState::Disconnecting => "Closing",
-                ConnState::Failed(_) => "Retry",
-            }
-        };
-        let cap_a = if matches!(self.state, ConnState::Connecting | ConnState::Disconnecting) {
-            150.0 + 70.0 * (t * 2.4).sin().abs()
-        } else {
-            235.0
-        };
-        painter.text(
-            center,
-            egui::Align2::CENTER_CENTER,
-            caption,
-            theme::semi(16.5),
-            theme::alpha(theme::TEXT, cap_a as u8),
+    fn tab_connect(&mut self, ui: &mut egui::Ui, t: f32, phase: f32, twinkle_t: f32) {
+        let rect = ui.max_rect().shrink2(egui::vec2(24.0, 18.0));
+        let col_w = 400.0_f32.min(rect.width());
+        let col = egui::Rect::from_center_size(
+            egui::pos2(rect.center().x, rect.center().y - 14.0),
+            egui::vec2(col_w, rect.height()),
         );
-
-        if resp.clicked() {
-            match self.state {
-                ConnState::Disconnected | ConnState::Failed(_) => self.connect_manual(),
-                ConnState::Connected { .. } => self.disconnect(),
-                _ => {}
-            }
-        }
-
-        // ---- left column: state, profile, action, facts ----
-        let col_rect = egui::Rect::from_min_max(rect.min, egui::pos2(rect.left() + col_w, rect.bottom()));
         let mut cui = ui.new_child(
             egui::UiBuilder::new()
-                .max_rect(col_rect.shrink2(egui::vec2(26.0, 24.0)))
-                .layout(Layout::top_down(Align::Min)),
+                .max_rect(col)
+                .layout(Layout::top_down(Align::Center)),
         );
         let ui = &mut cui;
 
-        let (state_word, state_col) = match &self.state {
-            ConnState::Disconnected => ("Disconnected", theme::SUB),
+        // Brand mark: the black hole, small and quiet. Brightness and spin
+        // follow the connection state as mood, never as measured speed.
+        let er = 30.0;
+        let (erect, _) = ui.allocate_exact_size(egui::vec2(er * 5.0, er * 2.2), egui::Sense::hover());
+        self.scene
+            .paint_hole(ui.painter(), erect.center(), er, phase, twinkle_t, self.energy);
+        ui.add_space(16.0);
+
+        let (word, wcol) = match &self.state {
+            ConnState::Disconnected => ("Disconnected", theme::TEXT),
             ConnState::Connecting => ("Connecting", theme::ACCENT),
             ConnState::Connected { .. } => ("Connected", theme::GOOD),
             ConnState::Disconnecting => ("Disconnecting", theme::SUB),
             ConnState::Failed(_) => ("Connection failed", theme::BAD),
         };
-        ui.label(RichText::new(state_word).font(theme::semi(27.0)).color(state_col));
-        ui.add_space(2.0);
-        match &self.state {
-            ConnState::Connecting => {
-                let stage = self.connect_stages.last().copied().unwrap_or("Starting");
-                ui.horizontal(|ui| {
-                    let (r, _) = ui.allocate_exact_size(egui::vec2(14.0, 14.0), egui::Sense::hover());
-                    let pulse = 0.5 + 0.5 * (t * 3.0).sin();
-                    ui.painter()
-                        .circle_filled(r.center(), 3.0 + pulse, theme::alpha(theme::ACCENT, 150));
-                    ui.label(RichText::new(stage).size(12.0).color(theme::TEXT));
-                });
-            }
-            ConnState::Connected { since } => {
-                ui.label(
-                    RichText::new(format!("session {}", fmt_duration(since.elapsed())))
-                        .size(12.0)
-                        .color(theme::SUB),
-                );
-            }
-            ConnState::Failed(msg) => {
-                let msg = msg.clone();
-                ui.label(RichText::new(msg).size(12.0).color(theme::BAD));
-            }
-            _ => {
-                ui.label(RichText::new(&self.status_line).size(12.0).color(theme::SUB));
-            }
-        }
-
-        ui.add_space(24.0);
+        ui.label(RichText::new(word).font(theme::semi(32.0)).color(wcol));
+        ui.add_space(8.0);
 
         // Profile: the name opens the picker while disconnected.
         let (pname, pendpoint) = self
@@ -880,7 +787,7 @@ impl WaxApp {
         let can_switch = matches!(self.state, ConnState::Disconnected | ConnState::Failed(_))
             && self.profiles.len() > 1;
         let name_resp = ui.add(
-            egui::Label::new(RichText::new(&pname).font(theme::semi(16.0)).color(theme::TEXT))
+            egui::Label::new(RichText::new(&pname).font(theme::semi(15.0)).color(theme::SUB))
                 .sense(if can_switch { egui::Sense::click() } else { egui::Sense::hover() }),
         );
         if name_resp.hovered() && can_switch {
@@ -889,10 +796,10 @@ impl WaxApp {
         if name_resp.clicked() && can_switch {
             self.picker_open = !self.picker_open;
         }
-        ui.label(RichText::new(&pendpoint).size(11.0).color(theme::SUB).monospace());
+        ui.label(RichText::new(&pendpoint).size(11.5).color(theme::MUTE).monospace());
         if can_switch {
             ui.label(
-                RichText::new(if self.picker_open { "choose a profile" } else { "click to switch profile" })
+                RichText::new(if self.picker_open { "choose a profile" } else { "click to switch" })
                     .size(10.0)
                     .color(theme::MUTE),
             );
@@ -901,6 +808,7 @@ impl WaxApp {
             ui.add_space(6.0);
             theme::card_frame().show(ui, |ui| {
                 ui.set_max_width(300.0);
+                ui.set_min_width(280.0);
                 for i in 0..self.profiles.len() {
                     let (name, ep) = {
                         let p = &self.profiles[i];
@@ -954,25 +862,23 @@ impl WaxApp {
             });
         }
 
-        ui.add_space(20.0);
+        ui.add_space(26.0);
 
-        // The one confident action. A real button: screen readers and the
-        // automation harness get an exact action name.
-        let btn = egui::Button::new(
-            RichText::new(action_label)
-                .font(theme::semi(14.0))
-                .color(if can_act { theme::BG } else { theme::MUTE }),
-        )
-        .fill(if can_act { theme::ACCENT } else { theme::alpha(theme::ACCENT, 36) })
-        .corner_radius(egui::CornerRadius::same(12))
-        .min_size(egui::vec2(ui.available_width(), 46.0));
-        if ui.add_enabled(can_act, btn).clicked() {
+        // The one confident action.
+        let (action_label, can_act) = match &self.state {
+            ConnState::Disconnected | ConnState::Failed(_) => ("Connect", self.selected.is_some()),
+            ConnState::Connected { .. } => ("Disconnect", true),
+            ConnState::Connecting => ("Connecting", false),
+            ConnState::Disconnecting => ("Disconnecting", false),
+        };
+        if theme::primary_button(ui, action_label, can_act) {
             match self.state {
                 ConnState::Disconnected | ConnState::Failed(_) => self.connect_manual(),
                 ConnState::Connected { .. } => self.disconnect(),
                 _ => {}
             }
         }
+        ui.add_space(8.0);
         if self.selected.is_none() {
             ui.label(
                 RichText::new("Add a profile from the Profiles tab to connect")
@@ -988,15 +894,51 @@ impl WaxApp {
             }
         }
 
-        if let ConnState::Connected { .. } = self.state {
-            ui.add_space(18.0);
+        if let ConnState::Failed(msg) = &self.state {
+            let msg = msg.clone();
+            ui.add_space(6.0);
+            ui.label(RichText::new(msg).size(12.0).color(theme::BAD));
+        }
+        if matches!(self.state, ConnState::Connecting) {
+            let stage = self.connect_stages.last().copied().unwrap_or("Starting");
+            ui.add_space(6.0);
+            ui.horizontal(|ui| {
+                let (r, _) = ui.allocate_exact_size(egui::vec2(14.0, 14.0), egui::Sense::hover());
+                let pulse = 0.5 + 0.5 * (t * 3.0).sin();
+                ui.painter()
+                    .circle_filled(r.center(), 3.0 + pulse, theme::alpha(theme::ACCENT, 150));
+                ui.label(RichText::new(stage).size(12.0).color(theme::SUB));
+            });
+        }
+
+        if let ConnState::Connected { since } = self.state {
+            ui.add_space(22.0);
+            theme::hairline(ui);
+            ui.add_space(14.0);
+            let session = fmt_duration(since.elapsed());
             let rx = fmt_bytes(self.stats.rx_bytes);
             let txb = fmt_bytes(self.stats.tx_bytes);
             ui.horizontal(|ui| {
-                mini_stat(ui, "RECEIVED", &rx);
-                ui.add_space(26.0);
-                mini_stat(ui, "SENT", &txb);
+                let w = ui.available_width() / 3.0;
+                ui.allocate_ui_with_layout(
+                    egui::vec2(w, 40.0),
+                    Layout::top_down(Align::Center),
+                    |ui| mini_stat(ui, "Session", &session),
+                );
+                ui.allocate_ui_with_layout(
+                    egui::vec2(w, 40.0),
+                    Layout::top_down(Align::Center),
+                    |ui| mini_stat(ui, "Received", &rx),
+                );
+                ui.allocate_ui_with_layout(
+                    egui::vec2(w, 40.0),
+                    Layout::top_down(Align::Center),
+                    |ui| mini_stat(ui, "Sent", &txb),
+                );
             });
+            ui.add_space(12.0);
+            theme::hairline(ui);
+            ui.add_space(10.0);
             let hs = self
                 .stats
                 .last_handshake
@@ -1010,22 +952,9 @@ impl WaxApp {
             );
         }
 
-        // Facts pinned to the bottom of the column.
-        let details = self.selected.and_then(|i| self.profiles.get(i)).map(|p| {
-            let addr = p
-                .config
-                .interface
-                .addresses
-                .iter()
-                .map(|a| a.to_string())
-                .collect::<Vec<_>>()
-                .join(", ");
-            (
-                p.config.peers.first().and_then(|x| x.endpoint.clone()).unwrap_or_else(|| "-".into()),
-                addr,
-            )
-        });
-        ui.with_layout(Layout::bottom_up(Align::Min), |ui| {
+        // Quiet facts pinned to the bottom.
+        ui.with_layout(Layout::bottom_up(Align::Center), |ui| {
+            ui.add_space(2.0);
             if let Some(issue) = self.cleanup_issue.clone() {
                 ui.horizontal(|ui| {
                     ui.label(RichText::new(issue).size(10.5).color(theme::WARN));
@@ -1039,24 +968,15 @@ impl WaxApp {
                         });
                     }
                 });
-                ui.add_space(4.0);
             }
-            ui.horizontal(|ui| {
-                ui.label(RichText::new("Kill switch").size(11.5).color(theme::MUTE));
-                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    ui.label(
-                        RichText::new(if self.settings.kill_switch { "On" } else { "Off" })
-                            .size(11.5)
-                            .color(if self.settings.kill_switch { theme::GOOD } else { theme::MUTE }),
-                    );
-                });
-            });
-            if let Some((ep, addr)) = details {
-                detail_row(ui, "Tunnel address", &addr);
-                detail_row(ui, "Endpoint", &ep);
-            }
-            ui.label(RichText::new("Connection details").size(10.0).color(theme::MUTE).strong());
-            ui.add_space(6.0);
+            ui.label(
+                RichText::new(format!(
+                    "Kill switch {}  ·  v{VERSION}",
+                    if self.settings.kill_switch { "on" } else { "off" }
+                ))
+                .size(10.5)
+                .color(theme::MUTE),
+            );
         });
     }
 
@@ -1298,19 +1218,11 @@ impl WaxApp {
 
 fn mini_stat(ui: &mut egui::Ui, label: &str, value: &str) {
     ui.vertical(|ui| {
-        ui.label(RichText::new(label).size(9.5).color(theme::MUTE).strong());
+        ui.label(RichText::new(label).size(11.0).color(theme::MUTE));
         ui.label(RichText::new(value).size(14.0).color(theme::TEXT).monospace());
     });
 }
 
-fn detail_row(ui: &mut egui::Ui, k: &str, v: &str) {
-    ui.horizontal(|ui| {
-        ui.label(RichText::new(k).size(11.5).color(theme::MUTE));
-        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            ui.label(RichText::new(v).size(11.5).color(theme::SUB));
-        });
-    });
-}
 
 fn chrome_button(ui: &mut egui::Ui, glyph: &str, tooltip: &str) -> bool {
     let (rect, resp) = ui.allocate_exact_size(egui::vec2(30.0, 22.0), egui::Sense::click());
@@ -1352,6 +1264,13 @@ fn rail_button(ui: &mut egui::Ui, tab: Tab, label: &str, active: bool) -> bool {
     } else {
         theme::SUB
     };
+    if on > 0.03 {
+        let bar = egui::Rect::from_center_size(
+            egui::pos2(rect.left() + 2.0, rect.center().y),
+            egui::vec2(2.5, 22.0),
+        );
+        ui.painter().rect_filled(bar, egui::CornerRadius::same(1), theme::alpha(theme::ACCENT, (255.0 * on) as u8));
+    }
     rail_icon(ui.painter(), tab, rect.center_top() + egui::vec2(0.0, 18.0), 9.0, col);
     ui.painter().text(
         rect.center_bottom() + egui::vec2(0.0, -9.0),
@@ -1444,8 +1363,8 @@ fn main() -> eframe::Result<()> {
             .with_title("waX VPN")
             .with_app_id("wax-vpn")
             .with_icon(icon)
-            .with_inner_size([940.0, 620.0])
-            .with_min_inner_size([820.0, 540.0])
+            .with_inner_size([880.0, 600.0])
+            .with_min_inner_size([760.0, 540.0])
             .with_resizable(true)
             .with_decorations(false),
         ..Default::default()
