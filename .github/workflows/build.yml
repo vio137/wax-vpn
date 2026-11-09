@@ -468,12 +468,12 @@ jobs:
                 }
                 $wr = @(Get-NetRoute -InterfaceAlias 'waX VPN' -AddressFamily IPv4 -ErrorAction SilentlyContinue)
                 $covered = @($wr | Where-Object { Test-IPv4InPrefix $_.DestinationPrefix '8.8.8.8' })
-                if ($wr.Count -gt 10 -and $covered.Count -eq 0) {
-                  Note "PASS split tunneling: 8.8.8.8/32 excluded - $($wr.Count) tunnel routes installed, none covers 8.8.8.8"
-                } elseif ($wr.Count -le 10 -and $covered.Count -eq 0) {
-                  Note "FAIL split tunneling: only $($wr.Count) tunnel routes (expected many from /32 subtraction)"
+                $kept = @($wr | Where-Object { Test-IPv4InPrefix $_.DestinationPrefix '1.1.1.1' })
+                $offTunnel = @(Get-NetRoute -AddressFamily IPv4 -ErrorAction SilentlyContinue | Where-Object { $_.InterfaceAlias -ne 'waX VPN' -and (Test-IPv4InPrefix $_.DestinationPrefix '8.8.8.8') })
+                if ($wr.Count -gt 10 -and $covered.Count -eq 0 -and $kept.Count -gt 0 -and $offTunnel.Count -gt 0) {
+                  Note "PASS split tunneling: $($wr.Count) tunnel routes, none covers 8.8.8.8; 1.1.1.1 still tunnel-routed; 8.8.8.8 resolves via $($offTunnel[0].InterfaceAlias)"
                 } else {
-                  Note "FAIL split tunneling: a tunnel route still covers 8.8.8.8 ($($wr.Count) routes)"
+                  Note "FAIL split tunneling: routes=$($wr.Count) covers-excluded=$($covered.Count) keeps-1.1.1.1=$($kept.Count) off-tunnel=$($offTunnel.Count)"
                 }
               }
               $conAfter = [WaxCon]::CountConsoles()
