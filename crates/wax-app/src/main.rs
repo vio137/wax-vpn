@@ -3,6 +3,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod orb;
+mod theme;
 mod settings;
 
 use std::sync::mpsc::{channel, Receiver};
@@ -25,6 +26,16 @@ pub enum ConnState {
     Disconnecting,
     Failed(String),
 }
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Tab {
+    Connect,
+    Profiles,
+    Features,
+    Warp,
+    About,
+}
+
 
 enum AppEvent {
     Connected,
@@ -52,6 +63,7 @@ pub struct WaxApp {
     warp_busy: bool,
     import_paste: String,
     import_error: Option<String>,
+    tab: Tab,
 }
 
 impl WaxApp {
@@ -90,6 +102,7 @@ impl WaxApp {
             warp_busy: false,
             import_paste: String::new(),
             import_error: None,
+            tab: Tab::Connect,
         };
         app.refresh_warp_summary();
         // Pick up a tunnel left running by an earlier instance.
@@ -348,8 +361,7 @@ fn fmt_duration(d: Duration) -> String {
 impl eframe::App for WaxApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
-        let ctx = &ctx;
-        self.handle_events(ctx);
+        self.handle_events(&ctx);
 
         // Drag & drop .conf import
         let dropped = ctx.input(|i| i.raw.dropped_files.clone());
@@ -363,223 +375,396 @@ impl eframe::App for WaxApp {
                     .to_string();
                 if let Ok(text) = std::fs::read_to_string(&path) {
                     self.import_text(name, &text);
+                    self.tab = Tab::Profiles;
                 }
             }
         }
 
         let t = self.start.elapsed().as_secs_f32();
 
-        egui::CentralPanel::default()
-            .frame(egui::Frame::default().fill(orb::BG))
+        // ---------- top bar ----------
+        egui::Panel::top("topbar")
+            .frame(egui::Frame::default().fill(theme::PANEL).inner_margin(egui::Margin::symmetric(14, 10)))
             .show(ui, |ui| {
-                ui.add_space(10.0);
-                ui.with_layout(Layout::top_down(Align::Center), |ui| {
-                    ui.label(
-                        RichText::new("waX VPN")
-                            .size(26.0)
-                            .color(Color32::from_rgb(226, 232, 240))
-                            .strong(),
-                    );
-                    ui.label(
-                        RichText::new(format!("v{VERSION} - WireGuard, in Rust"))
-                            .size(11.0)
-                            .color(Color32::from_rgb(100, 116, 139)),
-                    );
-                });
-
-                ui.add_space(6.0);
-                ui.with_layout(Layout::top_down(Align::Center), |ui| {
-                    let response = orb::paint_orb(ui, &self.state, t, self.settings.reduced_motion);
-                    if response.clicked() {
-                        match self.state {
-                            ConnState::Disconnected | ConnState::Failed(_) => self.connect(),
-                            ConnState::Connected { .. } => self.disconnect(),
-                            _ => {}
-                        }
-                    }
-                });
-
-                let failed_msg = if let ConnState::Failed(msg) = &self.state { Some(msg.clone()) } else { None };
-                if let Some(msg) = failed_msg {
-                    ui.add_space(4.0);
-                    ui.with_layout(Layout::top_down(Align::Center), |ui| {
-                        ui.label(RichText::new(&msg).size(12.0).color(orb::BAD));
-                        if !self.is_admin {
-                            if ui.button("Restart as administrator").clicked() {
-                                self.restart_as_admin();
-                            }
-                        }
-                    });
-                }
-
-                ui.with_layout(Layout::top_down(Align::Center), |ui| {
-                    ui.label(
-                        RichText::new(&self.status_line)
-                            .size(12.0)
-                            .color(Color32::from_rgb(148, 163, 184)),
-                    );
-                });
-
-                if let ConnState::Connected { since } = self.state {
-                    ui.add_space(2.0);
-                    ui.with_layout(Layout::top_down(Align::Center), |ui| {
-                        let hs = self
-                            .stats
-                            .last_handshake
-                            .and_then(|h| SystemTime::now().duration_since(h).ok())
-                            .map(fmt_duration)
-                            .unwrap_or_else(|| "-".into());
-                        ui.label(
-                            RichText::new(format!(
-                                "{} up  -  rx {}  -  tx {}  -  handshake {} ago",
-                                fmt_duration(since.elapsed()),
-                                fmt_bytes(self.stats.rx_bytes),
-                                fmt_bytes(self.stats.tx_bytes),
-                                hs
-                            ))
-                            .size(12.0)
-                            .color(orb::GOOD),
-                        );
-                    });
-                }
-
-                ui.add_space(8.0);
-                // Profile picker
                 ui.horizontal(|ui| {
-                    ui.label(RichText::new("Profile").color(Color32::from_rgb(148, 163, 184)));
-                    let current = self
-                        .selected
-                        .and_then(|i| self.profiles.get(i))
-                        .map(|p| p.name.clone())
-                        .unwrap_or_else(|| "none".to_string());
-                    egui::ComboBox::from_id_salt("profile-picker")
-                        .selected_text(current)
-                        .show_ui(ui, |ui| {
-                            for (i, p) in self.profiles.iter().enumerate() {
-                                ui.selectable_value(&mut self.selected, Some(i), &p.name);
-                            }
-                        });
-                    if ui.small_button("Delete").clicked() {
-                        if let Some(i) = self.selected {
-                            if let Some(p) = self.profiles.get(i) {
-                                let _ = profile::delete_profile(&p.name);
-                                self.reload_profiles();
-                            }
-                        }
-                    }
-                });
-
-                ui.add_space(4.0);
-                ui.separator();
-
-                egui::ScrollArea::vertical().show(ui, |ui| {
-                    ui.collapsing("Settings", |ui| {
-                        if ui
-                            .checkbox(&mut self.settings.kill_switch, "Kill switch (block traffic outside the tunnel)")
-                            .changed()
-                        {
-                            settings::save(&self.settings);
-                        }
-                        if ui
-                            .checkbox(&mut self.settings.allow_lan, "Allow local network while kill switch is on")
-                            .changed()
-                        {
-                            settings::save(&self.settings);
-                        }
-                        if ui.checkbox(&mut self.settings.autostart, "Start waX VPN with Windows").changed() {
-                            self.toggle_autostart();
-                            settings::save(&self.settings);
-                        }
-                        if ui
-                            .checkbox(&mut self.settings.reduced_motion, "Reduced motion (calm interface)")
-                            .changed()
-                        {
-                            settings::save(&self.settings);
-                        }
-                        ui.label(
-                            RichText::new(if self.is_admin {
-                                "Running with administrator rights"
-                            } else {
-                                "Not elevated - connecting will need a restart as administrator"
-                            })
-                            .size(11.0)
-                            .color(Color32::from_rgb(100, 116, 139)),
-                        );
-                    });
-
-                    ui.collapsing("Cloudflare WARP (opt-in)", |ui| {
-                        ui.label(
-                            RichText::new("waX VPN is not affiliated with Cloudflare. Registering creates a Cloudflare WARP account.")
-                                .size(11.0)
-                                .color(Color32::from_rgb(148, 163, 184)),
-                        );
-                        ui.label(RichText::new(&self.warp_summary).size(12.0));
-                        if self.warp_registered {
-                            if ui
-                                .add_enabled(!self.warp_busy, egui::Button::new("Unregister WARP"))
-                                .clicked()
-                            {
-                                self.warp_unregister();
-                            }
+                    ui.label(RichText::new("waX").size(19.0).color(theme::TEXT).strong());
+                    ui.label(RichText::new("VPN").size(19.0).color(theme::ACCENT).strong());
+                    ui.add_space(6.0);
+                    ui.label(RichText::new(format!("v{VERSION}")).size(10.5).color(theme::MUTE));
+                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                        let (txt, col) = if self.is_admin {
+                            ("ADMIN", theme::GOOD)
                         } else {
-                            ui.horizontal(|ui| {
-                                ui.checkbox(&mut self.warp_tos, "I accept");
-                                ui.hyperlink_to(
-                                    "Cloudflare's Terms of Service",
-                                    "https://www.cloudflare.com/application/terms/",
-                                );
-                            });
-                            if ui
-                                .add_enabled(
-                                    self.warp_tos && !self.warp_busy,
-                                    egui::Button::new("Register WARP and create profile"),
-                                )
-                                .clicked()
-                            {
-                                self.warp_register();
-                            }
-                        }
-                    });
-
-                    ui.collapsing("Import a profile", |ui| {
+                            ("NOT ELEVATED", theme::WARN)
+                        };
                         ui.label(
-                            RichText::new("Drop a .conf file anywhere in this window, or paste config text:")
-                                .size(11.0)
-                                .color(Color32::from_rgb(148, 163, 184)),
-                        );
-                        egui::ScrollArea::vertical()
-                            .id_salt("import-scroll")
-                            .max_height(120.0)
-                            .show(ui, |ui| {
-                                ui.add(
-                                    egui::TextEdit::multiline(&mut self.import_paste)
-                                        .hint_text("[Interface]\nPrivateKey = ...")
-                                        .desired_width(f32::INFINITY),
-                                );
-                            });
-                        if ui.button("Import pasted config").clicked() {
-                            let text = self.import_paste.trim().to_string();
-                            if !text.is_empty() {
-                                self.import_text(format!("Imported {}", chrono_free_stamp()), &text);
-                                self.import_paste.clear();
-                            }
-                        }
-                        if let Some(err) = &self.import_error {
-                            ui.label(RichText::new(err).size(11.0).color(orb::BAD));
-                        }
-                    });
-
-                    ui.add_space(8.0);
-                    ui.with_layout(Layout::top_down(Align::Center), |ui| {
-                        ui.label(
-                            RichText::new("Not affiliated with Cloudflare or the WireGuard project")
+                            RichText::new(txt)
                                 .size(10.0)
-                                .color(Color32::from_rgb(71, 85, 105)),
+                                .color(col)
+                                .strong(),
                         );
                     });
-                    let _ = Vec2::ZERO; // keep egui::Vec2 import used
                 });
             });
+
+        // ---------- sidebar ----------
+        egui::Panel::left("nav")
+            .resizable(false)
+            .exact_size(132.0)
+            .frame(egui::Frame::default().fill(theme::PANEL).inner_margin(egui::Margin::symmetric(8, 12)))
+            .show(ui, |ui| {
+                let items = [
+                    (Tab::Connect, "Connect"),
+                    (Tab::Profiles, "Profiles"),
+                    (Tab::Features, "Features"),
+                    (Tab::Warp, "WARP"),
+                    (Tab::About, "About"),
+                ];
+                for (tab, label) in items {
+                    if theme::nav_button(ui, label, self.tab == tab) {
+                        self.tab = tab;
+                    }
+                    ui.add_space(2.0);
+                }
+                ui.with_layout(Layout::bottom_up(Align::Min), |ui| {
+                    ui.label(
+                        RichText::new("WireGuard in Rust")
+                            .size(9.5)
+                            .color(theme::alpha(theme::MUTE, 140)),
+                    );
+                });
+            });
+
+        // ---------- central ----------
+        egui::CentralPanel::default()
+            .frame(egui::Frame::default().fill(theme::BG).inner_margin(egui::Margin::symmetric(18, 12)))
+            .show(ui, |ui| {
+                match self.tab {
+                    Tab::Connect => self.tab_connect(ui, t),
+                    Tab::Profiles => self.tab_profiles(ui),
+                    Tab::Features => self.tab_features(ui),
+                    Tab::Warp => self.tab_warp(ui),
+                    Tab::About => self.tab_about(ui),
+                }
+            });
+
+        ctx.request_repaint_after(Duration::from_millis(66));
+    }
+}
+
+impl WaxApp {
+    fn tab_connect(&mut self, ui: &mut egui::Ui, t: f32) {
+        ui.with_layout(Layout::top_down(Align::Center), |ui| {
+            ui.add_space(2.0);
+            let response = orb::paint_orb(ui, &self.state, t, self.settings.reduced_motion);
+            if response.clicked() {
+                match self.state {
+                    ConnState::Disconnected | ConnState::Failed(_) => self.connect(),
+                    ConnState::Connected { .. } => self.disconnect(),
+                    _ => {}
+                }
+            }
+        });
+
+        // selected profile summary
+        let (pname, pendpoint) = self
+            .selected
+            .and_then(|i| self.profiles.get(i))
+            .map(|p| {
+                let ep = p
+                    .config
+                    .peers
+                    .first()
+                    .and_then(|peer| peer.endpoint.clone())
+                    .unwrap_or_else(|| "no endpoint".to_string());
+                (p.name.clone(), ep)
+            })
+            .unwrap_or_else(|| ("No profile selected".to_string(), "import or register WARP".to_string()));
+        ui.with_layout(Layout::top_down(Align::Center), |ui| {
+            ui.label(RichText::new(&pname).size(15.0).color(theme::TEXT).strong());
+            ui.label(RichText::new(&pendpoint).size(11.0).color(theme::MUTE));
+        });
+
+        ui.add_space(4.0);
+
+        // failure card
+        let failed_msg = if let ConnState::Failed(msg) = &self.state { Some(msg.clone()) } else { None };
+        if let Some(msg) = failed_msg {
+            theme::card_frame().show(ui, |ui| {
+                ui.label(RichText::new("Connection failed").size(12.5).color(theme::BAD).strong());
+                ui.label(RichText::new(&msg).size(11.5).color(theme::SUB));
+                if !self.is_admin && theme::primary_button(ui, "Restart as administrator", true) {
+                    self.restart_as_admin();
+                }
+            });
+            ui.add_space(6.0);
+        }
+
+        // stats row
+        if let ConnState::Connected { since } = self.state {
+            let hs = self
+                .stats
+                .last_handshake
+                .and_then(|h| SystemTime::now().duration_since(h).ok())
+                .map(fmt_duration)
+                .unwrap_or_else(|| "-".into());
+            let session = fmt_duration(since.elapsed());
+            let rx = fmt_bytes(self.stats.rx_bytes);
+            let tx = fmt_bytes(self.stats.tx_bytes);
+            ui.horizontal(|ui| {
+                theme::stat_tile(ui, "SESSION", &session, theme::TEXT);
+                theme::stat_tile(ui, "RECEIVED", &rx, theme::ACCENT);
+                theme::stat_tile(ui, "SENT", &tx, theme::ACCENT);
+            });
+            ui.with_layout(Layout::top_down(Align::Center), |ui| {
+                ui.label(
+                    RichText::new(format!("last handshake {hs} ago"))
+                        .size(11.0)
+                        .color(theme::GOOD),
+                );
+            });
+            ui.add_space(4.0);
+        }
+
+        // explicit action button (orb is also clickable)
+        let (label, enabled) = match &self.state {
+            ConnState::Disconnected | ConnState::Failed(_) => ("Connect", self.selected.is_some() && self.is_admin),
+            ConnState::Connected { .. } => ("Disconnect", true),
+            ConnState::Connecting => ("Connecting...", false),
+            ConnState::Disconnecting => ("Disconnecting...", false),
+        };
+        ui.with_layout(Layout::top_down(Align::Center), |ui| {
+            if theme::primary_button(ui, label, enabled) {
+                match self.state {
+                    ConnState::Disconnected | ConnState::Failed(_) => self.connect(),
+                    ConnState::Connected { .. } => self.disconnect(),
+                    _ => {}
+                }
+            }
+            if self.selected.is_none() {
+                ui.label(
+                    RichText::new("Add a profile from the Profiles tab to connect")
+                        .size(11.0)
+                        .color(theme::MUTE),
+                );
+            } else if !self.is_admin {
+                if ui.link(RichText::new("Restart as administrator to connect").size(11.5).color(theme::WARN)).clicked() {
+                    self.restart_as_admin();
+                }
+            }
+            ui.add_space(2.0);
+            ui.label(
+                RichText::new(&self.status_line).size(11.0).color(theme::SUB),
+            );
+        });
+    }
+
+    fn tab_profiles(&mut self, ui: &mut egui::Ui) {
+        theme::section_heading(ui, "Profiles", "WireGuard configs on this device. Drop a .conf file anywhere to import.");
+        let mut connect_idx: Option<usize> = None;
+        let mut delete_idx: Option<usize> = None;
+        let connected = matches!(self.state, ConnState::Connected { .. });
+        egui::ScrollArea::vertical().max_height(250.0).show(ui, |ui| {
+            for (i, p) in self.profiles.iter().enumerate() {
+                let selected = self.selected == Some(i);
+                let ep = p
+                    .config
+                    .peers
+                    .first()
+                    .and_then(|peer| peer.endpoint.clone())
+                    .unwrap_or_else(|| "-".to_string());
+                let addr = p
+                    .config
+                    .interface
+                    .addresses
+                    .iter()
+                    .map(|a| a.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let frame = if selected {
+                    theme::card_frame().stroke(egui::Stroke::new(1.0, theme::ACCENT))
+                } else {
+                    theme::card_frame()
+                };
+                frame.show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.vertical(|ui| {
+                            ui.label(RichText::new(&p.name).size(13.5).color(theme::TEXT).strong());
+                            ui.label(RichText::new(format!("{ep}  -  {addr}")).size(10.5).color(theme::MUTE));
+                        });
+                        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                            if theme::danger_button(ui, "Delete") {
+                                delete_idx = Some(i);
+                            }
+                            if !connected
+                                && ui
+                                    .add(egui::Button::new(RichText::new("Connect").size(12.0).color(theme::ACCENT))
+                                        .fill(theme::alpha(theme::ACCENT, 18))
+                                        .stroke(egui::Stroke::new(1.0, theme::alpha(theme::ACCENT, 90)))
+                                        .corner_radius(egui::CornerRadius::same(8)))
+                                    .clicked()
+                            {
+                                connect_idx = Some(i);
+                            }
+                            if ui.selectable_label(selected, RichText::new(if selected { "Selected" } else { "Select" }).size(11.5)).clicked() {
+                                self.selected = Some(i);
+                            }
+                        });
+                    });
+                });
+                ui.add_space(4.0);
+            }
+            if self.profiles.is_empty() {
+                theme::card_frame().show(ui, |ui| {
+                    ui.label(RichText::new("No profiles yet").size(13.0).color(theme::SUB));
+                    ui.label(
+                        RichText::new("Paste a config below, drop a .conf file, or register Cloudflare WARP from the WARP tab.")
+                            .size(11.0)
+                            .color(theme::MUTE),
+                    );
+                });
+            }
+        });
+        if let Some(i) = delete_idx {
+            if let Some(p) = self.profiles.get(i) {
+                let _ = profile::delete_profile(&p.name);
+                self.reload_profiles();
+            }
+        }
+        if let Some(i) = connect_idx {
+            self.selected = Some(i);
+            self.connect();
+        }
+
+        ui.add_space(8.0);
+        theme::section_heading(ui, "Import", "Paste a WireGuard config");
+        theme::card_frame().show(ui, |ui| {
+            egui::ScrollArea::vertical()
+                .id_salt("import-scroll")
+                .max_height(110.0)
+                .show(ui, |ui| {
+                    ui.add(
+                        egui::TextEdit::multiline(&mut self.import_paste)
+                            .hint_text("[Interface]\nPrivateKey = ...")
+                            .desired_width(f32::INFINITY),
+                    );
+                });
+            ui.add_space(4.0);
+            if theme::primary_button(ui, "Import config", !self.import_paste.trim().is_empty()) {
+                let text = self.import_paste.trim().to_string();
+                self.import_text(format!("Imported {}", chrono_free_stamp()), &text);
+                self.import_paste.clear();
+            }
+            if let Some(err) = &self.import_error {
+                ui.label(RichText::new(err).size(11.0).color(theme::BAD));
+            }
+        });
+    }
+
+    fn tab_features(&mut self, ui: &mut egui::Ui) {
+        theme::section_heading(ui, "Features", "Protection and behaviour");
+        if theme::toggle_row(
+            ui,
+            &mut self.settings.kill_switch,
+            "Kill switch",
+            "Block all traffic outside the tunnel while connected",
+        ) {
+            settings::save(&self.settings);
+        }
+        ui.add_space(4.0);
+        if theme::toggle_row(
+            ui,
+            &mut self.settings.allow_lan,
+            "Allow local network",
+            "Keep printers and local devices reachable when the kill switch is on",
+        ) {
+            settings::save(&self.settings);
+        }
+        ui.add_space(4.0);
+        if theme::toggle_row(
+            ui,
+            &mut self.settings.autostart,
+            "Start with Windows",
+            "Launch waX VPN when you sign in",
+        ) {
+            self.toggle_autostart();
+            settings::save(&self.settings);
+        }
+        ui.add_space(4.0);
+        if theme::toggle_row(
+            ui,
+            &mut self.settings.reduced_motion,
+            "Reduced motion",
+            "Calm the interface animation",
+        ) {
+            settings::save(&self.settings);
+        }
+        ui.add_space(8.0);
+        theme::card_frame().show(ui, |ui| {
+            ui.label(
+                RichText::new(if self.is_admin {
+                    "Running with administrator rights"
+                } else {
+                    "Not elevated - connecting requires a restart as administrator"
+                })
+                .size(11.5)
+                .color(theme::MUTE),
+            );
+        });
+    }
+
+    fn tab_warp(&mut self, ui: &mut egui::Ui) {
+        theme::section_heading(ui, "Cloudflare WARP", "Optional. waX VPN is not affiliated with Cloudflare.");
+        theme::card_frame().show(ui, |ui| {
+            ui.label(
+                RichText::new("Registering creates a Cloudflare WARP account from this device and adds a 'Cloudflare WARP' profile.")
+                    .size(11.5)
+                    .color(theme::SUB),
+            );
+            ui.add_space(4.0);
+            ui.label(RichText::new(&self.warp_summary).size(12.5).color(theme::TEXT));
+            ui.add_space(6.0);
+            if self.warp_registered {
+                if theme::danger_button(ui, "Unregister WARP") && !self.warp_busy {
+                    self.warp_unregister();
+                }
+            } else {
+                ui.horizontal(|ui| {
+                    ui.checkbox(&mut self.warp_tos, RichText::new("I accept").size(12.0).color(theme::SUB));
+                    ui.hyperlink_to(
+                        RichText::new("Cloudflare's Terms of Service").size(12.0).color(theme::ACCENT),
+                        "https://www.cloudflare.com/application/terms/",
+                    );
+                });
+                ui.add_space(2.0);
+                if theme::primary_button(ui, "Register WARP and create profile", self.warp_tos && !self.warp_busy) {
+                    self.warp_register();
+                }
+            }
+        });
+    }
+
+    fn tab_about(&mut self, ui: &mut egui::Ui) {
+        theme::section_heading(ui, "About", "");
+        theme::card_frame().show(ui, |ui| {
+            ui.label(RichText::new(format!("waX VPN v{VERSION}")).size(14.0).color(theme::TEXT).strong());
+            ui.label(
+                RichText::new("A WireGuard client for Windows written in Rust, using the official wireguard-nt driver.")
+                    .size(11.5)
+                    .color(theme::SUB),
+            );
+            ui.add_space(4.0);
+            ui.hyperlink_to(
+                RichText::new("github.com/vio137/wax-vpn").size(12.0).color(theme::ACCENT),
+                "https://github.com/vio137/wax-vpn",
+            );
+            ui.add_space(4.0);
+            ui.label(
+                RichText::new("Not affiliated with Cloudflare or the WireGuard project.")
+                    .size(10.5)
+                    .color(theme::MUTE),
+            );
+        });
     }
 }
 
