@@ -367,11 +367,13 @@ impl WaxApp {
                 self.quit_app();
             }
             if want_show {
+                crate::single::diag("primary: show signal consumed");
                 self.hidden = false;
                 ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(false));
                 ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
                 ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
                 ctx.request_repaint();
+                crate::single::show_own_window();
             }
         }
         while let Ok(event) = self.events_rx.try_recv() {

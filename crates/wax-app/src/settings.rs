@@ -33,6 +33,11 @@ fn path() -> std::path::PathBuf {
     wax_core::profile::config_dir().join("settings.json")
 }
 
+/// Path of the small diagnostics log for the cross-instance show path.
+pub fn debug_log_path() -> std::path::PathBuf {
+    wax_core::profile::config_dir().join("wax-debug.log")
+}
+
 pub fn load() -> Settings {
     let p = path();
     if !p.exists() {

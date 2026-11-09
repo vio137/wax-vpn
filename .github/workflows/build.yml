@@ -403,6 +403,7 @@ jobs:
           "@
           Get-Process wax-vpn -ErrorAction SilentlyContinue | Stop-Process -Force
           Start-Sleep -Seconds 2
+          Remove-Item (Join-Path $env:APPDATA 'wax-vpn\wax-debug.log') -ErrorAction SilentlyContinue
           $conBefore = [WaxCon]::CountConsoles()
           # Scoped split-tunnel check: exclude 8.8.8.8/32 for the demo profile
           # (runner-local settings only; no live routes touched beyond the demo tunnel).
@@ -520,6 +521,8 @@ jobs:
                 Note 'PASS single instance: second launch handed off, running instance showed its window, second process exited'
               } else {
                 Note "FAIL single instance: first-alive=$(-not $pg.HasExited) second-exited=$($p2.HasExited) window-visible=$siVisible"
+                $dbg = Get-Content (Join-Path $env:APPDATA 'wax-vpn\wax-debug.log') -ErrorAction SilentlyContinue
+                if ($dbg) { $dbg | ForEach-Object { Note "DIAG $_" } } else { Note 'DIAG no show-path diagnostics recorded (signal never consumed?)' }
                 if (-not $p2.HasExited) { $p2.Kill() }
               }
               # The runner session has no notification area (Shell_TrayWnd absent), so

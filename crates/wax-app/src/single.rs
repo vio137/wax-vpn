@@ -8,8 +8,24 @@
 
 #![cfg(windows)]
 
-use windows_sys::Win32::Foundation::{CloseHandle, GetLastError, ERROR_ALREADY_EXISTS, HANDLE, WAIT_OBJECT_0};
+use windows_sys::Win32::Foundation::{CloseHandle, GetLastError, ERROR_ALREADY_EXISTS, HANDLE, HWND, LPARAM, WAIT_OBJECT_0};
 use windows_sys::Win32::System::Threading::{CreateEventW, CreateMutexW, SetEvent, WaitForSingleObject};
+use windows_sys::Win32::UI::WindowsAndMessaging::{
+    BringWindowToTop, EnumWindows, GetWindow, GetWindowThreadProcessId, IsWindowVisible,
+    SetForegroundWindow, ShowWindow, GW_OWNER, SW_RESTORE, SW_SHOW,
+};
+
+/// One-line diagnostics for the cross-instance show path, read by CI on failure.
+pub fn diag(msg: &str) {
+    if let Ok(mut f) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(crate::settings::debug_log_path())
+    {
+        use std::io::Write;
+        let _ = writeln!(f, "{msg}");
+    }
+}
 
 fn wide(s: &str) -> Vec<u16> {
     s.encode_utf16().chain(std::iter::once(0)).collect()
@@ -34,8 +50,11 @@ fn signal(name: &str) {
     unsafe {
         let ev = CreateEventW(std::ptr::null(), 0, 0, wide(name).as_ptr());
         if ev != 0 {
-            SetEvent(ev);
+            let ok = SetEvent(ev);
+            diag(&format!("signal {name}: SetEvent -> {ok}"));
             CloseHandle(ev);
+        } else {
+            diag(&format!("signal {name}: CreateEventW failed ({})", GetLastError()));
         }
     }
 }
@@ -83,6 +102,30 @@ pub fn request_quit() -> bool {
             signal(QUIT_EVENT);
         }
         running
+    }
+}
+
+/// Restore and raise this process's own top-level window. Viewport commands
+/// issued while hidden are unreliable, so the show signal goes through Win32.
+pub fn show_own_window() {
+    unsafe extern "system" fn enum_cb(hwnd: HWND, lparam: LPARAM) -> i32 {
+        let mut pid: u32 = 0;
+        GetWindowThreadProcessId(hwnd, &mut pid);
+        if pid == lparam as u32 && GetWindow(hwnd, GW_OWNER) == 0 {
+            let before = IsWindowVisible(hwnd);
+            ShowWindow(hwnd, SW_RESTORE);
+            ShowWindow(hwnd, SW_SHOW);
+            BringWindowToTop(hwnd);
+            SetForegroundWindow(hwnd);
+            let after = IsWindowVisible(hwnd);
+            diag(&format!(
+                "show_own_window: hwnd={hwnd} visible {before} -> {after}"
+            ));
+        }
+        1
+    }
+    unsafe {
+        EnumWindows(Some(enum_cb), std::process::id() as LPARAM);
     }
 }
 
