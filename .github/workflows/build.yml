@@ -312,7 +312,6 @@ jobs:
               const byte VK_CONTROL = 0x11; const uint KEYUP = 0x0002;
               keybd_event(VK_CONTROL, 0, 0, UIntPtr.Zero);
               keybd_event((byte)(0x30 + d), 0, 0, UIntPtr.Zero);
-              System.Threading.Thread.Sleep(60);
               keybd_event((byte)(0x30 + d), 0, KEYUP, UIntPtr.Zero);
               keybd_event(VK_CONTROL, 0, KEYUP, UIntPtr.Zero);
             }
@@ -388,7 +387,14 @@ jobs:
             }
           }
           "@
+          Get-Process wax-vpn -ErrorAction SilentlyContinue | Stop-Process -Force
+          Start-Sleep -Seconds 2
           $conBefore = [WaxCon]::CountConsoles()
+          # Scoped split-tunnel check: exclude 8.8.8.8/32 for the demo profile
+          # (runner-local settings only; no live routes touched beyond the demo tunnel).
+          $cfgDir = Join-Path $env:APPDATA 'wax-vpn'
+          New-Item -ItemType Directory -Force -Path $cfgDir | Out-Null
+          Set-Content -Path (Join-Path $cfgDir 'settings.json') -Value '{"split_exclusions":{"demo":"8.8.8.8/32"}}'
           $pg = Start-Process -FilePath "$PWD\bin\wax-vpn.exe" -PassThru
           Add-Type -AssemblyName UIAutomationClient
           Add-Type -AssemblyName UIAutomationTypes
@@ -448,6 +454,28 @@ jobs:
                 if ($st -match 'Last handshake') { $up = $true }
               }
               if ($up) { Note 'PASS GUI-driven connect: handshake after clicking Connect in the app' } else { Note 'FAIL GUI-driven connect: no handshake within 120s of clicking Connect' }
+              if ($up) {
+                function Test-IPv4InPrefix([string]$prefix, [string]$ip) {
+                  $parts = $prefix -split '/'
+                  $plen = [int]$parts[1]
+                  if ($plen -eq 0) { return $true }
+                  $b = [System.Net.IPAddress]::Parse($parts[0]).GetAddressBytes()
+                  $a = [System.Net.IPAddress]::Parse($ip).GetAddressBytes()
+                  $bv = ([uint32]$b[0] -shl 24) -bor ([uint32]$b[1] -shl 16) -bor ([uint32]$b[2] -shl 8) -bor $b[3]
+                  $av = ([uint32]$a[0] -shl 24) -bor ([uint32]$a[1] -shl 16) -bor ([uint32]$a[2] -shl 8) -bor $a[3]
+                  $m = [uint32](([uint64][uint32]::MaxValue -shl (32 - $plen)) -band [uint32]::MaxValue)
+                  return (($av -band $m) -eq ($bv -band $m))
+                }
+                $wr = @(Get-NetRoute -InterfaceAlias 'waX VPN' -AddressFamily IPv4 -ErrorAction SilentlyContinue)
+                $covered = @($wr | Where-Object { Test-IPv4InPrefix $_.DestinationPrefix '8.8.8.8' })
+                if ($wr.Count -gt 10 -and $covered.Count -eq 0) {
+                  Note "PASS split tunneling: 8.8.8.8/32 excluded - $($wr.Count) tunnel routes installed, none covers 8.8.8.8"
+                } elseif ($wr.Count -le 10 -and $covered.Count -eq 0) {
+                  Note "FAIL split tunneling: only $($wr.Count) tunnel routes (expected many from /32 subtraction)"
+                } else {
+                  Note "FAIL split tunneling: a tunnel route still covers 8.8.8.8 ($($wr.Count) routes)"
+                }
+              }
               $conAfter = [WaxCon]::CountConsoles()
               $conMax = Receive-Job $watcher -Wait -AutoRemoveJob
               if (($conMax -le $conBefore) -and ($conAfter -le $conBefore)) { Note "PASS no console windows observed during GUI connect (polled every ~100ms; windows shorter than the interval could be missed; baseline=$conBefore peak=$conMax end=$conAfter)" } else { Note "FAIL console window observed during GUI connect (baseline=$conBefore peak=$conMax end=$conAfter)" }
