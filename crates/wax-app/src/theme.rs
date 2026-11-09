@@ -108,6 +108,10 @@ pub fn section_heading(ui: &mut egui::Ui, title: &str, sub: &str) {
 
 /// The one confident action style. Real egui button: accessible name from text.
 pub fn primary_button(ui: &mut egui::Ui, label: &str, enabled: bool) -> bool {
+    primary_button_named(ui, label, enabled, label)
+}
+
+pub fn primary_button_named(ui: &mut egui::Ui, label: &str, enabled: bool, a11y_name: &str) -> bool {
     let btn = egui::Button::new(
         egui::RichText::new(label)
             .font(semi(14.0))
@@ -116,7 +120,10 @@ pub fn primary_button(ui: &mut egui::Ui, label: &str, enabled: bool) -> bool {
     .fill(if enabled { ACCENT } else { alpha(ACCENT, 36) })
     .corner_radius(egui::CornerRadius::same(12))
     .min_size(Vec2::new(ui.available_width(), 46.0));
-    ui.add_enabled(enabled, btn).clicked()
+    let resp = ui.add_enabled(enabled, btn);
+    let a11y = a11y_name.to_string();
+    resp.widget_info(move || egui::WidgetInfo::labeled(egui::Role::Button, enabled, a11y.clone()));
+    resp.clicked()
 }
 
 pub fn danger_button(ui: &mut egui::Ui, label: &str) -> bool {

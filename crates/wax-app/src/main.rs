@@ -980,7 +980,23 @@ impl WaxApp {
             ConnState::Connecting => ("Connecting", false),
             ConnState::Disconnecting => ("Disconnecting", false),
         };
-        if theme::primary_button(ui, action_label, can_act) {
+        let action_a11y = match &self.state {
+            ConnState::Disconnected | ConnState::Failed(_) => self
+                .selected
+                .and_then(|i| self.profiles.get(i))
+                .map(|p| format!("Connect to {}", p.name)),
+            ConnState::Connected { .. } => self
+                .selected
+                .and_then(|i| self.profiles.get(i))
+                .map(|p| format!("Disconnect from {}", p.name)),
+            _ => None,
+        };
+        if theme::primary_button_named(
+            ui,
+            action_label,
+            can_act,
+            action_a11y.as_deref().unwrap_or(action_label),
+        ) {
             match self.state {
                 ConnState::Disconnected | ConnState::Failed(_) => self.connect_manual(),
                 ConnState::Connected { .. } => self.disconnect(),

@@ -339,10 +339,21 @@ jobs:
             Add-Type -AssemblyName UIAutomationClient
             Add-Type -AssemblyName UIAutomationTypes
             $uiaWin = [System.Windows.Automation.AutomationElement]::FromHandle($hwnd)
+            $allBtns = $uiaWin.FindAll([System.Windows.Automation.TreeScope]::Descendants, (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Button)))
+            Write-Host "buttons in tree: $(@($allBtns | ForEach-Object { $_.Current.Name }) -join ' | ')"
+            $marker = @{ Profiles='Profiles'; Features='Features'; WARP='Cloudflare WARP'; About='About' }
             foreach ($tab in @('Profiles','Features','WARP','About')) {
               $nb = $uiaWin.FindFirst([System.Windows.Automation.TreeScope]::Descendants, (New-Object System.Windows.Automation.AndCondition((New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, $tab)), (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Button)))))
-              if ($nb) { $nb.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke() }
+              if (-not $nb) { Write-Error "UIA: no rail button named '$tab' in the app window"; exit 1 }
+              $nb.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
               Start-Sleep -Milliseconds 1500
+              $mk = $uiaWin.FindFirst([System.Windows.Automation.TreeScope]::Descendants, (New-Object System.Windows.Automation.AndCondition((New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, $marker[$tab])), (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Text)))))
+              if (-not $mk) {
+                $allText = $uiaWin.FindAll([System.Windows.Automation.TreeScope]::Descendants, (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Text)))
+                Write-Host "text elements present: $(@($allText | ForEach-Object { $_.Current.Name }) -join ' | ')"
+                Write-Error "UIA: heading '$($marker[$tab])' not visible after invoking '$tab' - tab did not switch"
+                exit 1
+              }
               $bmp2 = New-Object System.Drawing.Bitmap $w, $h
               $g2 = [System.Drawing.Graphics]::FromImage($bmp2)
               $g2.CopyFromScreen($r.Left, $r.Top, 0, 0, (New-Object System.Drawing.Size $w, $h))
@@ -415,7 +426,10 @@ jobs:
             for ($i = 0; $i -lt 20 -and -not $btn; $i++) {
               Start-Sleep -Seconds 2
               $ct = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Button)
-              $nm = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, 'Connect')
+              # The rail also has a 'Connect' button; the action button is named for its profile.
+              $nm1 = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, 'Connect to demo')
+              $nm2 = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, 'Disconnect from demo')
+              $nm = New-Object System.Windows.Automation.OrCondition($nm1, $nm2)
               $btn = $win.FindFirst([System.Windows.Automation.TreeScope]::Descendants, (New-Object System.Windows.Automation.AndCondition($ct, $nm)))
             }
             if (-not $btn) {
@@ -491,6 +505,19 @@ jobs:
                 if ($ad) { Note 'PASS close-to-tray: app still running and tunnel adapter still up after closing the window' } else { Note 'WARN close-to-tray: app alive after close but adapter is gone' }
               } else {
                 Note 'FAIL close-to-tray: app exited when the window was closed'
+              }
+              # Single instance: a second launch must signal the running instance
+              # (window hidden by close-to-tray must reappear), then exit itself.
+              $p2 = Start-Process -FilePath "$PWD\bin\wax-vpn.exe" -PassThru
+              Start-Sleep -Seconds 5
+              $p2.Refresh(); $pg.Refresh()
+              $siWin = [WaxCon]::FindWindowW($null, 'waX VPN')
+              $siVisible = ($siWin -ne [IntPtr]::Zero) -and [WaxCon]::IsWindowVisible($siWin)
+              if (-not $pg.HasExited -and $p2.HasExited -and $siVisible) {
+                Note 'PASS single instance: second launch handed off, running instance showed its window, second process exited'
+              } else {
+                Note "FAIL single instance: first-alive=$(-not $pg.HasExited) second-exited=$($p2.HasExited) window-visible=$siVisible"
+                if (-not $p2.HasExited) { $p2.Kill() }
               }
               # The runner session has no notification area (Shell_TrayWnd absent), so
               # tray-menu interaction cannot be automated here; it stays a manual check
