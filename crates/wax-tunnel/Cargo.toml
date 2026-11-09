@@ -1,0 +1,15 @@
+[package]
+name = "wax-tunnel"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "WireGuard tunnel management for waX VPN via the official WireGuardNT kernel driver"
+
+[dependencies]
+wax-core = { path = "../wax-core" }
+thiserror = "2"
+log = "0.4"
+
+[target.'cfg(windows)'.dependencies]
+wireguard-nt = "0.5"
+ipnet = "2"

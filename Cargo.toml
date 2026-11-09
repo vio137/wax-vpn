@@ -1,0 +1,21 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/wax-core",
+    "crates/wax-warp",
+    "crates/wax-tunnel",
+    "crates/wax-cli",
+    "crates/wax-app",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/vio137/wax-vpn"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+opt-level = 3
+strip = true

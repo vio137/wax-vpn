@@ -1,0 +1,17 @@
+[package]
+name = "wax-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "waX VPN command line interface"
+
+[[bin]]
+name = "wax"
+path = "src/main.rs"
+
+[dependencies]
+wax-core = { path = "../wax-core" }
+wax-warp = { path = "../wax-warp" }
+wax-tunnel = { path = "../wax-tunnel" }
+clap = { version = "4", features = ["derive"] }
+thiserror = "2"

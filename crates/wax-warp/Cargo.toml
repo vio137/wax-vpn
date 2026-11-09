@@ -1,0 +1,15 @@
+[package]
+name = "wax-warp"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Cloudflare WARP (wgcf-equivalent) client for waX VPN - opt-in only"
+
+[dependencies]
+wax-core = { path = "../wax-core" }
+reqwest = { version = "0.13", default-features = false, features = ["blocking", "json", "rustls"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+ipnet = "2"
+time = { version = "0.3", features = ["formatting"] }
