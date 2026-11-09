@@ -52,7 +52,7 @@ jobs:
 
       - name: Test (workspace)
         if: steps.staleness.outputs.skip != 'true'
-        run: cargo test --workspace --locked=false
+        run: cargo test --workspace
 
       - name: Build release binaries
         if: steps.staleness.outputs.skip != 'true'
