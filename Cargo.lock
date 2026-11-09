@@ -4690,7 +4690,6 @@ dependencies = [
  "egui",
  "embed-resource",
  "log",
- "reqwest",
  "serde",
  "serde_json",
  "tray-icon",

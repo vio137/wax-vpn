@@ -68,8 +68,6 @@ Not yet verified (honest list):
   accept the ToS first - by design).
 - Leak testing (IPv6, DNS) against an external observer.
 - Installer launch on a clean machine.
-- Exit IP display (fetched through the tunnel on connect; shown only when the
-  lookup succeeds).
 
 Implemented and unit-tested, not yet exercised on Windows:
 - Split tunneling: per-profile CIDR exclusions subtracted from AllowedIPs at

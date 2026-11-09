@@ -46,7 +46,6 @@ enum AppEvent {
     ConnectFailed(String),
     Disconnected,
     Stats(TunnelStats),
-    ExitIp(Option<String>),
     WarpDone(Result<String, String>),
 }
 
@@ -76,7 +75,6 @@ pub struct WaxApp {
     picker_open: bool,
     split_edit: String,
     split_edit_for: Option<usize>,
-    exit_ip: Option<String>,
     last_quit_poll: Instant,
     confirm_delete: Option<(usize, f64)>,
     cleanup_issue: Option<String>,
@@ -155,7 +153,6 @@ impl WaxApp {
             picker_open: false,
             split_edit: String::new(),
             split_edit_for: None,
-            exit_ip: None,
             last_quit_poll: Instant::now(),
             confirm_delete: None,
             cleanup_issue: None,
@@ -386,21 +383,6 @@ impl WaxApp {
                 AppEvent::Connected => {
                     self.state = ConnState::Connected { since: Instant::now() };
                     self.status_line = "Tunnel is up".to_string();
-                    self.exit_ip = None;
-                    {
-                        let tx = self.events_tx.clone();
-                        std::thread::spawn(move || {
-                            let ip = reqwest::blocking::Client::builder()
-                                .timeout(std::time::Duration::from_secs(4))
-                                .build()
-                                .ok()
-                                .and_then(|c| c.get("https://api.ipify.org").send().ok())
-                                .and_then(|r| r.text().ok())
-                                .map(|t| t.trim().to_string())
-                                .filter(|t| !t.is_empty() && t.len() < 46);
-                            let _ = tx.send(AppEvent::ExitIp(ip));
-                        });
-                    }
                     self.reconnect_attempts = 0;
                     self.reconnecting = false;
                     if let Some(idx) = self.selected {
@@ -445,7 +427,6 @@ impl WaxApp {
                     };
                     self.stats = TunnelStats::default();
                 }
-                AppEvent::ExitIp(ip) => self.exit_ip = ip,
                 AppEvent::Stats(s) => self.stats = s,
                 AppEvent::Stage(stage) => {
                     self.connect_stages.push(stage);
@@ -1065,15 +1046,6 @@ impl WaxApp {
                     .size(11.0)
                     .color(theme::GOOD),
             );
-            if let Some(ip) = &self.exit_ip {
-                ui.add_space(4.0);
-                ui.label(
-                    RichText::new(format!("Exit IP {ip}"))
-                        .size(11.0)
-                        .color(theme::SUB)
-                        .monospace(),
-                );
-            }
         }
 
     }
