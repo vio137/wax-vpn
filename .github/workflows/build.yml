@@ -244,6 +244,8 @@ jobs:
             Start-Sleep -Seconds 3
             $dnsCrash = Get-DnsClientServerAddress -InterfaceAlias 'waX VPN' -AddressFamily IPv4 -ErrorAction SilentlyContinue
             $adapterCrash = Get-NetAdapter -Name 'waX VPN' -ErrorAction SilentlyContinue
+            $rulesPre = Get-NetFirewallRule -DisplayName 'waX VPN KillSwitch*' -ErrorAction SilentlyContinue
+            Note ("INFO state 3s after owner kill (before any cleanup): adapter=" + $(if ($adapterCrash) { 'present' } else { 'gone' }) + " dns=" + $(if ($dnsCrash) { ($dnsCrash.ServerAddresses -join ',') } else { 'none' }) + " killSwitchRules=" + $(if ($rulesPre) { $rulesPre.Count } else { 0 }))
             .\bin\wax.exe disconnect | Out-Null
             Start-Sleep -Seconds 2
             $dnsCrashAfter = Get-DnsClientServerAddress -InterfaceAlias 'waX VPN' -AddressFamily IPv4 -ErrorAction SilentlyContinue
@@ -271,7 +273,6 @@ jobs:
         shell: pwsh
         run: |
           $p = Start-Process -FilePath "$PWD\bin\wax-vpn.exe" -PassThru
-          Start-Sleep -Seconds 10
           Add-Type -AssemblyName System.Windows.Forms
           Add-Type -AssemblyName System.Drawing
           Add-Type -ReferencedAssemblies System.Drawing.Primitives -TypeDefinition @"
@@ -284,7 +285,11 @@ jobs:
             public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
           }
           "@
-          $hwnd = [WaxWin32]::FindWindowW($null, 'waX VPN')
+          $hwnd = [IntPtr]::Zero
+          for ($i = 0; $i -lt 25 -and $hwnd -eq [IntPtr]::Zero; $i++) {
+            Start-Sleep -Seconds 2
+            $hwnd = [WaxWin32]::FindWindowW($null, 'waX VPN')
+          }
           if ($hwnd -ne [IntPtr]::Zero) {
             [WaxWin32]::SetForegroundWindow($hwnd) | Out-Null
             Start-Sleep -Seconds 2

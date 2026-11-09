@@ -4,6 +4,7 @@
 
 mod orb;
 mod theme;
+mod tray;
 mod settings;
 
 use std::sync::mpsc::{channel, Receiver};
@@ -64,6 +65,9 @@ pub struct WaxApp {
     import_paste: String,
     import_error: Option<String>,
     tab: Tab,
+    hidden: bool,
+    #[cfg(windows)]
+    tray: Option<tray::Tray>,
 }
 
 impl WaxApp {
@@ -103,6 +107,9 @@ impl WaxApp {
             import_paste: String::new(),
             import_error: None,
             tab: Tab::Connect,
+            hidden: false,
+            #[cfg(windows)]
+            tray: tray::Tray::new(),
         };
         app.refresh_warp_summary();
         // Pick up a tunnel left running by an earlier instance.
@@ -366,6 +373,49 @@ impl eframe::App for WaxApp {
         let ctx = ui.ctx().clone();
         self.handle_events(&ctx);
 
+        // Close button hides to the tray instead of exiting; Quit lives in the tray menu.
+        if ctx.input(|i| i.viewport().close_requested()) {
+            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+            ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
+            self.hidden = true;
+        }
+
+        #[cfg(windows)]
+        {
+            let mut open = false;
+            let mut toggle = false;
+            let mut quit = false;
+            while let Some(ev) = tray::poll_menu() {
+                if let Some(t) = &self.tray {
+                    if ev.id == t.open_id {
+                        open = true;
+                    } else if ev.id == t.toggle_id {
+                        toggle = true;
+                    } else if ev.id == t.quit_id {
+                        quit = true;
+                    }
+                }
+            }
+            if open {
+                self.hidden = false;
+                ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
+                ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+            }
+            if toggle {
+                match self.state {
+                    ConnState::Disconnected | ConnState::Failed(_) => self.connect(),
+                    ConnState::Connected { .. } => self.disconnect(),
+                    _ => {}
+                }
+            }
+            if let Some(t) = &self.tray {
+                t.set_connected(matches!(self.state, ConnState::Connected { .. }));
+            }
+            if quit {
+                self.quit_app();
+            }
+        }
+
         // Drag & drop .conf import
         let dropped = ctx.input(|i| i.raw.dropped_files.clone());
         for file in dropped {
@@ -451,11 +501,26 @@ impl eframe::App for WaxApp {
                 }
             });
 
-        ctx.request_repaint_after(Duration::from_millis(66));
+        ctx.request_repaint_after(if self.hidden {
+            Duration::from_millis(1000)
+        } else {
+            Duration::from_millis(66)
+        });
     }
 }
 
 impl WaxApp {
+    /// Explicit quit from the tray menu: disconnect cleanly, then exit.
+    fn quit_app(&mut self) {
+        let taken = self.tunnel.lock().unwrap().take();
+        if let Some(t) = taken {
+            let _ = t.shutdown();
+        } else {
+            let _ = Tunnel::force_disconnect();
+        }
+        std::process::exit(0);
+    }
+
     fn tab_connect(&mut self, ui: &mut egui::Ui, t: f32) {
         ui.with_layout(Layout::top_down(Align::Center), |ui| {
             ui.add_space(2.0);
