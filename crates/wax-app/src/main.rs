@@ -345,14 +345,18 @@ impl WaxApp {
         }
     }
 
-    fn import_text(&mut self, name: String, text: &str) {
+    fn import_text(&mut self, name: String, text: &str) -> bool {
         match profile::import_conf(&name, text) {
             Ok(p) => {
                 self.status_line = format!("Imported profile '{}'", p.name);
                 self.import_error = None;
                 self.reload_profiles();
+                true
             }
-            Err(e) => self.import_error = Some(e.to_string()),
+            Err(e) => {
+                self.import_error = Some(e.to_string());
+                false
+            }
         }
     }
 
@@ -1304,8 +1308,9 @@ impl WaxApp {
             ui.add_space(4.0);
             if theme::primary_button(ui, "Import config", !self.import_paste.trim().is_empty()) {
                 let text = self.import_paste.trim().to_string();
-                self.import_text(format!("Imported {}", chrono_free_stamp()), &text);
-                self.import_paste.clear();
+                if self.import_text(format!("Imported {}", chrono_free_stamp()), &text) {
+                    self.import_paste.clear();
+                }
             }
             if let Some(err) = &self.import_error {
                 ui.label(RichText::new(err).size(11.0).color(theme::BAD));
