@@ -3,6 +3,7 @@
 pub mod conf;
 pub mod keys;
 pub mod profile;
+pub mod split;
 
 pub use conf::{InterfaceConfig, PeerConfig, WireGuardConfig};
 pub use profile::Profile;

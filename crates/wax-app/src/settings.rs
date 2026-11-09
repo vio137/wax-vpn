@@ -11,6 +11,8 @@ pub struct Settings {
     pub auto_reconnect: bool,
     pub reduced_motion: bool,
     pub last_profile: Option<String>,
+    /// Per-profile split-tunnel exclusions (profile name -> raw CIDR list).
+    pub split_exclusions: std::collections::BTreeMap<String, String>,
 }
 
 impl Default for Settings {
@@ -22,6 +24,7 @@ impl Default for Settings {
             auto_reconnect: true,
             reduced_motion: false,
             last_profile: None,
+            split_exclusions: std::collections::BTreeMap::new(),
         }
     }
 }

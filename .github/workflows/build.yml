@@ -331,6 +331,9 @@ jobs:
             foreach ($tab in @(@('^2','profiles'), @('^3','features'), @('^4','warp'), @('^5','about'))) {
               [WaxWin32]::SetForegroundWindow($hwnd) | Out-Null
               [System.Windows.Forms.SendKeys]::SendWait($tab[0])
+              Start-Sleep -Milliseconds 500
+              [WaxWin32]::SetForegroundWindow($hwnd) | Out-Null
+              [System.Windows.Forms.SendKeys]::SendWait($tab[0])
               Start-Sleep -Milliseconds 1200
               $bmp2 = New-Object System.Drawing.Bitmap $w, $h
               $g2 = [System.Drawing.Graphics]::FromImage($bmp2)

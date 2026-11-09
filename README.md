@@ -45,18 +45,36 @@ against the attached `SHA256SUMS` file.
 ## Verified vs. planned
 
 Verified (automated):
-- Unit tests: key generation round-trips, `.conf` parse/serialize round-trip.
+- Unit tests: key generation round-trips, `.conf` parse/serialize round-trip,
+  split-tunnel CIDR subtraction.
 - CI: full workspace builds on Windows; installer produced; artifact SHA256 published.
 
-Not yet verified on a real machine (honest list):
-- Actual adapter creation, handshake and traffic flow.
-- Kill switch and DNS restoration.
+Verified in CI on Windows runners (see `verify-results.txt` in each build's
+verification-evidence artifact):
+- Profile import, tunnel connect with a live handshake, ping through the tunnel.
+- GUI-driven connect (UI Automation clicks the app's Connect button), and
+  close-to-tray with the process and tunnel adapter still up.
+- Tunnel DNS applied on connect and restored on disconnect; no firewall
+  leftovers after disconnect.
+- Crash recovery: adapter and DNS are reclaimed by Windows when the owner
+  process dies; kill-switch firewall rules persist across an owner crash
+  (persistence observed - effective traffic blocking is not traffic-tested).
+
+Not yet verified (honest list):
+- Effective traffic blocking by the kill switch (rule presence only).
+- Tray Quit and reopen-from-tray-menu (the runner's notification area is not
+  reachable by automation).
 - WARP registration against the live Cloudflare API (requires a person to
   accept the ToS first - by design).
-- GUI behavior on a real display.
+- Leak testing (IPv6, DNS) against an external observer.
+- Installer launch on a clean machine.
 
-Planned: tray icon, auto-reconnect, split tunneling, per-profile MTU/DNS
-overrides, speed test, installer polish (icon, branding), localization.
+Implemented and unit-tested, not yet exercised on Windows:
+- Split tunneling: per-profile CIDR exclusions subtracted from AllowedIPs at
+  connect time (Profiles tab -> Split tunneling).
+
+Planned: per-profile MTU/DNS overrides, speed test, installer polish (icon,
+branding), localization.
 
 ## Building
 

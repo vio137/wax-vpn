@@ -73,6 +73,8 @@ pub struct WaxApp {
     reconnect_attempts: u8,
     reconnecting: bool,
     picker_open: bool,
+    split_edit: String,
+    split_edit_for: Option<usize>,
     confirm_delete: Option<(usize, f64)>,
     cleanup_issue: Option<String>,
     scene: gargantua::Gargantua,
@@ -148,6 +150,8 @@ impl WaxApp {
             reconnect_attempts: 0,
             reconnecting: false,
             picker_open: false,
+            split_edit: String::new(),
+            split_edit_for: None,
             confirm_delete: None,
             cleanup_issue: None,
             scene: gargantua::Gargantua::new(),
@@ -230,7 +234,29 @@ impl WaxApp {
             );
             return;
         }
-        let Some(profile) = self.profiles.get(idx).cloned() else { return };
+        let Some(mut profile) = self.profiles.get(idx).cloned() else { return };
+        if let Some(raw) = self.settings.split_exclusions.get(&profile.name) {
+            if !raw.trim().is_empty() {
+                match wax_core::split::parse_exclusions(raw) {
+                    Ok(excls) => {
+                        for peer in &mut profile.config.peers {
+                            peer.allowed_ips =
+                                wax_core::split::apply_exclusions(&peer.allowed_ips, &excls);
+                        }
+                        if profile.config.peers.iter().all(|pr| pr.allowed_ips.is_empty()) {
+                            self.state = ConnState::Failed(
+                                "Split tunneling exclusions cover all traffic - nothing left to tunnel".into(),
+                            );
+                            return;
+                        }
+                    }
+                    Err(e) => {
+                        self.state = ConnState::Failed(format!("Split tunneling: {e}"));
+                        return;
+                    }
+                }
+            }
+        }
         self.state = ConnState::Connecting;
         self.connect_stages.clear();
         self.status_line = format!("Connecting to {}...", profile.name);
@@ -1136,6 +1162,52 @@ impl WaxApp {
             self.selected = Some(i);
             self.confirm_delete = None;
             self.connect_manual();
+        }
+
+        if let Some(sel) = self.selected {
+            if self.profiles.get(sel).is_some() {
+                if self.split_edit_for != Some(sel) {
+                    self.split_edit_for = Some(sel);
+                    self.split_edit = self
+                        .profiles
+                        .get(sel)
+                        .and_then(|pr| self.settings.split_exclusions.get(&pr.name).cloned())
+                        .unwrap_or_default();
+                }
+                ui.add_space(10.0);
+                theme::section_heading(ui, "Split tunneling", "CIDRs excluded from the tunnel for the selected profile. Applies on next connect.");
+                let resp = ui.add(
+                    egui::TextEdit::singleline(&mut self.split_edit)
+                        .hint_text("192.168.0.0/16, fd00::/8")
+                        .desired_width(f32::INFINITY),
+                );
+                if resp.changed() {
+                    if let Some(pr) = self.profiles.get(sel) {
+                        let name = pr.name.clone();
+                        if self.split_edit.trim().is_empty() {
+                            self.settings.split_exclusions.remove(&name);
+                        } else {
+                            self.settings
+                                .split_exclusions
+                                .insert(name, self.split_edit.trim().to_string());
+                        }
+                        settings::save(&self.settings);
+                    }
+                }
+                match wax_core::split::parse_exclusions(&self.split_edit) {
+                    Ok(excls) if !excls.is_empty() => {
+                        ui.label(
+                            RichText::new(format!("{} excluded range(s)", excls.len()))
+                                .size(10.5)
+                                .color(theme::MUTE),
+                        );
+                    }
+                    Ok(_) => {}
+                    Err(e) => {
+                        ui.label(RichText::new(format!("{e}")).size(11.0).color(theme::BAD));
+                    }
+                }
+            }
         }
 
         ui.add_space(8.0);
