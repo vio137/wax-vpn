@@ -21,15 +21,35 @@ pub struct WarpClient {
 fn decode_result<T: serde::de::DeserializeOwned>(resp: reqwest::blocking::Response) -> Result<T, WarpError> {
     let status = resp.status();
     let body = resp.text().map_err(|e| WarpError::Http(e.to_string()))?;
-    let env: Envelope<T> = serde_json::from_str(&body).map_err(|e| {
-        WarpError::BadResponse(format!("status {status}, undecodable body: {e}"))
+    let value: serde_json::Value = serde_json::from_str(&body).map_err(|e| {
+        WarpError::BadResponse(format!("HTTP {status}, body is not JSON: {e}"))
     })?;
-    if !env.success {
-        let first = env.errors.first().cloned().unwrap_or_default();
-        return Err(WarpError::Api { code: first.code, message: first.message });
+    // Failure: HTTP error status, or an explicit `"success": false` envelope.
+    let envelope_failed = value.get("success").and_then(|v| v.as_bool()) == Some(false);
+    if !status.is_success() || envelope_failed {
+        let first = value
+            .get("errors")
+            .and_then(|e| e.as_array())
+            .and_then(|a| a.first())
+            .cloned()
+            .unwrap_or_default();
+        let code = first.get("code").and_then(|c| c.as_i64()).unwrap_or(i64::from(status.as_u16()));
+        let message = first
+            .get("message")
+            .and_then(|m| m.as_str())
+            .map(str::to_string)
+            .unwrap_or_else(|| format!("HTTP {status}"));
+        return Err(WarpError::Api { code, message });
     }
-    env.result
-        .ok_or_else(|| WarpError::BadResponse(format!("status {status}, empty result")))
+    // The registration endpoint returns the object directly; other endpoints
+    // may wrap it as {"success":true,"result":{...}}. Accept both.
+    let payload = if value.get("success").is_some() && value.get("result").is_some() {
+        value["result"].clone()
+    } else {
+        value
+    };
+    serde_json::from_value(payload)
+        .map_err(|e| WarpError::BadResponse(format!("HTTP {status}, unexpected shape: {e}")))
 }
 
 impl WarpClient {
@@ -139,5 +159,18 @@ impl WarpClient {
             let body = resp.text().unwrap_or_default();
             Err(WarpError::Http(format!("status {status}: {body}")))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn registration_object_decodes_without_envelope() {
+        let v: serde_json::Value = serde_json::from_str(r#"{"id":"abc","token":"t","account":{"id":"x","account_type":"free","license":"L"},"config":{"client_id":"AQID","interface":{"addresses":{"v4":"172.16.0.2","v6":"fd01::2"}},"peers":[{"public_key":"pk","endpoint":{"host":"h:2408","v4":"1.2.3.4:0","v6":"[::1]:0"}}]}}"#).unwrap();
+        assert!(v.get("success").is_none());
+        let r: Registration = serde_json::from_value(v).unwrap();
+        assert_eq!(r.id, "abc");
+        assert_eq!(r.config.peers.len(), 1);
     }
 }
