@@ -441,13 +441,44 @@ jobs:
               } else {
                 Note 'FAIL close-to-tray: app exited when the window was closed'
               }
+              function Find-WaxTrayIcon {
+                foreach ($tbName in @('User Promoted Notification Area', 'Notification Area')) {
+                  $tb = $root.FindFirst([System.Windows.Automation.TreeScope]::Descendants, (New-Object System.Windows.Automation.AndCondition((New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, $tbName)), (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::ToolBar)))))
+                  if ($tb) {
+                    $ic = $tb.FindFirst([System.Windows.Automation.TreeScope]::Descendants, (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, 'waX VPN')))
+                    if ($ic) { return $ic }
+                  }
+                }
+                return $null
+              }
               $quitDone = $false
               try {
                 $chev = $root.FindFirst([System.Windows.Automation.TreeScope]::Descendants, (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, 'Notification Chevron')))
                 if ($chev) { $chev.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke(); Start-Sleep -Seconds 2 }
-                $tray = $root.FindFirst([System.Windows.Automation.TreeScope]::Descendants, (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, 'waX VPN')))
+                $tray = Find-WaxTrayIcon
+                if (-not $tray) {
+                  $seen = @()
+                  foreach ($tbName in @('User Promoted Notification Area', 'Notification Area')) {
+                    $tb = $root.FindFirst([System.Windows.Automation.TreeScope]::Descendants, (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, $tbName)))
+                    if ($tb) { $seen += ($tb.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition) | ForEach-Object { $_.Current.Name } | Where-Object { $_ }) }
+                  }
+                  Note "WARN tray icon not found in notification area toolbars; icons seen: $($seen -join ' | ')"
+                }
                 if ($tray) {
                   $pt = $tray.GetClickablePoint()
+                  [WaxCon]::RightClick([int]$pt.X, [int]$pt.Y)
+                  Start-Sleep -Seconds 2
+                  $open = $root.FindFirst([System.Windows.Automation.TreeScope]::Descendants, (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, 'Open waX VPN')))
+                  if ($open) {
+                    $open.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+                    Start-Sleep -Seconds 3
+                    $w2 = $root.FindFirst([System.Windows.Automation.TreeScope]::Descendants, (New-Object System.Windows.Automation.AndCondition((New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, 'waX VPN')), (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Window)))))
+                    if ($w2) {
+                      Note 'PASS reopen: window restored via tray Open after close-to-tray'
+                      try { $w2.GetCurrentPattern([System.Windows.Automation.WindowPattern]::Pattern).Close() } catch { Note "WARN window re-close failed: $($_.Exception.Message)" }
+                      Start-Sleep -Seconds 2
+                    } else { Note 'WARN reopen: window not detected after tray Open' }
+                  } else { Note 'WARN tray Open menu item not found' }
                   [WaxCon]::RightClick([int]$pt.X, [int]$pt.Y)
                   Start-Sleep -Seconds 2
                   $q = $root.FindFirst([System.Windows.Automation.TreeScope]::Descendants, (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, 'Quit waX VPN')))
