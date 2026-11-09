@@ -1,0 +1,76 @@
+# waX VPN
+
+A WireGuard VPN client for Windows, written in Rust - with Cloudflare WARP
+(wgcf-equivalent) support built in, strictly opt-in.
+
+**Status: early preview.** The workspace compiles, core logic is unit-tested,
+and the CI pipeline produces a real installer. Actual on-machine tunnel
+behavior is being verified build by build - see "Verified vs. planned" below.
+Nothing here is claimed to work until it has been tested.
+
+## Download
+
+Grab the latest installer from
+[Releases](https://github.com/vio137/wax-vpn/releases) and check its SHA256
+against the attached `SHA256SUMS` file.
+
+## What it is
+
+- **Real system VPN.** waX VPN drives the official WireGuardNT kernel driver
+  (the same `wireguard.dll` that powers WireGuard for Windows, downloaded
+  from [download.wireguard.com](https://download.wireguard.com/wireguard-nt/))
+  through the MIT-licensed [`wireguard-nt`](https://crates.io/crates/wireguard-nt)
+  Rust bindings. No browser proxy, no userspace tunnel pretending to be a VPN.
+- **Rust first.** UI (egui), tunnel management, profile handling and the WARP
+  client are all Rust. The only non-Rust components are the official signed
+  WireGuardNT driver itself and standard OS facilities (netsh, Windows
+  Firewall).
+- **WARP built in, opt-in.** The functionality of
+  [wgcf](https://github.com/ViRb3/wgcf) - register, account details, device
+  management, profile generation - is reimplemented in Rust (`wax-warp`).
+  Registration only ever happens when you explicitly accept Cloudflare's
+  Terms of Service in the app or pass `--accept-tos` to the CLI. waX VPN is
+  **not affiliated with Cloudflare**.
+
+## Components
+
+| Crate | Purpose |
+| --- | --- |
+| `wax-core` | Keys (audited `x25519-dalek`), wg-quick `.conf` parsing/serialization, profile storage |
+| `wax-warp` | Cloudflare WARP API client (wgcf equivalent), account persistence, profile generation |
+| `wax-tunnel` | Adapter lifecycle on WireGuardNT, DNS (netsh), firewall-based kill switch (PowerShell) |
+| `wax-cli` (`wax.exe`) | Full CLI: profiles, import, connect/disconnect/status, WARP commands |
+| `wax-app` (`waX VPN.exe`) | egui GUI: animated connect orb, profile picker, stats, settings, WARP panel, drag-and-drop import |
+
+## Verified vs. planned
+
+Verified (automated):
+- Unit tests: key generation round-trips, `.conf` parse/serialize round-trip.
+- CI: full workspace builds on Windows; installer produced; artifact SHA256 published.
+
+Not yet verified on a real machine (honest list):
+- Actual adapter creation, handshake and traffic flow.
+- Kill switch and DNS restoration.
+- WARP registration against the live Cloudflare API (requires a person to
+  accept the ToS first - by design).
+- GUI behavior on a real display.
+
+Planned: tray icon, auto-reconnect, split tunneling, per-profile MTU/DNS
+overrides, speed test, installer polish (icon, branding), localization.
+
+## Building
+
+```
+cargo build --release --workspace
+```
+
+The app expects the official `wireguard.dll` next to the executable (the
+installer handles this).
+
+## License
+
+waX VPN's own code is MIT (see `LICENSE`). The bundled `wireguard.dll` is the
+official prebuilt WireGuardNT binary, distributed by the WireGuard project
+under the permissive license included in the installer
+(`LICENSE-wireguard-nt.txt`). WireGuard is a registered trademark of Jason A.
+Donenfeld; waX VPN is not affiliated with the WireGuard project.
