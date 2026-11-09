@@ -78,6 +78,12 @@ Donenfeld; waX VPN is not affiliated with the WireGuard project.
 ## Design process
 
 Interface refinements follow the unslop design-review rubric by Damir Sokolovsky
-(https://github.com/heydamir/unslop), used under CC BY 4.0. The direction:
-quiet dark chrome, one cyan accent, glassy raised surfaces, and the connect
-orb as the single rich moment.
+(https://github.com/heydamir/unslop), used under CC BY 4.0. The connect
+control is a Gargantua-inspired procedural black hole - a lensed starfield,
+an accretion disk with doppler brightening, a photon ring - painted in plain
+egui with no textures or shaders, ported from the same scene on the project
+website. Animation speed and brightness are fixed per connection state and
+never derived from measured traffic.
+
+The interface typeface is Inter Display by Rasmus Andersson
+(https://rsms.me/inter/), used under the SIL Open Font License 1.1.

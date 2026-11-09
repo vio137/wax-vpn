@@ -2,7 +2,7 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod orb;
+mod gargantua;
 mod theme;
 mod tray;
 mod settings;
@@ -75,6 +75,11 @@ pub struct WaxApp {
     picker_open: bool,
     confirm_delete: Option<(usize, f64)>,
     cleanup_issue: Option<String>,
+    scene: gargantua::Gargantua,
+    energy: f32,
+    speed: f32,
+    phase: f32,
+    last_tick: Instant,
     #[cfg(windows)]
     tray: Option<tray::Tray>,
 }
@@ -83,9 +88,31 @@ impl WaxApp {
     fn new(cc: &eframe::CreationContext<'_>) -> Self {
         cc.egui_ctx.set_theme(egui::Theme::Dark);
         cc.egui_ctx.style_mut_of(egui::Theme::Dark, |style| {
-            style.visuals.panel_fill = orb::BG;
-            style.visuals.window_fill = orb::BG;
+            style.visuals.panel_fill = theme::BG;
+            style.visuals.window_fill = theme::BG;
         });
+
+        // Inter Display (OFL 1.1) - the product typeface. SemiBold rides in a
+        // named family; egui's .strong() does not switch fonts on its own.
+        let mut fonts = egui::FontDefinitions::default();
+        fonts.font_data.insert(
+            "InterDisplay".into(),
+            std::sync::Arc::new(egui::FontData::from_static(include_bytes!("../assets/InterDisplay-Regular.ttf"))),
+        );
+        fonts.font_data.insert(
+            "InterDisplay-SemiBold".into(),
+            std::sync::Arc::new(egui::FontData::from_static(include_bytes!("../assets/InterDisplay-SemiBold.ttf"))),
+        );
+        fonts
+            .families
+            .entry(egui::FontFamily::Proportional)
+            .or_default()
+            .insert(0, "InterDisplay".into());
+        fonts.families.insert(
+            egui::FontFamily::Name("semibold".into()),
+            vec!["InterDisplay-SemiBold".into()],
+        );
+        cc.egui_ctx.set_fonts(fonts);
 
         let (tx, rx) = channel();
         let settings = settings::load();
@@ -123,6 +150,11 @@ impl WaxApp {
             picker_open: false,
             confirm_delete: None,
             cleanup_issue: None,
+            scene: gargantua::Gargantua::new(),
+            energy: 0.5,
+            speed: 0.7,
+            phase: 0.0,
+            last_tick: Instant::now(),
             #[cfg(windows)]
             tray: tray::Tray::new(&cc.egui_ctx),
         };
@@ -522,37 +554,43 @@ impl eframe::App for WaxApp {
 
         let t = self.start.elapsed().as_secs_f32();
 
-        // ---------- top bar ----------
-        egui::Panel::top("topbar")
-            .frame(egui::Frame::default().fill(theme::PANEL).inner_margin(egui::Margin::symmetric(14, 10)))
+        // ---------- custom title bar (frameless window) ----------
+        egui::Panel::top("titlebar")
+            .frame(egui::Frame::default().fill(theme::PANEL).inner_margin(egui::Margin::symmetric(10, 5)))
             .show(ui, |ui| {
+                let bar = ui.max_rect();
+                let drag = ui.interact(bar, ui.scope_id().with("titlebar_drag"), egui::Sense::click_and_drag());
+                if drag.drag_started() {
+                    ctx.send_viewport_cmd(egui::ViewportCommand::StartDrag);
+                }
                 ui.horizontal(|ui| {
-                    ui.label(RichText::new("waX").size(19.0).color(theme::TEXT).strong());
-                    ui.label(RichText::new("VPN").size(19.0).color(theme::ACCENT).strong());
-                    ui.add_space(6.0);
-                    ui.label(RichText::new(format!("v{VERSION}")).size(10.5).color(theme::MUTE));
+                    ui.label(RichText::new("waX VPN").size(12.5).color(theme::SUB).font(theme::semi(12.5)));
                     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                        // close hides to the tray; Quit lives in the tray menu
+                        if chrome_button(ui, "\u{00d7}", "Hide to tray - quit from the tray icon menu") {
+                            self.hidden = true;
+                            ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
+                        }
+                        if chrome_button(ui, "\u{2013}", "Minimize") {
+                            ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
+                        }
                         let (txt, col) = if self.is_admin {
                             ("Admin", theme::GOOD)
                         } else {
                             ("Not elevated", theme::WARN)
                         };
-                        ui.label(
-                            RichText::new(txt)
-                                .size(10.0)
-                                .color(col)
-                                .strong(),
-                        );
+                        ui.label(RichText::new(txt).size(10.0).color(col));
                     });
                 });
             });
 
-        // ---------- sidebar ----------
-        egui::Panel::left("nav")
+        // ---------- icon rail ----------
+        egui::Panel::left("rail")
             .resizable(false)
-            .exact_size(132.0)
-            .frame(egui::Frame::default().fill(theme::PANEL).inner_margin(egui::Margin::symmetric(8, 12)))
+            .exact_size(76.0)
+            .frame(egui::Frame::default().fill(theme::PANEL).inner_margin(egui::Margin::symmetric(6, 10)))
             .show(ui, |ui| {
+                ui.add_space(6.0);
                 let items = [
                     (Tab::Connect, "Connect"),
                     (Tab::Profiles, "Profiles"),
@@ -561,29 +599,60 @@ impl eframe::App for WaxApp {
                     (Tab::About, "About"),
                 ];
                 for (tab, label) in items {
-                    if theme::nav_button(ui, label, self.tab == tab) {
+                    if rail_button(ui, tab, label, self.tab == tab) {
                         self.tab = tab;
                     }
-                    ui.add_space(2.0);
+                    ui.add_space(4.0);
                 }
-                ui.with_layout(Layout::bottom_up(Align::Min), |ui| {
-                    ui.label(
-                        RichText::new("WireGuard in Rust")
-                            .size(9.5)
-                            .color(theme::alpha(theme::MUTE, 140)),
-                    );
-                });
             });
 
-        // ---------- central ----------
+        // ---------- central: deep-space scene with content on top ----------
         egui::CentralPanel::default()
             .frame(egui::Frame::default().fill(theme::BG).inner_margin(egui::Margin::symmetric(18, 12)))
             .show(ui, |ui| {
+                let rect = ui.max_rect();
+
+                // Scene timing. Brightness and rotation speed are fixed moods
+                // per connection state - never tied to measured throughput.
+                let now = Instant::now();
+                let dt = (now - self.last_tick).as_secs_f32().min(0.1);
+                self.last_tick = now;
+                let (energy_t, speed_t) = match &self.state {
+                    ConnState::Disconnected => (0.5_f32, 0.7_f32),
+                    ConnState::Connecting => (0.8, 1.35),
+                    ConnState::Connected { .. } => (1.0, 1.0),
+                    ConnState::Disconnecting => (0.55, 0.8),
+                    ConnState::Failed(_) => (0.3, 0.45),
+                };
+                let k = (dt * 4.0).min(1.0);
+                self.energy += (energy_t - self.energy) * k;
+                self.speed += (speed_t - self.speed) * k;
+                if !self.settings.reduced_motion {
+                    self.phase += dt * self.speed;
+                }
+                let t_wall = t;
+                let (phase, twinkle_t) = if self.settings.reduced_motion {
+                    (1.5, 4.2)
+                } else {
+                    (self.phase, t_wall)
+                };
+
+                let center = egui::pos2(rect.center().x, rect.center().y - 26.0);
+                let r_hole = rect.height().min(rect.width()) * 0.155;
+                {
+                    let painter = ui.painter().with_clip_rect(rect);
+                    self.scene.paint_stars(&painter, rect, center, r_hole, twinkle_t, 0.35 + 0.55 * self.energy);
+                }
+                if self.tab != Tab::Connect {
+                    // Scrim keeps cards and text readable over the starfield.
+                    ui.painter().rect_filled(rect, 0, egui::Color32::from_black_alpha(160));
+                }
+
                 let fade = theme::enter(ui, ui.scope_id().with(("tab", self.tab)), self.settings.reduced_motion);
                 ui.scope(|ui| {
                     ui.set_opacity(fade);
                     match self.tab {
-                        Tab::Connect => self.tab_connect(ui, t),
+                        Tab::Connect => self.tab_connect(ui, t, rect, center, r_hole, phase, twinkle_t),
                         Tab::Profiles => self.tab_profiles(ui),
                         Tab::Features => self.tab_features(ui),
                         Tab::Warp => self.tab_warp(ui),
@@ -592,8 +661,31 @@ impl eframe::App for WaxApp {
                 });
             });
 
+        // Frameless windows have no native resize border: thin edge strips
+        // and a corner grip restore it.
+        let screen = ctx.content_rect();
+        let grips = [
+            (egui::Rect::from_min_max(egui::pos2(screen.right() - 4.0, screen.top()), egui::pos2(screen.right(), screen.bottom())), egui::viewport::ResizeDirection::East),
+            (egui::Rect::from_min_max(egui::pos2(screen.left(), screen.bottom() - 4.0), egui::pos2(screen.right(), screen.bottom())), egui::viewport::ResizeDirection::South),
+            (egui::Rect::from_min_max(egui::pos2(screen.right() - 14.0, screen.bottom() - 14.0), egui::pos2(screen.right(), screen.bottom())), egui::viewport::ResizeDirection::SouthEast),
+        ];
+        for (i, (gr, dir)) in grips.into_iter().enumerate() {
+            let gresp = ui.interact(gr, ui.scope_id().with(("grip", i)), egui::Sense::click_and_drag());
+            if gresp.hovered() || gresp.dragged() {
+                ctx.set_cursor_icon(match dir {
+                    egui::viewport::ResizeDirection::East => egui::CursorIcon::ResizeHorizontal,
+                    _ => egui::CursorIcon::ResizeNwSe,
+                });
+            }
+            if gresp.drag_started() {
+                ctx.send_viewport_cmd(egui::ViewportCommand::BeginResize(dir));
+            }
+        }
+        let idle_still = matches!(self.state, ConnState::Disconnected) && self.settings.reduced_motion;
         ctx.request_repaint_after(if self.hidden {
             Duration::from_millis(1000)
+        } else if idle_still {
+            Duration::from_millis(250)
         } else {
             Duration::from_millis(33)
         });
@@ -613,20 +705,72 @@ impl WaxApp {
         std::process::exit(0);
     }
 
-    fn tab_connect(&mut self, ui: &mut egui::Ui, t: f32) {
-        ui.with_layout(Layout::top_down(Align::Center), |ui| {
-            ui.add_space(2.0);
-            let response = orb::paint_orb(ui, &self.state, t, self.settings.reduced_motion);
-            if response.clicked() {
-                match self.state {
-                    ConnState::Disconnected | ConnState::Failed(_) => self.connect_manual(),
-                    ConnState::Connected { .. } => self.disconnect(),
-                    _ => {}
-                }
-            }
-        });
+    fn tab_connect(
+        &mut self,
+        ui: &mut egui::Ui,
+        t: f32,
+        rect: egui::Rect,
+        center: egui::Pos2,
+        r_hole: f32,
+        phase: f32,
+        twinkle_t: f32,
+    ) {
+        let painter = ui.painter().clone();
 
-        // selected profile summary
+        // The hole is the connect button.
+        let hole_rect = egui::Rect::from_center_size(center, egui::vec2(r_hole * 3.0, r_hole * 2.6));
+        let resp = ui.interact(hole_rect, ui.scope_id().with("gargantua"), egui::Sense::click());
+        let hov = ui.ctx().animate_bool_responsive(resp.id.with("hov"), resp.hovered());
+        if resp.hovered() {
+            ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+        }
+        let (action_label, can_act) = match &self.state {
+            ConnState::Disconnected | ConnState::Failed(_) => ("Connect", self.selected.is_some()),
+            ConnState::Connected { .. } => ("Disconnect", true),
+            ConnState::Connecting => ("Connecting", false),
+            ConnState::Disconnecting => ("Disconnecting", false),
+        };
+        let state_name = match &self.state {
+            ConnState::Disconnected => "Connect",
+            ConnState::Connecting => "Connecting",
+            ConnState::Connected { .. } => "Connected",
+            ConnState::Disconnecting => "Closing",
+            ConnState::Failed(_) => "Retry",
+        };
+        resp.clone().widget_info(move || {
+            egui::WidgetInfo::labeled(egui::accesskit::Role::Button, can_act, format!("{action_label} button"))
+        });
+        self.scene
+            .paint_hole(&painter, center, r_hole, phase, twinkle_t, self.energy + 0.10 * hov);
+
+        // State word inside the void.
+        let caption = if resp.hovered() && matches!(self.state, ConnState::Connected { .. }) {
+            "Disconnect"
+        } else {
+            state_name
+        };
+        let cap_a = if matches!(self.state, ConnState::Connecting | ConnState::Disconnecting) {
+            150.0 + 70.0 * (t * 2.4).sin().abs()
+        } else {
+            235.0
+        };
+        painter.text(
+            center,
+            egui::Align2::CENTER_CENTER,
+            caption,
+            theme::semi(16.5),
+            theme::alpha(theme::TEXT, cap_a as u8),
+        );
+
+        if resp.clicked() {
+            match self.state {
+                ConnState::Disconnected | ConnState::Failed(_) => self.connect_manual(),
+                ConnState::Connected { .. } => self.disconnect(),
+                _ => {}
+            }
+        }
+
+        // ---- profile chip above the hole ----
         let (pname, pendpoint) = self
             .selected
             .and_then(|i| self.profiles.get(i))
@@ -640,39 +784,50 @@ impl WaxApp {
                 (p.name.clone(), ep)
             })
             .unwrap_or_else(|| ("No profile selected".to_string(), "import or register WARP".to_string()));
-        // Profile switcher: the profile name under the orb opens a picker
-        // while disconnected, so switching never needs a tab change.
         let can_switch = matches!(self.state, ConnState::Disconnected | ConnState::Failed(_))
             && self.profiles.len() > 1;
-        ui.with_layout(Layout::top_down(Align::Center), |ui| {
-            let name_text = RichText::new(&pname).size(15.0).color(theme::TEXT).strong();
-            if can_switch {
-                let resp = ui.add(
-                    egui::Label::new(name_text).sense(egui::Sense::click()),
-                );
-                let hov = ui.ctx().animate_bool_responsive(resp.id.with("hov"), resp.hovered());
-                if hov > 0.05 {
-                    let r = resp.rect;
-                    ui.painter().line_segment(
-                        [r.left_bottom() + egui::vec2(0.0, 1.0), r.right_bottom() + egui::vec2(0.0, 1.0)],
-                        egui::Stroke::new(1.0, theme::alpha(theme::ACCENT, (200.0 * hov) as u8)),
-                    );
-                }
-                if resp.clicked() {
-                    self.picker_open = !self.picker_open;
-                }
-                ui.label(RichText::new(if self.picker_open { "choose a profile" } else { "click to switch profile" })
-                    .size(9.5)
-                    .color(theme::alpha(theme::MUTE, 170)));
-            } else {
-                ui.label(name_text);
-            }
-            ui.label(RichText::new(&pendpoint).size(11.0).color(theme::MUTE));
-        });
+        let chip = egui::Rect::from_center_size(
+            egui::pos2(center.x, center.y - r_hole * 1.52 - 26.0),
+            egui::vec2(300.0, 42.0),
+        );
+        let chip_resp = ui.interact(chip, ui.scope_id().with("profile_chip"), if can_switch { egui::Sense::click() } else { egui::Sense::hover() });
+        let chip_hov = ui.ctx().animate_bool_responsive(chip_resp.id.with("hov"), chip_resp.hovered() && can_switch);
+        painter.text(
+            chip.center_top() + egui::vec2(0.0, 8.0),
+            egui::Align2::CENTER_CENTER,
+            &pname,
+            theme::semi(14.5),
+            theme::alpha(theme::TEXT, (215.0 + 40.0 * chip_hov) as u8),
+        );
+        painter.text(
+            chip.center_top() + egui::vec2(0.0, 28.0),
+            egui::Align2::CENTER_CENTER,
+            &pendpoint,
+            egui::FontId::monospace(10.5),
+            theme::MUTE,
+        );
+        if chip_hov > 0.05 {
+            let y = chip.center_top().y + 38.0;
+            painter.line_segment(
+                [egui::pos2(center.x - 40.0, y), egui::pos2(center.x + 40.0, y)],
+                egui::Stroke::new(1.0, theme::alpha(theme::ACCENT, (200.0 * chip_hov) as u8)),
+            );
+        }
+        if chip_resp.clicked() && can_switch {
+            self.picker_open = !self.picker_open;
+        }
         if self.picker_open && can_switch {
-            ui.add_space(4.0);
-            theme::card_frame().show(ui, |ui| {
-                ui.set_max_width(280.0);
+            let rows = self.profiles.len() as f32 * 30.0;
+            let card_rect = egui::Rect::from_min_size(
+                egui::pos2(center.x - 150.0, chip.bottom() + 6.0),
+                egui::vec2(300.0, rows + 14.0),
+            );
+            let mut cui = ui.new_child(
+                egui::UiBuilder::new()
+                    .max_rect(card_rect)
+                    .layout(Layout::top_down(Align::Min)),
+            );
+            theme::card_frame().show(&mut cui, |ui| {
                 for i in 0..self.profiles.len() {
                     let (name, ep) = {
                         let p = &self.profiles[i];
@@ -686,29 +841,29 @@ impl WaxApp {
                         )
                     };
                     let sel = self.selected == Some(i);
-                    let (rect, resp) = ui.allocate_exact_size(
+                    let (r, resp) = ui.allocate_exact_size(
                         egui::vec2(ui.available_width(), 30.0),
                         egui::Sense::click(),
                     );
-                    let hov = ui.ctx().animate_bool_responsive(resp.id.with("hov"), resp.hovered());
-                    if hov > 0.02 || sel {
+                    let h = ui.ctx().animate_bool_responsive(resp.id.with("hov"), resp.hovered());
+                    if h > 0.02 || sel {
                         ui.painter().rect(
-                            rect,
+                            r,
                             egui::CornerRadius::same(8),
-                            theme::alpha(egui::Color32::WHITE, (8.0 * hov) as u8 + if sel { 10 } else { 0 }),
+                            theme::alpha(egui::Color32::WHITE, (8.0 * h) as u8 + if sel { 10 } else { 0 }),
                             egui::Stroke::NONE,
                             egui::StrokeKind::Inside,
                         );
                     }
                     ui.painter().text(
-                        rect.left_center() + egui::vec2(10.0, 0.0),
+                        r.left_center() + egui::vec2(10.0, 0.0),
                         egui::Align2::LEFT_CENTER,
                         &name,
                         egui::FontId::proportional(13.0),
                         if sel { theme::ACCENT } else { theme::SUB },
                     );
                     ui.painter().text(
-                        rect.right_center() + egui::vec2(-10.0, 0.0),
+                        r.right_center() + egui::vec2(-10.0, 0.0),
                         egui::Align2::RIGHT_CENTER,
                         &ep,
                         egui::FontId::monospace(10.5),
@@ -724,145 +879,80 @@ impl WaxApp {
                     }
                 }
             });
-            ui.add_space(4.0);
         }
 
-        ui.add_space(4.0);
-
-        // failure card
-        let failed_msg = if let ConnState::Failed(msg) = &self.state { Some(msg.clone()) } else { None };
-        if let Some(msg) = failed_msg {
-            theme::card_frame().show(ui, |ui| {
-                ui.label(RichText::new("Connection failed").size(12.5).color(theme::BAD).strong());
-                ui.label(RichText::new(&msg).size(11.5).color(theme::SUB));
-                if !self.is_admin && theme::primary_button(ui, "Restart as administrator", true) {
-                    self.restart_as_admin();
+        // ---- status under the hole ----
+        let status_y = center.y + r_hole * 1.52 + 16.0;
+        match &self.state {
+            ConnState::Connecting => {
+                if let Some(stage) = self.connect_stages.last() {
+                    let pulse = 0.5 + 0.5 * (t * 3.0).sin();
+                    let galley = painter.layout_no_wrap((*stage).to_string(), egui::FontId::proportional(12.0), theme::TEXT);
+                    let tx = center.x - galley.size().x / 2.0;
+                    painter.circle_filled(egui::pos2(tx - 12.0, status_y), 3.0 + pulse, theme::alpha(theme::ACCENT, 150));
+                    painter.galley(egui::pos2(tx, status_y), galley, theme::TEXT);
+                } else {
+                    painter.text(egui::pos2(center.x, status_y), egui::Align2::CENTER_CENTER, "Starting", egui::FontId::proportional(12.0), theme::TEXT);
                 }
-            });
-            ui.add_space(6.0);
-        }
-
-        // stats row
-        if let ConnState::Connected { since } = self.state {
-            let hs = self
-                .stats
-                .last_handshake
-                .and_then(|h| SystemTime::now().duration_since(h).ok())
-                .map(fmt_duration)
-                .unwrap_or_else(|| "-".into());
-            let session = fmt_duration(since.elapsed());
-            let rx = fmt_bytes(self.stats.rx_bytes);
-            let tx = fmt_bytes(self.stats.tx_bytes);
-            ui.horizontal(|ui| {
-                theme::stat_tile(ui, "SESSION", &session, theme::TEXT);
-                theme::stat_tile(ui, "Received", &rx, theme::ACCENT);
-                theme::stat_tile(ui, "Sent", &tx, theme::ACCENT);
-            });
-            ui.with_layout(Layout::top_down(Align::Center), |ui| {
-                ui.label(
-                    RichText::new(format!("last handshake {hs} ago"))
-                        .size(11.0)
-                        .color(theme::GOOD),
+            }
+            ConnState::Connected { since } => {
+                let session = fmt_duration(since.elapsed());
+                let rx = fmt_bytes(self.stats.rx_bytes);
+                let txb = fmt_bytes(self.stats.tx_bytes);
+                painter.text(
+                    egui::pos2(center.x, status_y),
+                    egui::Align2::CENTER_CENTER,
+                    format!("{session}   ·   {rx} in   ·   {txb} out"),
+                    egui::FontId::monospace(11.5),
+                    theme::TEXT,
                 );
-            });
-            ui.add_space(4.0);
-        }
-
-        // explicit action button (orb is also clickable)
-        let (label, enabled) = match &self.state {
-            ConnState::Disconnected | ConnState::Failed(_) => ("Connect", self.selected.is_some()),
-            ConnState::Connected { .. } => ("Disconnect", true),
-            ConnState::Connecting => ("Connecting...", false),
-            ConnState::Disconnecting => ("Disconnecting...", false),
-        };
-        ui.with_layout(Layout::top_down(Align::Center), |ui| {
-            if theme::primary_button(ui, label, enabled) {
-                match self.state {
-                    ConnState::Disconnected | ConnState::Failed(_) => self.connect_manual(),
-                    ConnState::Connected { .. } => self.disconnect(),
-                    _ => {}
-                }
-            }
-            if self.selected.is_none() {
-                ui.label(
-                    RichText::new("Add a profile from the Profiles tab to connect")
-                        .size(11.0)
-                        .color(theme::MUTE),
+                let hs = self
+                    .stats
+                    .last_handshake
+                    .and_then(|h| SystemTime::now().duration_since(h).ok())
+                    .map(fmt_duration)
+                    .unwrap_or_else(|| "-".into());
+                painter.text(
+                    egui::pos2(center.x, status_y + 18.0),
+                    egui::Align2::CENTER_CENTER,
+                    format!("last handshake {hs} ago"),
+                    egui::FontId::proportional(10.5),
+                    theme::GOOD,
                 );
-            } else if !self.is_admin {
-                if ui.link(RichText::new("Restart as administrator to connect").size(11.5).color(theme::WARN)).clicked() {
-                    self.restart_as_admin();
+            }
+            ConnState::Failed(msg) => {
+                let mut m = msg.clone();
+                if m.chars().count() > 90 {
+                    m = m.chars().take(90).collect::<String>() + "...";
+                }
+                painter.text(egui::pos2(center.x, status_y), egui::Align2::CENTER_CENTER, m, egui::FontId::proportional(11.5), theme::BAD);
+            }
+            _ => {
+                let hint = if self.selected.is_none() {
+                    "add a profile from the Profiles tab"
+                } else if !self.is_admin {
+                    "restart as administrator to connect"
+                } else {
+                    "click the black hole to connect"
+                };
+                painter.text(egui::pos2(center.x, status_y), egui::Align2::CENTER_CENTER, hint, egui::FontId::proportional(11.5), theme::MUTE);
+                if self.status_line != "Ready" {
+                    painter.text(egui::pos2(center.x, status_y + 18.0), egui::Align2::CENTER_CENTER, &self.status_line, egui::FontId::proportional(10.5), theme::SUB);
                 }
             }
-            ui.add_space(2.0);
-            ui.label(
-                RichText::new(&self.status_line).size(11.0).color(theme::SUB),
-            );
-            if self.cleanup_issue.is_some() {
-                if ui
-                    .link(RichText::new("Retry network cleanup").size(11.5).color(theme::WARN))
-                    .clicked()
-                {
-                    let tx = self.events_tx.clone();
-                    std::thread::spawn(move || {
-                        let _ = tx.send(AppEvent::CleanupResult(
-                            Tunnel::force_disconnect().map_err(|e| e.to_string()),
-                        ));
-                        let _ = tx.send(AppEvent::Disconnected);
-                    });
-                }
+        }
+        // failure / elevation actions as real widgets under the status line
+        if matches!(self.state, ConnState::Failed(_)) && !self.is_admin {
+            let ar = egui::Rect::from_center_size(egui::pos2(center.x, status_y + 34.0), egui::vec2(240.0, 26.0));
+            let mut aui = ui.new_child(egui::UiBuilder::new().max_rect(ar).layout(Layout::top_down(Align::Center)));
+            if theme::primary_button(&mut aui, "Restart as administrator", true) {
+                self.restart_as_admin();
             }
-        });
-
-        // Live connection progress: each stage the tunnel core reports,
-        // oldest to newest. Completed stages get a check, the current one a
-        // pulsing dot. Honest state, no fake percentages.
-        if matches!(self.state, ConnState::Connecting) && !self.connect_stages.is_empty() {
-            ui.add_space(6.0);
-            theme::card_frame().show(ui, |ui| {
-                ui.label(RichText::new("Setting up").size(12.0).color(theme::MUTE).strong());
-                ui.add_space(2.0);
-                let n = self.connect_stages.len();
-                for (i, stage) in self.connect_stages.iter().enumerate() {
-                    let current = i + 1 == n;
-                    ui.horizontal(|ui| {
-                        let (rect, _) = ui.allocate_exact_size(egui::Vec2::new(16.0, 16.0), egui::Sense::hover());
-                        let c = rect.center();
-                        if current {
-                            let pulse = 0.5 + 0.5 * (t * 3.0).sin();
-                            ui.painter().circle(
-                                c,
-                                3.0 + pulse,
-                                theme::alpha(theme::ACCENT, 140),
-                                egui::Stroke::NONE,
-                            );
-                        } else {
-                            ui.painter().circle(c, 6.0, theme::alpha(theme::GOOD, 40), egui::Stroke::NONE);
-                            ui.painter().add(egui::Shape::line(
-                                vec![
-                                    egui::pos2(c.x - 3.0, c.y + 0.5),
-                                    egui::pos2(c.x - 1.0, c.y + 2.5),
-                                    egui::pos2(c.x + 3.5, c.y - 2.5),
-                                ],
-                                egui::Stroke::new(1.5, theme::GOOD),
-                            ));
-                        }
-                        ui.label(
-                            RichText::new(*stage)
-                                .size(12.0)
-                                .color(if current { theme::TEXT } else { theme::MUTE }),
-                        );
-                    });
-                }
-            });
         }
 
-        ui.add_space(10.0);
-        // Connection details card (fills the lower pane, honest facts only)
-        let details = self
-            .selected
-            .and_then(|i| self.profiles.get(i))
-            .map(|p| {
+        // ---- details card anchored to the bottom (hidden while connecting) ----
+        if !matches!(self.state, ConnState::Connecting) {
+            let details = self.selected.and_then(|i| self.profiles.get(i)).map(|p| {
                 let addr = p
                     .config
                     .interface
@@ -871,39 +961,54 @@ impl WaxApp {
                     .map(|a| a.to_string())
                     .collect::<Vec<_>>()
                     .join(", ");
-                Some((p.config.peers.first().and_then(|x| x.endpoint.clone()).unwrap_or_else(|| "-".into()), addr))
-            })
-            .flatten();
-        theme::card_frame().show(ui, |ui| {
-            ui.label(RichText::new("Connection details").size(12.0).color(theme::MUTE).strong());
-            ui.add_space(2.0);
-            if let Some((ep, addr)) = details {
-                ui.horizontal(|ui| {
-                    ui.label(RichText::new("Endpoint").size(11.5).color(theme::MUTE));
-                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                        ui.label(RichText::new(ep).size(11.5).color(theme::SUB));
-                    });
-                });
-                ui.horizontal(|ui| {
-                    ui.label(RichText::new("Tunnel address").size(11.5).color(theme::MUTE));
-                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                        ui.label(RichText::new(addr).size(11.5).color(theme::SUB));
-                    });
-                });
-            } else {
-                ui.label(RichText::new("No profile selected").size(11.5).color(theme::MUTE));
-            }
-            ui.horizontal(|ui| {
-                ui.label(RichText::new("Kill switch").size(11.5).color(theme::MUTE));
-                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    ui.label(
-                        RichText::new(if self.settings.kill_switch { "On" } else { "Off" })
-                            .size(11.5)
-                            .color(if self.settings.kill_switch { theme::GOOD } else { theme::MUTE }),
-                    );
-                });
+                (
+                    p.config.peers.first().and_then(|x| x.endpoint.clone()).unwrap_or_else(|| "-".into()),
+                    addr,
+                )
             });
-        });
+            let card_h = if self.cleanup_issue.is_some() { 128.0 } else { 108.0 };
+            let card_rect = egui::Rect::from_min_size(
+                egui::pos2(center.x - 190.0, rect.bottom() - card_h - 2.0),
+                egui::vec2(380.0, card_h),
+            );
+            let mut dui = ui.new_child(
+                egui::UiBuilder::new()
+                    .max_rect(card_rect)
+                    .layout(Layout::top_down(Align::Min)),
+            );
+            theme::card_frame().show(&mut dui, |ui| {
+                if let Some((ep, addr)) = details {
+                    detail_row(ui, "Endpoint", &ep);
+                    detail_row(ui, "Tunnel address", &addr);
+                } else {
+                    ui.label(RichText::new("No profile selected").size(11.5).color(theme::MUTE));
+                }
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new("Kill switch").size(11.5).color(theme::MUTE));
+                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                        ui.label(
+                            RichText::new(if self.settings.kill_switch { "On" } else { "Off" })
+                                .size(11.5)
+                                .color(if self.settings.kill_switch { theme::GOOD } else { theme::MUTE }),
+                        );
+                    });
+                });
+                if let Some(issue) = self.cleanup_issue.clone() {
+                    ui.horizontal(|ui| {
+                        ui.label(RichText::new(issue).size(10.5).color(theme::WARN));
+                        if ui.link(RichText::new("Retry").size(10.5).color(theme::WARN)).clicked() {
+                            let tx = self.events_tx.clone();
+                            std::thread::spawn(move || {
+                                let _ = tx.send(AppEvent::CleanupResult(
+                                    Tunnel::force_disconnect().map_err(|e| e.to_string()),
+                                ));
+                                let _ = tx.send(AppEvent::Disconnected);
+                            });
+                        }
+                    });
+                }
+            });
+        }
     }
 
     fn tab_profiles(&mut self, ui: &mut egui::Ui) {
@@ -1142,6 +1247,131 @@ impl WaxApp {
     }
 }
 
+fn detail_row(ui: &mut egui::Ui, k: &str, v: &str) {
+    ui.horizontal(|ui| {
+        ui.label(RichText::new(k).size(11.5).color(theme::MUTE));
+        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+            ui.label(RichText::new(v).size(11.5).color(theme::SUB));
+        });
+    });
+}
+
+fn chrome_button(ui: &mut egui::Ui, glyph: &str, tooltip: &str) -> bool {
+    let (rect, resp) = ui.allocate_exact_size(egui::vec2(30.0, 22.0), egui::Sense::click());
+    let hov = ui.ctx().animate_bool_responsive(resp.id.with("h"), resp.hovered());
+    if hov > 0.02 {
+        ui.painter().rect_filled(
+            rect,
+            egui::CornerRadius::same(6),
+            theme::alpha(egui::Color32::WHITE, (10.0 * hov) as u8),
+        );
+    }
+    ui.painter().text(
+        rect.center(),
+        egui::Align2::CENTER_CENTER,
+        glyph,
+        egui::FontId::proportional(13.0),
+        theme::alpha(theme::SUB, (160.0 + 95.0 * hov) as u8),
+    );
+    resp.clone().on_hover_text(tooltip);
+    resp.clicked()
+}
+
+fn rail_button(ui: &mut egui::Ui, tab: Tab, label: &str, active: bool) -> bool {
+    let (rect, resp) = ui.allocate_exact_size(egui::vec2(64.0, 54.0), egui::Sense::click());
+    let hov = ui.ctx().animate_bool_responsive(resp.id.with("h"), resp.hovered());
+    let on = ui.ctx().animate_bool(resp.id.with("on"), active);
+    let bg = 6.0 * hov + 12.0 * on;
+    if bg > 0.5 {
+        ui.painter().rect_filled(
+            rect,
+            egui::CornerRadius::same(10),
+            theme::alpha(egui::Color32::WHITE, bg as u8),
+        );
+    }
+    let col = if active {
+        theme::ACCENT
+    } else if resp.hovered() {
+        theme::TEXT
+    } else {
+        theme::MUTE
+    };
+    rail_icon(ui.painter(), tab, rect.center_top() + egui::vec2(0.0, 18.0), 9.0, col);
+    ui.painter().text(
+        rect.center_bottom() + egui::vec2(0.0, -9.0),
+        egui::Align2::CENTER_CENTER,
+        label,
+        egui::FontId::proportional(9.0),
+        col,
+    );
+    resp.clone().widget_info(move || {
+        egui::WidgetInfo::labeled(egui::accesskit::Role::Button, true, format!("{label} tab"))
+    });
+    resp.clone().on_hover_text(label);
+    if resp.hovered() {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+    }
+    resp.clicked()
+}
+
+fn rail_icon(p: &egui::Painter, tab: Tab, c: egui::Pos2, s: f32, col: egui::Color32) {
+    let st = egui::Stroke::new(1.4, col);
+    match tab {
+        Tab::Connect => {
+            // mini black hole: dark core, ring, tilted disk
+            let pts: Vec<egui::Pos2> = (0..=40)
+                .map(|i| {
+                    let a = i as f32 / 40.0 * std::f32::consts::TAU;
+                    c + egui::vec2(a.cos() * s, a.sin() * s * 0.32)
+                })
+                .collect();
+            p.add(egui::Shape::line(pts, st));
+            p.circle_filled(c, s * 0.5, egui::Color32::from_rgb(2, 3, 6));
+            p.circle_stroke(c, s * 0.5, st);
+        }
+        Tab::Profiles => {
+            for i in -1..=1 {
+                let r = egui::Rect::from_center_size(
+                    c + egui::vec2(i as f32 * 2.4, i as f32 * -3.4),
+                    egui::vec2(s * 1.5, s * 0.85),
+                );
+                p.rect_stroke(r, egui::CornerRadius::same(2), st, egui::StrokeKind::Inside);
+            }
+        }
+        Tab::Features => {
+            for i in -1..=1 {
+                let y = c.y + i as f32 * s * 0.55;
+                p.line_segment(
+                    [egui::pos2(c.x - s * 0.85, y), egui::pos2(c.x + s * 0.85, y)],
+                    st,
+                );
+                let kx = c.x + (i as f32) * s * 0.38;
+                p.circle_filled(egui::pos2(kx, y), s * 0.2, col);
+            }
+        }
+        Tab::Warp => {
+            let pts: Vec<egui::Pos2> = (0..40)
+                .map(|i| {
+                    let a = i as f32 / 40.0 * std::f32::consts::TAU * 1.5;
+                    let r = s * i as f32 / 40.0;
+                    c + egui::vec2(a.cos() * r, a.sin() * r)
+                })
+                .collect();
+            p.add(egui::Shape::line(pts, st));
+        }
+        Tab::About => {
+            p.circle_stroke(c, s * 0.85, st);
+            p.text(
+                c,
+                egui::Align2::CENTER_CENTER,
+                "i",
+                egui::FontId::proportional(s * 1.1),
+                col,
+            );
+        }
+    }
+}
+
 fn chrono_free_stamp() -> String {
     let secs = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
@@ -1158,9 +1388,10 @@ fn main() -> eframe::Result<()> {
             .with_title("waX VPN")
             .with_app_id("wax-vpn")
             .with_icon(icon)
-            .with_inner_size([620.0, 600.0])
-            .with_min_inner_size([560.0, 520.0])
-            .with_resizable(true),
+            .with_inner_size([940.0, 620.0])
+            .with_min_inner_size([720.0, 520.0])
+            .with_resizable(true)
+            .with_decorations(false),
         ..Default::default()
     };
     eframe::run_native(

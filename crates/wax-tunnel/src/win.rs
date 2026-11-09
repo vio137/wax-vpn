@@ -83,6 +83,15 @@ fn set_dns(adapter: &str, dns: &[std::net::IpAddr]) -> Result<(), TunnelError> {
 }
 
 fn reset_dns(adapter: &str) -> Result<(), TunnelError> {
+    // A missing adapter is already clean: Windows reclaimed it and there is
+    // no DNS entry left to reset. netsh fails with a syntax error on a
+    // nonexistent interface name, so check first instead of reporting noise.
+    let probe = powershell(&format!(
+        "if (Get-NetAdapter -Name '{adapter}' -ErrorAction SilentlyContinue) {{ exit 0 }} else {{ exit 1 }}"
+    ));
+    if probe.is_err() {
+        return Ok(());
+    }
     let mut problems = Vec::new();
     if let Err(e) = run("netsh", &["interface", "ipv4", "set", "dnsservers", &format!("name={adapter}"), "dhcp"]) {
         problems.push(format!("ipv4 dns reset: {e}"));

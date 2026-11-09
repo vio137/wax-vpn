@@ -5,10 +5,10 @@
 //! surfaces, and the connect orb as the one rich moment. Microinteractions
 //! are short, eased and only ever color/surface/opacity, never layout.
 
-use eframe::egui::{self, Color32, Pos2, Rect, Sense, Stroke, Vec2};
+use eframe::egui::{self, Color32, Pos2, Sense, Stroke, Vec2};
 
-pub const BG: Color32 = Color32::from_rgb(8, 12, 24);
-pub const PANEL: Color32 = Color32::from_rgb(12, 18, 34);
+pub const BG: Color32 = Color32::from_rgb(4, 6, 14);
+pub const PANEL: Color32 = Color32::from_rgb(8, 12, 22);
 #[allow(dead_code)]
 pub const CARD: Color32 = Color32::from_rgb(17, 25, 46);
 #[allow(dead_code)]
@@ -117,60 +117,7 @@ pub fn toggle_row(ui: &mut egui::Ui, on: &mut bool, title: &str, desc: &str) -> 
     changed
 }
 
-/// Sidebar navigation button with eased hover and selection transitions.
-pub fn nav_button(ui: &mut egui::Ui, label: &str, selected: bool) -> bool {
-    let (rect, response) =
-        ui.allocate_exact_size(Vec2::new(ui.available_width(), 34.0), Sense::click());
-    if ui.is_rect_visible(rect) {
-        let sel = ui
-            .ctx()
-            .animate_bool_responsive(response.id.with("sel"), selected);
-        let hov = ui
-            .ctx()
-            .animate_bool_responsive(response.id.with("hov"), response.hovered());
-        let mut fill = alpha(Color32::WHITE, (hov * 10.0) as u8);
-        if sel > 0.01 {
-            fill = fill.blend(alpha(ACCENT, (26.0 * sel) as u8));
-        }
-        if fill.a() > 0 {
-            ui.painter().rect(
-                rect,
-                egui::CornerRadius::same(8),
-                fill,
-                Stroke::NONE,
-                egui::StrokeKind::Inside,
-            );
-        }
-        if sel > 0.02 {
-            let bar_h = rect.height() * (0.55 + 0.45 * sel);
-            let bar = Rect::from_center_size(
-                Pos2::new(rect.left() + 1.5, rect.center().y),
-                Vec2::new(3.0, bar_h),
-            );
-            ui.painter()
-                .rect_filled(bar, egui::CornerRadius::same(2), alpha(ACCENT, (255.0 * sel) as u8));
-        }
-        ui.painter().text(
-            rect.left_center() + egui::vec2(14.0 + hov * 2.0, 0.0),
-            egui::Align2::LEFT_CENTER,
-            label,
-            egui::FontId::proportional(13.5),
-            lerp(SUB, ACCENT, sel).blend(alpha(TEXT, (120.0 * hov) as u8)),
-        );
-    }
-    response.clicked()
-}
 
-/// Small stat tile used under the orb; values in mono for tabular figures.
-pub fn stat_tile(ui: &mut egui::Ui, label: &str, value: &str, color: Color32) {
-    card_frame().show(ui, |ui| {
-        ui.set_min_width(104.0);
-        ui.vertical(|ui| {
-            ui.label(egui::RichText::new(label).size(10.5).color(MUTE));
-            ui.label(egui::RichText::new(value).size(14.5).color(color).monospace());
-        });
-    });
-}
 
 pub fn section_heading(ui: &mut egui::Ui, title: &str, sub: &str) {
     ui.label(egui::RichText::new(title).size(17.0).color(TEXT).strong());
@@ -243,4 +190,9 @@ pub fn danger_button(ui: &mut egui::Ui, label: &str) -> bool {
             .min_size(Vec2::new(0.0, 26.0)),
     )
     .clicked()
+}
+
+/// SemiBold Inter for headings and the in-void state word.
+pub fn semi(size: f32) -> egui::FontId {
+    egui::FontId::new(size, egui::FontFamily::Name("semibold".into()))
 }
