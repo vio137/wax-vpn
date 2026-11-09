@@ -141,7 +141,7 @@ jobs:
 
           # 1. Register a fresh key with demo.wireguard.com (protocol from
           #    wireguard-tools contrib/ncat-client-server)
-          $keyout = .bin\wax.exe keygen
+          $keyout = .\bin\wax.exe keygen
           $priv = ($keyout | Select-String 'PrivateKey = (.+)$').Matches[0].Groups[1].Value.Trim()
           $pub  = ($keyout | Select-String 'PublicKey\s+= (.+)$').Matches[0].Groups[1].Value.Trim()
           $tcp = New-Object System.Net.Sockets.TcpClient
@@ -170,12 +170,12 @@ jobs:
           )
           $conf | Out-File -Encoding ascii demo.conf
 
-          .bin\wax.exe import demo.conf --name demo
+          .\bin\wax.exe import demo.conf --name demo
           if ($LASTEXITCODE -ne 0) { Note 'FAIL import'; exit 1 }
           Note 'PASS profile import'
 
           # 2. Connect (runner is elevated)
-          .bin\wax.exe connect demo --no-wait
+          .\bin\wax.exe connect demo --no-wait
           if ($LASTEXITCODE -ne 0) { Note 'FAIL connect command'; exit 1 }
           Note 'PASS connect command returned success'
 
@@ -183,7 +183,7 @@ jobs:
           $handshake = $false
           for ($i = 0; $i -lt 18; $i++) {
             Start-Sleep -Seconds 5
-            $status = .bin\wax.exe status
+            $status = .\bin\wax.exe status
             if ($status -match 'Last handshake') { $handshake = $true; break }
           }
           if ($handshake) { Note "PASS live handshake: $($status -join ' | ')" } else { Note 'FAIL no handshake within 90s' }
@@ -195,7 +195,7 @@ jobs:
           if ($dns.ServerAddresses -contains '1.1.1.1') { Note 'PASS tunnel DNS applied' } else { Note 'FAIL tunnel DNS missing' }
 
           # 5. Disconnect and verify restoration
-          .bin\wax.exe disconnect
+          .\bin\wax.exe disconnect
           if ($LASTEXITCODE -ne 0) { Note 'FAIL disconnect command'; exit 1 }
           Start-Sleep -Seconds 3
           $dnsAfter = Get-DnsClientServerAddress -InterfaceAlias 'waX VPN' -AddressFamily IPv4 -ErrorAction SilentlyContinue
