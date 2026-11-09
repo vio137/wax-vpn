@@ -184,10 +184,12 @@ jobs:
           if ($LASTEXITCODE -ne 0) { Note 'FAIL import'; exit 1 }
           Note 'PASS profile import'
 
-          # 2. Connect (runner is elevated)
-          .\bin\wax.exe connect demo --no-wait
-          if ($LASTEXITCODE -ne 0) { Note 'FAIL connect command'; exit 1 }
-          Note 'PASS connect command returned success'
+          # 2. Connect (runner is elevated). The tunnel lives only while the
+          #    owning process is alive, so keep it running in the background.
+          $proc = Start-Process -FilePath "$PWD\bin\wax.exe" -ArgumentList 'connect','demo' -PassThru -WindowStyle Hidden -RedirectStandardOutput connect-out.txt -RedirectStandardError connect-err.txt
+          Start-Sleep -Seconds 4
+          if ($proc.HasExited) { Note "FAIL connect process exited early: $(Get-Content connect-out.txt,connect-err.txt -Raw)"; exit 1 }
+          Note "PASS connect process running (pid $($proc.Id))"
 
           # 3. Wait for a real handshake
           $handshake = $false
@@ -206,7 +208,9 @@ jobs:
 
           # 5. Disconnect and verify restoration
           .\bin\wax.exe disconnect
-          if ($LASTEXITCODE -ne 0) { Note 'FAIL disconnect command'; exit 1 }
+          if ($LASTEXITCODE -ne 0) { Note 'FAIL disconnect command'; if (-not $proc.HasExited) { $proc.Kill() }; exit 1 }
+          Start-Sleep -Seconds 2
+          if (-not $proc.HasExited) { $proc.Kill() }
           Start-Sleep -Seconds 3
           $dnsAfter = Get-DnsClientServerAddress -InterfaceAlias 'waX VPN' -AddressFamily IPv4 -ErrorAction SilentlyContinue
           if (-not $dnsAfter -or $dnsAfter.ServerAddresses.Count -eq 0) { Note 'PASS DNS restored on disconnect' } else { Note "FAIL DNS left behind: $($dnsAfter.ServerAddresses -join ',')" }
@@ -217,6 +221,7 @@ jobs:
           if ($results -match '^FAIL') { exit 1 }
 
       - name: GUI screenshot on the runner desktop
+        if: always()
         shell: pwsh
         run: |
           $p = Start-Process -FilePath "$PWD\bin\wax-vpn.exe" -PassThru
