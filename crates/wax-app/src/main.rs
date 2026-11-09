@@ -755,6 +755,7 @@ impl WaxApp {
         twinkle_t: f32,
     ) {
         let painter = ui.painter().clone();
+        let status_y = center.y + r_hole * 1.52 + 16.0;
 
         // The hole is the connect button.
         let hole_rect = egui::Rect::from_center_size(center, egui::vec2(r_hole * 3.0, r_hole * 2.6));
@@ -777,7 +778,7 @@ impl WaxApp {
             ConnState::Failed(_) => "Retry",
         };
         resp.clone().widget_info(move || {
-            egui::WidgetInfo::labeled(egui::accesskit::Role::Button, can_act, format!("{action_label} button"))
+            egui::WidgetInfo::labeled(egui::accesskit::Role::Button, can_act, action_label)
         });
         self.scene
             .paint_hole(&painter, center, r_hole, phase, twinkle_t, self.energy + 0.10 * hov);
@@ -810,6 +811,9 @@ impl WaxApp {
         }
 
         // ---- profile chip above the hole ----
+        gargantua::radial_glow(&painter, egui::pos2(center.x, center.y - r_hole * 1.52 - 8.0), 130.0, egui::Color32::from_rgba_unmultiplied(2, 3, 6, 110));
+        gargantua::radial_glow(&painter, egui::pos2(center.x, status_y + 8.0), 150.0, egui::Color32::from_rgba_unmultiplied(2, 3, 6, 110));
+
         let (pname, pendpoint) = self
             .selected
             .and_then(|i| self.profiles.get(i))
@@ -921,7 +925,6 @@ impl WaxApp {
         }
 
         // ---- status under the hole ----
-        let status_y = center.y + r_hole * 1.52 + 16.0;
         match &self.state {
             ConnState::Connecting => {
                 if let Some(stage) = self.connect_stages.last() {

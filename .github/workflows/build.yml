@@ -465,6 +465,7 @@ jobs:
               .\bin\wax.exe disconnect | Out-Null
             }
           }
+          if (Get-Content verify-results.txt -ErrorAction SilentlyContinue | Where-Object { $_ -match '^FAIL' }) { exit 1 }
 
       - uses: actions/upload-artifact@v4
         if: always()

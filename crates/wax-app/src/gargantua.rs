@@ -275,7 +275,7 @@ fn mix(a: Color32, b: Color32, t: f32) -> Color32 {
 }
 
 /// Soft radial glow via a triangle-fan mesh (egui has no gradient primitive).
-fn radial_glow(painter: &Painter, center: Pos2, radius: f32, color: Color32) {
+pub fn radial_glow(painter: &Painter, center: Pos2, radius: f32, color: Color32) {
     let n = 40;
     let mut mesh = egui::Mesh::default();
     let edge = Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), 0);
