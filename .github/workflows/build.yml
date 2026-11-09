@@ -130,7 +130,15 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: wax-vpn-binaries
-          path: bin
+          path: dl
+
+      - name: Stage binaries
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory bin -Force | Out-Null
+          Copy-Item dl\target\release\wax.exe bin\
+          Copy-Item dl\target\release\wax-vpn.exe bin\
+          Copy-Item dl\installer\payload\wireguard.dll bin\
 
       - name: Real tunnel test against the official WireGuard demo server
         shell: pwsh
