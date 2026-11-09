@@ -346,11 +346,29 @@ impl WaxApp {
     }
 
     fn import_text(&mut self, name: String, text: &str) -> bool {
-        match profile::import_conf(&name, text) {
+        // Import is additive: dropping another same-named config must not
+        // overwrite a working profile or inherit its split exclusions.
+        let mut candidate = name.clone();
+        let mut suffix = 2u32;
+        while profile::profile_path(&candidate).exists() {
+            candidate = format!("{name} - {suffix}");
+            suffix += 1;
+        }
+        // Use the actual sanitized on-disk name for selection and settings.
+        let canonical = profile::profile_path(&candidate)
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("profile")
+            .to_string();
+        match profile::import_conf(&canonical, text) {
             Ok(p) => {
                 self.status_line = format!("Imported profile '{}'", p.name);
                 self.import_error = None;
                 self.reload_profiles();
+                if matches!(self.state, ConnState::Disconnected | ConnState::Failed(_)) {
+                    self.selected = self.profiles.iter().position(|item| item.name == p.name);
+                    self.split_edit_for = None;
+                }
                 true
             }
             Err(e) => {
