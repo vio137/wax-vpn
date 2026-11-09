@@ -336,14 +336,17 @@ jobs:
             $g.CopyFromScreen($r.Left, $r.Top, 0, 0, (New-Object System.Drawing.Size $w, $h))
             $bmp.Save('gui-screenshot.png')
             $g.Dispose(); $bmp.Dispose()
-            foreach ($tab in @(@(2,'profiles'), @(3,'features'), @(4,'warp'), @(5,'about'))) {
-              [WaxWin32]::SetForegroundWindow($hwnd) | Out-Null
-              [WaxWin32]::SendCtrlDigit($tab[0])
+            Add-Type -AssemblyName UIAutomationClient
+            Add-Type -AssemblyName UIAutomationTypes
+            $uiaWin = [System.Windows.Automation.AutomationElement]::FromHandle($hwnd)
+            foreach ($tab in @('Profiles','Features','WARP','About')) {
+              $nb = $uiaWin.FindFirst([System.Windows.Automation.TreeScope]::Descendants, (New-Object System.Windows.Automation.AndCondition((New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, $tab)), (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Button)))))
+              if ($nb) { $nb.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke() }
               Start-Sleep -Milliseconds 1500
               $bmp2 = New-Object System.Drawing.Bitmap $w, $h
               $g2 = [System.Drawing.Graphics]::FromImage($bmp2)
               $g2.CopyFromScreen($r.Left, $r.Top, 0, 0, (New-Object System.Drawing.Size $w, $h))
-              $bmp2.Save("gui-screenshot-$($tab[1]).png")
+              $bmp2.Save("gui-screenshot-$($tab.ToLower()).png")
               $g2.Dispose(); $bmp2.Dispose()
             }
           } else {

@@ -4696,6 +4696,7 @@ dependencies = [
  "wax-core",
  "wax-tunnel",
  "wax-warp",
+ "windows-sys 0.52.0",
  "winreg",
 ]
 

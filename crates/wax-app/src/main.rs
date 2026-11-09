@@ -3,6 +3,12 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod gargantua;
+#[cfg(windows)]
+mod single;
+#[cfg(not(windows))]
+mod single {
+    pub struct Instance;
+}
 mod theme;
 mod tray;
 mod settings;
@@ -75,7 +81,8 @@ pub struct WaxApp {
     picker_open: bool,
     split_edit: String,
     split_edit_for: Option<usize>,
-    last_quit_poll: Instant,
+    #[allow(dead_code)]
+    instance: Option<single::Instance>,
     confirm_delete: Option<(usize, f64)>,
     cleanup_issue: Option<String>,
     scene: gargantua::Gargantua,
@@ -88,7 +95,10 @@ pub struct WaxApp {
 }
 
 impl WaxApp {
-    fn new(cc: &eframe::CreationContext<'_>) -> Self {
+    fn new(
+        cc: &eframe::CreationContext<'_>,
+        #[cfg_attr(not(windows), allow(unused_variables))] instance: Option<single::Instance>,
+    ) -> Self {
         cc.egui_ctx.set_theme(egui::Theme::Dark);
         cc.egui_ctx.style_mut_of(egui::Theme::Dark, |style| {
             style.visuals.panel_fill = theme::BG;
@@ -153,7 +163,7 @@ impl WaxApp {
             picker_open: false,
             split_edit: String::new(),
             split_edit_for: None,
-            last_quit_poll: Instant::now(),
+            instance,
             confirm_delete: None,
             cleanup_issue: None,
             scene: gargantua::Gargantua::new(),
@@ -347,11 +357,15 @@ impl WaxApp {
     }
 
     fn handle_events(&mut self, ctx: &egui::Context) {
-        if self.last_quit_poll.elapsed().as_millis() >= 500 {
-            self.last_quit_poll = Instant::now();
-            if quit_request_path().exists() {
-                let _ = std::fs::remove_file(quit_request_path());
+        #[cfg(windows)]
+        if let Some(inst) = &self.instance {
+            if inst.take_quit() {
                 self.quit_app();
+            }
+            if inst.take_show() {
+                self.hidden = false;
+                ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
+                ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
             }
         }
         while let Ok(event) = self.events_rx.try_recv() {
@@ -762,11 +776,6 @@ impl eframe::App for WaxApp {
 
 impl WaxApp {
     /// Explicit quit from the tray menu: disconnect cleanly, then exit.
-    #[cfg(not(windows))]
-    fn quit_app(&mut self) {
-        std::process::exit(0);
-    }
-
     #[cfg(windows)]
     fn quit_app(&mut self) {
         let taken = self.tunnel.lock().unwrap().take();
@@ -1396,6 +1405,7 @@ fn chrome_button(ui: &mut egui::Ui, glyph: &str, tooltip: &str) -> bool {
 
 fn rail_button(ui: &mut egui::Ui, tab: Tab, label: &str, active: bool) -> bool {
     let (rect, resp) = ui.allocate_exact_size(egui::vec2(64.0, 54.0), egui::Sense::click());
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), label));
     let hov = ui.ctx().animate_bool_responsive(resp.id.with("h"), resp.hovered());
     let on = ui.ctx().animate_bool(resp.id.with("on"), active);
     let bg = 6.0 * hov + 12.0 * on;
@@ -1504,31 +1514,21 @@ fn chrono_free_stamp() -> String {
     format!("{}", secs % 100_000)
 }
 
-/// File-based quit request: `wax-vpn.exe --quit` drops this file and the
-/// running instance exits gracefully (same cleanup path as tray Quit).
-fn quit_request_path() -> std::path::PathBuf {
-    wax_core::profile::config_dir().join("quit.request")
-}
-
 fn main() -> eframe::Result<()> {
     if std::env::args().any(|a| a == "--quit") {
-        let dir = wax_core::profile::config_dir();
-        let _ = std::fs::create_dir_all(&dir);
-        let _ = std::fs::write(quit_request_path(), b"quit");
+        #[cfg(windows)]
+        if !single::request_quit() {
+            eprintln!("waX VPN is not running");
+        }
         return Ok(());
     }
-    // A stale request older than a few seconds must not kill a fresh launch.
-    if let Ok(meta) = std::fs::metadata(quit_request_path()) {
-        let stale = meta
-            .modified()
-            .ok()
-            .and_then(|m| m.elapsed().ok())
-            .map(|e| e.as_secs() > 5)
-            .unwrap_or(false);
-        if stale {
-            let _ = std::fs::remove_file(quit_request_path());
-        }
-    }
+    #[cfg(windows)]
+    let instance = match single::acquire() {
+        single::Acquire::Primary(inst) => Some(inst),
+        single::Acquire::AlreadyRunning => return Ok(()),
+    };
+    #[cfg(not(windows))]
+    let instance: Option<single::Instance> = None;
     let icon = eframe::icon_data::from_png_bytes(include_bytes!("../assets/icon-256.png"))
         .expect("embedded icon must decode");
     let options = eframe::NativeOptions {
@@ -1545,6 +1545,6 @@ fn main() -> eframe::Result<()> {
     eframe::run_native(
         "waX VPN",
         options,
-        Box::new(|cc| Ok(Box::new(WaxApp::new(cc)))),
+        Box::new(|cc| Ok(Box::new(WaxApp::new(cc, instance)))),
     )
 }
