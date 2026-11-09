@@ -209,8 +209,7 @@ jobs:
       - name: GUI screenshot on the runner desktop
         shell: pwsh
         run: |
-          Copy-Item bin\wireguard.dll bin\ -Force
-          $p = Start-Process -FilePath "$PWDbin\wax-vpn.exe" -PassThru
+          $p = Start-Process -FilePath "$PWD\bin\wax-vpn.exe" -PassThru
           Start-Sleep -Seconds 8
           Add-Type -AssemblyName System.Windows.Forms
           Add-Type -AssemblyName System.Drawing
