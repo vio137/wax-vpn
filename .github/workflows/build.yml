@@ -328,6 +328,16 @@ jobs:
             $g.CopyFromScreen($r.Left, $r.Top, 0, 0, (New-Object System.Drawing.Size $w, $h))
             $bmp.Save('gui-screenshot.png')
             $g.Dispose(); $bmp.Dispose()
+            foreach ($tab in @(@('^2','profiles'), @('^3','features'), @('^4','warp'), @('^5','about'))) {
+              [WaxWin32]::SetForegroundWindow($hwnd) | Out-Null
+              [System.Windows.Forms.SendKeys]::SendWait($tab[0])
+              Start-Sleep -Milliseconds 1200
+              $bmp2 = New-Object System.Drawing.Bitmap $w, $h
+              $g2 = [System.Drawing.Graphics]::FromImage($bmp2)
+              $g2.CopyFromScreen($r.Left, $r.Top, 0, 0, (New-Object System.Drawing.Size $w, $h))
+              $bmp2.Save("gui-screenshot-$($tab[1]).png")
+              $g2.Dispose(); $bmp2.Dispose()
+            }
           } else {
             Write-Host 'window not found, full-screen fallback'
             $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
@@ -505,3 +515,7 @@ jobs:
           path: |
             verify-results.txt
             gui-screenshot.png
+            gui-screenshot-profiles.png
+            gui-screenshot-features.png
+            gui-screenshot-warp.png
+            gui-screenshot-about.png

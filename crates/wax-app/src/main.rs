@@ -761,6 +761,41 @@ impl WaxApp {
         if matches!(self.state, ConnState::Failed(_)) {
             content_h += 24.0;
         }
+        // Quiet facts pin to the window bottom, independent of the column.
+        {
+            let strip = egui::Rect::from_center_size(
+                egui::pos2(rect.center().x, rect.bottom() - 10.0),
+                egui::vec2(col_w, 20.0),
+            );
+            let mut sui = ui.new_child(
+                egui::UiBuilder::new()
+                    .max_rect(strip)
+                    .layout(Layout::top_down(Align::Center)),
+            );
+            let ui = &mut sui;
+            if let Some(issue) = self.cleanup_issue.clone() {
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new(issue).size(10.5).color(theme::WARN));
+                    if ui.link(RichText::new("Retry").size(10.5).color(theme::WARN)).clicked() {
+                        let tx = self.events_tx.clone();
+                        std::thread::spawn(move || {
+                            let _ = tx.send(AppEvent::CleanupResult(
+                                Tunnel::force_disconnect().map_err(|e| e.to_string()),
+                            ));
+                            let _ = tx.send(AppEvent::Disconnected);
+                        });
+                    }
+                });
+            }
+            ui.label(
+                RichText::new(format!(
+                    "Kill switch {}  ·  v{VERSION}",
+                    if self.settings.kill_switch { "on" } else { "off" }
+                ))
+                .size(10.5)
+                .color(theme::MUTE),
+            );
+        }
         let col_h = content_h.min(rect.height());
         let col = egui::Rect::from_center_size(
             egui::pos2(rect.center().x, rect.center().y - 10.0),
@@ -973,32 +1008,6 @@ impl WaxApp {
             );
         }
 
-        // Quiet facts pinned to the bottom.
-        ui.with_layout(Layout::bottom_up(Align::Center), |ui| {
-            ui.add_space(2.0);
-            if let Some(issue) = self.cleanup_issue.clone() {
-                ui.horizontal(|ui| {
-                    ui.label(RichText::new(issue).size(10.5).color(theme::WARN));
-                    if ui.link(RichText::new("Retry").size(10.5).color(theme::WARN)).clicked() {
-                        let tx = self.events_tx.clone();
-                        std::thread::spawn(move || {
-                            let _ = tx.send(AppEvent::CleanupResult(
-                                Tunnel::force_disconnect().map_err(|e| e.to_string()),
-                            ));
-                            let _ = tx.send(AppEvent::Disconnected);
-                        });
-                    }
-                });
-            }
-            ui.label(
-                RichText::new(format!(
-                    "Kill switch {}  ·  v{VERSION}",
-                    if self.settings.kill_switch { "on" } else { "off" }
-                ))
-                .size(10.5)
-                .color(theme::MUTE),
-            );
-        });
     }
 
     fn tab_profiles(&mut self, ui: &mut egui::Ui) {
