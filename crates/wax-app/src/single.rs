@@ -11,8 +11,8 @@
 use windows_sys::Win32::Foundation::{CloseHandle, GetLastError, ERROR_ALREADY_EXISTS, HANDLE, HWND, LPARAM, WAIT_OBJECT_0};
 use windows_sys::Win32::System::Threading::{CreateEventW, CreateMutexW, SetEvent, WaitForSingleObject};
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    BringWindowToTop, EnumWindows, GetWindow, GetWindowThreadProcessId, IsWindowVisible,
-    SetForegroundWindow, ShowWindow, GW_OWNER, SW_RESTORE, SW_SHOW,
+    BringWindowToTop, EnumWindows, GetWindow, GetWindowTextW, GetWindowThreadProcessId,
+    IsWindowVisible, SetForegroundWindow, ShowWindow, GW_OWNER, SW_RESTORE, SW_SHOW,
 };
 
 /// One-line diagnostics for the cross-instance show path, read by CI on failure.
@@ -112,6 +112,11 @@ pub fn show_own_window() {
         let mut pid: u32 = 0;
         GetWindowThreadProcessId(hwnd, &mut pid);
         if pid == lparam as u32 && GetWindow(hwnd, GW_OWNER) == 0 {
+            let mut title = [0u16; 128];
+            let n = GetWindowTextW(hwnd, title.as_mut_ptr(), 128);
+            if n == 0 {
+                return 1; // tray/message helpers carry no title; leave them alone
+            }
             let before = IsWindowVisible(hwnd);
             ShowWindow(hwnd, SW_RESTORE);
             ShowWindow(hwnd, SW_SHOW);
@@ -119,7 +124,7 @@ pub fn show_own_window() {
             SetForegroundWindow(hwnd);
             let after = IsWindowVisible(hwnd);
             diag(&format!(
-                "show_own_window: hwnd={hwnd} visible {before} -> {after}"
+                "show_own_window: hwnd={hwnd} titled=1 visible {before} -> {after}"
             ));
         }
         1

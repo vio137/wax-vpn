@@ -786,12 +786,16 @@ impl WaxApp {
     /// Explicit quit from the tray menu: disconnect cleanly, then exit.
     #[cfg(windows)]
     fn quit_app(&mut self) {
+        #[cfg(windows)]
+        crate::single::diag("quit: signal consumed, shutting down tunnel");
         let taken = self.tunnel.lock().unwrap().take();
         if let Some(t) = taken {
             let _ = t.shutdown();
         } else {
             let _ = Tunnel::force_disconnect();
         }
+        #[cfg(windows)]
+        crate::single::diag("quit: tunnel down, exiting");
         std::process::exit(0);
     }
 

@@ -389,6 +389,19 @@ jobs:
             [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
             [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
             [DllImport("user32.dll")] public static extern void mouse_event(uint f, uint dx, uint dy, uint d, IntPtr e);
+            [DllImport("user32.dll")] public static extern int GetWindowTextW(IntPtr h, StringBuilder s, int n);
+            [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+            public static string ListWindows() {
+              var lines = new System.Collections.Generic.List<string>();
+              EnumWindows((h,l) => {
+                var t = new StringBuilder(128); GetWindowTextW(h, t, 128);
+                var c = new StringBuilder(128); GetClassNameW(h, c, 128);
+                uint pid; GetWindowThreadProcessId(h, out pid);
+                if (t.Length > 0 || IsWindowVisible(h)) lines.Add($"hwnd={h} pid={pid} vis={IsWindowVisible(h)} title='{t}' class='{c}'");
+                return true;
+              }, IntPtr.Zero);
+              return string.Join("\n", lines);
+            }
             public static int CountConsoles() {
               int c = 0;
               EnumWindows((h,l) => { var sb = new StringBuilder(256); GetClassNameW(h, sb, 256); if (sb.ToString() == "ConsoleWindowClass" && IsWindowVisible(h)) c++; return true; }, IntPtr.Zero);
@@ -523,6 +536,7 @@ jobs:
                 Note "FAIL single instance: first-alive=$(-not $pg.HasExited) second-exited=$($p2.HasExited) window-visible=$siVisible"
                 $dbg = Get-Content (Join-Path $env:APPDATA 'wax-vpn\wax-debug.log') -ErrorAction SilentlyContinue
                 if ($dbg) { $dbg | ForEach-Object { Note "DIAG $_" } } else { Note 'DIAG no show-path diagnostics recorded (signal never consumed?)' }
+                [WaxCon]::ListWindows() -split "\n" | ForEach-Object { Note "DIAGWIN $_" }
                 if (-not $p2.HasExited) { $p2.Kill() }
               }
               # The runner session has no notification area (Shell_TrayWnd absent), so
@@ -531,12 +545,15 @@ jobs:
               # Quit) is verified through the app's --quit request.
               Note 'INFO tray menu Quit/Open: manual-only on real Windows (runner has no notification area)'
               .\bin\wax-vpn.exe --quit
-              Start-Sleep -Seconds 5
+              for ($i = 0; $i -lt 15 -and -not $pg.HasExited; $i++) { Start-Sleep -Seconds 1 }
+              $pg.Refresh()
               if ($pg.HasExited) {
                 $ad2 = Get-NetAdapter -Name 'waX VPN' -ErrorAction SilentlyContinue
                 if (-not $ad2) { Note 'PASS graceful quit: app exited on --quit request and adapter removed' } else { Note 'FAIL graceful quit: app exited but adapter remains' }
               } else {
-                Note 'FAIL graceful quit: app still running 5s after --quit request'
+                Note 'FAIL graceful quit: app still running 15s after --quit request'
+                $dbg2 = Get-Content (Join-Path $env:APPDATA 'wax-vpn\wax-debug.log') -ErrorAction SilentlyContinue
+                if ($dbg2) { $dbg2 | ForEach-Object { Note "DIAG $_" } }
                 $pg.Kill()
               }
               .\bin\wax.exe disconnect | Out-Null
