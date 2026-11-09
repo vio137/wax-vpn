@@ -41,6 +41,7 @@ enum Tab {
 enum AppEvent {
     Stage(&'static str),
     TunnelLost,
+    CleanupResult(Result<(), String>),
     Connected,
     ConnectFailed(String),
     Disconnected,
@@ -70,8 +71,10 @@ pub struct WaxApp {
     hidden: bool,
     connect_stages: Vec<&'static str>,
     reconnect_attempts: u8,
+    reconnecting: bool,
     picker_open: bool,
     confirm_delete: Option<(usize, f64)>,
+    cleanup_issue: Option<String>,
     #[cfg(windows)]
     tray: Option<tray::Tray>,
 }
@@ -116,8 +119,10 @@ impl WaxApp {
             hidden: false,
             connect_stages: Vec::new(),
             reconnect_attempts: 0,
+            reconnecting: false,
             picker_open: false,
             confirm_delete: None,
+            cleanup_issue: None,
             #[cfg(windows)]
             tray: tray::Tray::new(&cc.egui_ctx),
         };
@@ -162,7 +167,6 @@ impl WaxApp {
                 Some(t) => {
                     if !t.is_up() {
                         drop(guard);
-                        let _ = Tunnel::force_disconnect();
                         let _ = tx.send(AppEvent::TunnelLost);
                         break;
                     }
@@ -175,6 +179,12 @@ impl WaxApp {
                 None => break,
             }
         });
+    }
+
+    fn connect_manual(&mut self) {
+        self.reconnect_attempts = 0;
+        self.reconnecting = false;
+        self.connect();
     }
 
     fn connect(&mut self) {
@@ -220,11 +230,12 @@ impl WaxApp {
         let tx = self.events_tx.clone();
         std::thread::spawn(move || {
             let taken = tunnel.lock().unwrap().take();
-            if let Some(t) = taken {
-                let _ = t.shutdown();
+            let result = if let Some(t) = taken {
+                t.shutdown().map_err(|e| e.to_string())
             } else {
-                let _ = Tunnel::force_disconnect();
-            }
+                Tunnel::force_disconnect().map_err(|e| e.to_string())
+            };
+            let _ = tx.send(AppEvent::CleanupResult(result));
             let _ = tx.send(AppEvent::Disconnected);
         });
     }
@@ -279,20 +290,26 @@ impl WaxApp {
         while let Ok(event) = self.events_rx.try_recv() {
             match event {
                 AppEvent::TunnelLost => {
-                    if matches!(self.state, ConnState::Connected { .. }) && self.settings.auto_reconnect {
-                        self.reconnect_attempts += 1;
-                        if self.reconnect_attempts <= 3 {
-                            self.status_line = format!(
-                                "Connection lost - reconnecting ({}/3)",
-                                self.reconnect_attempts
-                            );
-                            self.connect();
-                        } else {
-                            self.state = ConnState::Failed(
-                                "Connection lost; 3 reconnect attempts failed".into(),
-                            );
-                        }
-                    } else if matches!(self.state, ConnState::Connected { .. }) {
+                    if !matches!(self.state, ConnState::Connected { .. }) {
+                        continue;
+                    }
+                    if !self.settings.kill_switch {
+                        // No kill switch: clean leftovers before reconnecting.
+                        let _ = Tunnel::force_disconnect();
+                    }
+                    // With the kill switch on, leave its rules in place so the
+                    // machine stays fail-closed between attempts; connecting
+                    // re-adds them idempotently.
+                    if self.settings.auto_reconnect {
+                        self.reconnecting = true;
+                        self.reconnect_attempts = 1;
+                        self.status_line = "Connection lost - reconnecting (1/3)".into();
+                        self.connect();
+                    } else if self.settings.kill_switch {
+                        self.state = ConnState::Failed(
+                            "Connection lost; kill-switch rules remain enabled".into(),
+                        );
+                    } else {
                         self.state = ConnState::Failed("Connection lost".into());
                     }
                 }
@@ -300,6 +317,7 @@ impl WaxApp {
                     self.state = ConnState::Connected { since: Instant::now() };
                     self.status_line = "Tunnel is up".to_string();
                     self.reconnect_attempts = 0;
+                    self.reconnecting = false;
                     if let Some(idx) = self.selected {
                         if let Some(p) = self.profiles.get(idx) {
                             self.settings.last_profile = Some(p.name.clone());
@@ -308,13 +326,38 @@ impl WaxApp {
                     }
                     self.spawn_stats_loop();
                 }
+                AppEvent::ConnectFailed(e) if self.reconnecting && self.reconnect_attempts < 3 => {
+                    self.reconnect_attempts += 1;
+                    self.status_line = format!(
+                        "Connection lost - reconnecting ({}/3)",
+                        self.reconnect_attempts
+                    );
+                    self.connect();
+                    let _ = e;
+                }
                 AppEvent::ConnectFailed(e) => {
-                    self.state = ConnState::Failed(e.clone());
-                    self.status_line = e;
+                    self.reconnecting = false;
+                    let msg = if self.reconnect_attempts > 0 && self.settings.kill_switch {
+                        format!("{e} - kill-switch rules remain enabled")
+                    } else {
+                        e
+                    };
+                    self.reconnect_attempts = 0;
+                    self.state = ConnState::Failed(msg.clone());
+                    self.status_line = msg;
+                }
+                AppEvent::CleanupResult(Ok(())) => {
+                    self.cleanup_issue = None;
+                }
+                AppEvent::CleanupResult(Err(e)) => {
+                    self.cleanup_issue = Some(e);
                 }
                 AppEvent::Disconnected => {
                     self.state = ConnState::Disconnected;
-                    self.status_line = "Disconnected".to_string();
+                    self.status_line = match &self.cleanup_issue {
+                        None => "Disconnected".to_string(),
+                        Some(e) => format!("Disconnected, but cleanup needs attention: {e}"),
+                    };
                     self.stats = TunnelStats::default();
                 }
                 AppEvent::Stats(s) => self.stats = s,
@@ -447,7 +490,7 @@ impl eframe::App for WaxApp {
             }
             if toggle {
                 match self.state {
-                    ConnState::Disconnected | ConnState::Failed(_) => self.connect(),
+                    ConnState::Disconnected | ConnState::Failed(_) => self.connect_manual(),
                     ConnState::Connected { .. } => self.disconnect(),
                     _ => {}
                 }
@@ -576,7 +619,7 @@ impl WaxApp {
             let response = orb::paint_orb(ui, &self.state, t, self.settings.reduced_motion);
             if response.clicked() {
                 match self.state {
-                    ConnState::Disconnected | ConnState::Failed(_) => self.connect(),
+                    ConnState::Disconnected | ConnState::Failed(_) => self.connect_manual(),
                     ConnState::Connected { .. } => self.disconnect(),
                     _ => {}
                 }
@@ -735,7 +778,7 @@ impl WaxApp {
         ui.with_layout(Layout::top_down(Align::Center), |ui| {
             if theme::primary_button(ui, label, enabled) {
                 match self.state {
-                    ConnState::Disconnected | ConnState::Failed(_) => self.connect(),
+                    ConnState::Disconnected | ConnState::Failed(_) => self.connect_manual(),
                     ConnState::Connected { .. } => self.disconnect(),
                     _ => {}
                 }
@@ -755,6 +798,20 @@ impl WaxApp {
             ui.label(
                 RichText::new(&self.status_line).size(11.0).color(theme::SUB),
             );
+            if self.cleanup_issue.is_some() {
+                if ui
+                    .link(RichText::new("Retry network cleanup").size(11.5).color(theme::WARN))
+                    .clicked()
+                {
+                    let tx = self.events_tx.clone();
+                    std::thread::spawn(move || {
+                        let _ = tx.send(AppEvent::CleanupResult(
+                            Tunnel::force_disconnect().map_err(|e| e.to_string()),
+                        ));
+                        let _ = tx.send(AppEvent::Disconnected);
+                    });
+                }
+            }
         });
 
         // Live connection progress: each stage the tunnel core reports,
@@ -940,7 +997,8 @@ impl WaxApp {
         }
         if let Some(i) = connect_idx {
             self.selected = Some(i);
-            self.connect();
+            self.confirm_delete = None;
+            self.connect_manual();
         }
 
         ui.add_space(8.0);

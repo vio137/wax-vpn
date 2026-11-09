@@ -82,25 +82,41 @@ fn set_dns(adapter: &str, dns: &[std::net::IpAddr]) -> Result<(), TunnelError> {
     Ok(())
 }
 
-fn reset_dns(adapter: &str) {
-    let _ = run("netsh", &["interface", "ipv4", "set", "dnsservers", &format!("name={adapter}"), "dhcp"]);
-    let _ = run("netsh", &["interface", "ipv6", "set", "dnsservers", &format!("name={adapter}"), "dhcp"]);
+fn reset_dns(adapter: &str) -> Result<(), TunnelError> {
+    let mut problems = Vec::new();
+    if let Err(e) = run("netsh", &["interface", "ipv4", "set", "dnsservers", &format!("name={adapter}"), "dhcp"]) {
+        problems.push(format!("ipv4 dns reset: {e}"));
+    }
+    if let Err(e) = run("netsh", &["interface", "ipv6", "set", "dnsservers", &format!("name={adapter}"), "dhcp"]) {
+        problems.push(format!("ipv6 dns reset: {e}"));
+    }
+    if problems.is_empty() {
+        Ok(())
+    } else {
+        Err(TunnelError::Message(problems.join("; ")))
+    }
 }
 
 fn enable_kill_switch(endpoint_ip: &str, endpoint_port: u16, allow_lan: bool) -> Result<(), TunnelError> {
-    disable_kill_switch();
-    let mut script = format!(
-        "New-NetFirewallRule -DisplayName '{KILLSWITCH_RULE_PREFIX} - Endpoint' -Direction Outbound -Action Allow -Protocol UDP -RemoteAddress {endpoint_ip} -RemotePort {endpoint_port} | Out-Null; \
-         New-NetFirewallRule -DisplayName '{KILLSWITCH_RULE_PREFIX} - Tunnel' -Direction Outbound -Action Allow -InterfaceAlias '{ADAPTER_NAME}' | Out-Null; "
+    // Never delete the whole rule set to rebuild it: that would open an
+    // unprotected window. The Block rule is only ever created, never
+    // removed here; the Endpoint rule is updated in place when present.
+    let ep = format!("{KILLSWITCH_RULE_PREFIX} - Endpoint");
+    let tunnel = format!("{KILLSWITCH_RULE_PREFIX} - Tunnel");
+    let lan = format!("{KILLSWITCH_RULE_PREFIX} - LAN");
+    let block = format!("{KILLSWITCH_RULE_PREFIX} - Block");
+    let lan_part = if allow_lan {
+        format!(
+            "if (-not (Get-NetFirewallRule -DisplayName '{lan}' -ErrorAction SilentlyContinue)) {{ New-NetFirewallRule -DisplayName '{lan}' -Direction Outbound -Action Allow -RemoteAddress LocalSubnet | Out-Null }}; "
+        )
+    } else {
+        format!(
+            "Remove-NetFirewallRule -DisplayName '{lan}' -ErrorAction SilentlyContinue; "
+        )
+    };
+    let script = format!(
+        "if (Get-NetFirewallRule -DisplayName '{ep}' -ErrorAction SilentlyContinue) {{ Set-NetFirewallRule -DisplayName '{ep}' -Protocol UDP -RemoteAddress {endpoint_ip} -RemotePort {endpoint_port} -Action Allow }}          else {{ New-NetFirewallRule -DisplayName '{ep}' -Direction Outbound -Action Allow -Protocol UDP -RemoteAddress {endpoint_ip} -RemotePort {endpoint_port} | Out-Null }};          if (-not (Get-NetFirewallRule -DisplayName '{tunnel}' -ErrorAction SilentlyContinue)) {{ New-NetFirewallRule -DisplayName '{tunnel}' -Direction Outbound -Action Allow -InterfaceAlias '{ADAPTER_NAME}' | Out-Null }};          {lan_part}         if (-not (Get-NetFirewallRule -DisplayName '{block}' -ErrorAction SilentlyContinue)) {{ New-NetFirewallRule -DisplayName '{block}' -Direction Outbound -Action Block -RemoteAddress Any | Out-Null }}"
     );
-    if allow_lan {
-        script.push_str(&format!(
-            "New-NetFirewallRule -DisplayName '{KILLSWITCH_RULE_PREFIX} - LAN' -Direction Outbound -Action Allow -RemoteAddress LocalSubnet | Out-Null; "
-        ));
-    }
-    script.push_str(&format!(
-        "New-NetFirewallRule -DisplayName '{KILLSWITCH_RULE_PREFIX} - Block' -Direction Outbound -Action Block -RemoteAddress Any | Out-Null"
-    ));
     powershell(&script)
 }
 
@@ -244,22 +260,45 @@ impl Tunnel {
 
     /// Bring the tunnel down, restoring DNS and removing kill-switch rules.
     pub fn shutdown(self) -> Result<(), TunnelError> {
-        let _ = self.adapter.down();
-        reset_dns(ADAPTER_NAME);
-        if self.opts.kill_switch {
-            disable_kill_switch()?;
+        // Run every cleanup step even when one fails, then report all
+        // failures together - never a silent partial cleanup.
+        let mut problems = Vec::new();
+        if let Err(e) = self.adapter.down() {
+            problems.push(format!("adapter down: {e}"));
         }
-        Ok(())
+        if let Err(e) = reset_dns(ADAPTER_NAME) {
+            problems.push(e.to_string());
+        }
+        if self.opts.kill_switch {
+            if let Err(e) = disable_kill_switch() {
+                problems.push(format!("kill-switch rules remain: {e}"));
+            }
+        }
+        if problems.is_empty() {
+            Ok(())
+        } else {
+            Err(TunnelError::Message(problems.join("; ")))
+        }
     }
 
     /// Down any leftover waX VPN adapter from a previous run (CLI disconnect).
     pub fn force_disconnect() -> Result<(), TunnelError> {
         let wireguard = load_driver()?;
+        let mut problems = Vec::new();
         if let Ok(adapter) = Adapter::open(&wireguard, ADAPTER_NAME) {
-            let _ = adapter.down();
+            if let Err(e) = adapter.down() {
+                problems.push(format!("adapter down: {e}"));
+            }
         }
-        reset_dns(ADAPTER_NAME);
-        let _ = disable_kill_switch();
+        if let Err(e) = reset_dns(ADAPTER_NAME) {
+            problems.push(e.to_string());
+        }
+        if let Err(e) = disable_kill_switch() {
+            problems.push(format!("kill-switch rules remain: {e}"));
+        }
+        if !problems.is_empty() {
+            return Err(TunnelError::Message(problems.join("; ")));
+        }
         Ok(())
     }
 
