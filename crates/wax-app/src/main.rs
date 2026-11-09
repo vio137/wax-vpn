@@ -11,7 +11,7 @@ use std::sync::mpsc::{channel, Receiver};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime};
 
-use eframe::egui::{self, Align, Color32, Layout, RichText, Vec2};
+use eframe::egui::{self, Align, Layout, RichText};
 
 use settings::Settings;
 use wax_core::{profile, Profile};
@@ -28,7 +28,7 @@ pub enum ConnState {
     Failed(String),
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 enum Tab {
     Connect,
     Profiles,
@@ -109,7 +109,7 @@ impl WaxApp {
             tab: Tab::Connect,
             hidden: false,
             #[cfg(windows)]
-            tray: tray::Tray::new(),
+            tray: tray::Tray::new(&cc.egui_ctx),
         };
         app.refresh_warp_summary();
         // Pick up a tunnel left running by an earlier instance.
@@ -385,7 +385,7 @@ impl eframe::App for WaxApp {
             let mut open = false;
             let mut toggle = false;
             let mut quit = false;
-            while let Some(ev) = tray::poll_menu() {
+            while let Some(ev) = self.tray.as_ref().and_then(|t| t.poll()) {
                 if let Some(t) = &self.tray {
                     if ev.id == t.open_id {
                         open = true;
@@ -446,9 +446,9 @@ impl eframe::App for WaxApp {
                     ui.label(RichText::new(format!("v{VERSION}")).size(10.5).color(theme::MUTE));
                     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                         let (txt, col) = if self.is_admin {
-                            ("ADMIN", theme::GOOD)
+                            ("Admin", theme::GOOD)
                         } else {
-                            ("NOT ELEVATED", theme::WARN)
+                            ("Not elevated", theme::WARN)
                         };
                         ui.label(
                             RichText::new(txt)
@@ -492,25 +492,30 @@ impl eframe::App for WaxApp {
         egui::CentralPanel::default()
             .frame(egui::Frame::default().fill(theme::BG).inner_margin(egui::Margin::symmetric(18, 12)))
             .show(ui, |ui| {
-                match self.tab {
-                    Tab::Connect => self.tab_connect(ui, t),
-                    Tab::Profiles => self.tab_profiles(ui),
-                    Tab::Features => self.tab_features(ui),
-                    Tab::Warp => self.tab_warp(ui),
-                    Tab::About => self.tab_about(ui),
-                }
+                let fade = theme::enter(ui, ui.scope_id().with(("tab", self.tab)), self.settings.reduced_motion);
+                ui.scope(|ui| {
+                    ui.set_opacity(fade);
+                    match self.tab {
+                        Tab::Connect => self.tab_connect(ui, t),
+                        Tab::Profiles => self.tab_profiles(ui),
+                        Tab::Features => self.tab_features(ui),
+                        Tab::Warp => self.tab_warp(ui),
+                        Tab::About => self.tab_about(ui),
+                    }
+                });
             });
 
         ctx.request_repaint_after(if self.hidden {
             Duration::from_millis(1000)
         } else {
-            Duration::from_millis(66)
+            Duration::from_millis(33)
         });
     }
 }
 
 impl WaxApp {
     /// Explicit quit from the tray menu: disconnect cleanly, then exit.
+    #[cfg(windows)]
     fn quit_app(&mut self) {
         let taken = self.tunnel.lock().unwrap().take();
         if let Some(t) = taken {

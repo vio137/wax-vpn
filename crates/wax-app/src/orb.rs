@@ -27,11 +27,11 @@ fn arc_points(center: Pos2, radius: f32, start: f32, sweep: f32, segments: usize
 
 fn status_word(state: &ConnState) -> (&'static str, Color32) {
     match state {
-        ConnState::Disconnected => ("CONNECT", Color32::from_rgb(226, 232, 240)),
-        ConnState::Connecting => ("CONNECTING", WARN),
-        ConnState::Connected { .. } => ("SECURE", GOOD),
-        ConnState::Disconnecting => ("CLOSING", WARN),
-        ConnState::Failed(_) => ("RETRY", BAD),
+        ConnState::Disconnected => ("Connect", Color32::from_rgb(226, 232, 240)),
+        ConnState::Connecting => ("Connecting", WARN),
+        ConnState::Connected { .. } => ("Connected", GOOD),
+        ConnState::Disconnecting => ("Disconnecting", WARN),
+        ConnState::Failed(_) => ("Retry", BAD),
     }
 }
 
@@ -44,6 +44,17 @@ pub fn paint_orb(
 ) -> egui::Response {
     let size = egui::vec2(ui.available_width().min(320.0), 260.0);
     let (response, painter) = ui.allocate_painter(size, Sense::click());
+    response.widget_info(|| {
+        egui::WidgetInfo::labeled(
+            egui::Role::Button,
+            true,
+            match state {
+                ConnState::Disconnected | ConnState::Failed(_) => "Connect (orb)",
+                ConnState::Connected { .. } => "Disconnect (orb)",
+                _ => "Connection in progress",
+            },
+        )
+    });
     let center = response.rect.center();
     let base_r = 92.0;
     let (word, word_color) = status_word(state);
@@ -114,9 +125,9 @@ pub fn paint_orb(
         word_color,
     );
     let sub = match state {
-        ConnState::Disconnected => "tap to connect",
+        ConnState::Disconnected => "Click to connect",
         ConnState::Connecting => "negotiating tunnel",
-        ConnState::Connected { .. } => "tap to disconnect",
+        ConnState::Connected { .. } => "Click to disconnect",
         ConnState::Disconnecting => "restoring network",
         ConnState::Failed(_) => "something needs attention",
     };
@@ -128,8 +139,20 @@ pub fn paint_orb(
         Color32::from_rgb(148, 163, 184),
     );
 
-    if response.hovered() && !reduced_motion {
-        painter.circle_stroke(center, base_r + 4.0, Stroke::new(1.0, with_alpha(halo_color, 90)));
+    let hov = ui
+        .ctx()
+        .animate_bool_responsive(response.id.with("hov"), response.hovered());
+    if hov > 0.02 && !reduced_motion {
+        painter.circle_stroke(
+            center,
+            base_r + 4.0 + hov * 3.0,
+            Stroke::new(1.0, with_alpha(halo_color, (110.0 * hov) as u8)),
+        );
+        painter.circle_stroke(
+            center,
+            base_r - 22.0,
+            Stroke::new(1.0, with_alpha(Color32::WHITE, (26.0 * hov) as u8)),
+        );
     }
     response
 }

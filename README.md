@@ -74,3 +74,10 @@ official prebuilt WireGuardNT binary, distributed by the WireGuard project
 under the permissive license included in the installer
 (`LICENSE-wireguard-nt.txt`). WireGuard is a registered trademark of Jason A.
 Donenfeld; waX VPN is not affiliated with the WireGuard project.
+
+## Design process
+
+Interface refinements follow the unslop design-review rubric by Damir Sokolovsky
+(https://github.com/heydamir/unslop), used under CC BY 4.0. The direction:
+quiet dark chrome, one cyan accent, glassy raised surfaces, and the connect
+orb as the single rich moment.
