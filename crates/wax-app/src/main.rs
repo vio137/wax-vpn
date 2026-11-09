@@ -206,8 +206,11 @@ impl WaxApp {
         {
             if let Ok(exe) = std::env::current_exe() {
                 let script = format!("Start-Process -FilePath '{}' -Verb RunAs", exe.display());
+                use std::os::windows::process::CommandExt;
+                const CREATE_NO_WINDOW: u32 = 0x0800_0000;
                 let _ = std::process::Command::new("powershell")
                     .args(["-NoProfile", "-Command", &script])
+                    .creation_flags(CREATE_NO_WINDOW)
                     .spawn();
                 std::process::exit(0);
             }
@@ -528,7 +531,7 @@ impl WaxApp {
 
         // explicit action button (orb is also clickable)
         let (label, enabled) = match &self.state {
-            ConnState::Disconnected | ConnState::Failed(_) => ("Connect", self.selected.is_some() && self.is_admin),
+            ConnState::Disconnected | ConnState::Failed(_) => ("Connect", self.selected.is_some()),
             ConnState::Connected { .. } => ("Disconnect", true),
             ConnState::Connecting => ("Connecting...", false),
             ConnState::Disconnecting => ("Disconnecting...", false),

@@ -39,8 +39,11 @@ fn load_driver() -> Result<Wireguard, TunnelError> {
 }
 
 fn run(cmd: &str, args: &[&str]) -> Result<(), TunnelError> {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
     let output = Command::new(cmd)
         .args(args)
+        .creation_flags(CREATE_NO_WINDOW)
         .output()
         .map_err(|e| TunnelError::Command(format!("{cmd}: {e}")))?;
     if output.status.success() {

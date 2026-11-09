@@ -58,8 +58,11 @@ pub enum TunnelError {
 /// True when the current process holds administrator rights.
 #[cfg(windows)]
 pub fn is_elevated() -> bool {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
     std::process::Command::new("net")
         .args(["session"])
+        .creation_flags(CREATE_NO_WINDOW)
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .status()
