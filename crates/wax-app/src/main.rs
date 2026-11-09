@@ -614,7 +614,7 @@ impl eframe::App for WaxApp {
                             ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
                         }
                         let (txt, col) = if self.is_admin {
-                            ("Admin", theme::GOOD)
+                            ("Admin", theme::MUTE)
                         } else {
                             ("Not elevated", theme::WARN)
                         };
@@ -741,9 +741,30 @@ impl WaxApp {
     fn tab_connect(&mut self, ui: &mut egui::Ui, t: f32, phase: f32, twinkle_t: f32) {
         let rect = ui.max_rect().shrink2(egui::vec2(24.0, 18.0));
         let col_w = 400.0_f32.min(rect.width());
+        // Estimate the content block height so the column sits optically
+        // centered instead of hugging the top with dead space below.
+        let mut content_h = 66.0 + 16.0 + 42.0 + 8.0 + 22.0 + 18.0 + 26.0 + 52.0 + 8.0;
+        if self.profiles.len() > 1
+            && matches!(self.state, ConnState::Disconnected | ConnState::Failed(_))
+        {
+            content_h += 14.0; // switch hint
+            if self.picker_open {
+                content_h += 6.0 + self.profiles.len() as f32 * 30.0 + 24.0;
+            }
+        }
+        if matches!(self.state, ConnState::Connected { .. }) {
+            content_h += 22.0 + 1.0 + 14.0 + 40.0 + 12.0 + 1.0 + 10.0 + 18.0;
+        }
+        if matches!(self.state, ConnState::Connecting) {
+            content_h += 28.0;
+        }
+        if matches!(self.state, ConnState::Failed(_)) {
+            content_h += 24.0;
+        }
+        let col_h = content_h.min(rect.height());
         let col = egui::Rect::from_center_size(
-            egui::pos2(rect.center().x, rect.center().y - 14.0),
-            egui::vec2(col_w, rect.height()),
+            egui::pos2(rect.center().x, rect.center().y - 10.0),
+            egui::vec2(col_w, col_h),
         );
         let mut cui = ui.new_child(
             egui::UiBuilder::new()
@@ -754,7 +775,7 @@ impl WaxApp {
 
         // Brand mark: the black hole, small and quiet. Brightness and spin
         // follow the connection state as mood, never as measured speed.
-        let er = 30.0;
+        let er = 34.0;
         let (erect, _) = ui.allocate_exact_size(egui::vec2(er * 5.0, er * 2.2), egui::Sense::hover());
         self.scene
             .paint_hole(ui.painter(), erect.center(), er, phase, twinkle_t, self.energy);
@@ -1002,55 +1023,88 @@ impl WaxApp {
                     .map(|a| a.to_string())
                     .collect::<Vec<_>>()
                     .join(", ");
-                let frame = if selected {
-                    theme::card_frame().stroke(egui::Stroke::new(1.0, theme::ACCENT))
-                } else {
-                    theme::card_frame()
-                };
-                frame.show(ui, |ui| {
-                    ui.horizontal(|ui| {
-                        ui.vertical(|ui| {
-                            ui.label(RichText::new(&p.name).size(13.5).color(theme::TEXT).strong());
-                            ui.label(RichText::new(format!("{ep}  -  {addr}")).size(10.5).color(theme::MUTE).monospace());
-                        });
-                        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                            let now = ui.input(|inp| inp.time);
-                            let armed = matches!(self.confirm_delete, Some((idx, t0)) if idx == i && now - t0 < 3.0);
-                            if theme::danger_button(ui, if armed { "Confirm delete" } else { "Delete" }) {
-                                if armed {
-                                    delete_idx = Some(i);
-                                    self.confirm_delete = None;
-                                } else {
-                                    self.confirm_delete = Some((i, now));
-                                }
-                            }
-                            if !connected
-                                && ui
-                                    .add(egui::Button::new(RichText::new("Connect").size(12.0).color(theme::ACCENT))
-                                        .fill(theme::alpha(theme::ACCENT, 18))
-                                        .stroke(egui::Stroke::new(1.0, theme::alpha(theme::ACCENT, 90)))
-                                        .corner_radius(egui::CornerRadius::same(8)))
-                                    .clicked()
-                            {
-                                connect_idx = Some(i);
-                            }
-                            let sel_resp = ui.add(
-                                egui::Button::new(
-                                    RichText::new(if selected { "Selected" } else { "Select" })
-                                        .size(11.5)
-                                        .color(if selected { theme::ACCENT } else { theme::SUB }),
-                                )
-                                .fill(if selected { theme::alpha(theme::ACCENT, 18) } else { theme::alpha(egui::Color32::WHITE, 6) })
-                                .stroke(egui::Stroke::new(1.0, theme::alpha(if selected { theme::ACCENT } else { theme::SUB }, 60)))
-                                .corner_radius(egui::CornerRadius::same(8)),
-                            );
-                            if sel_resp.clicked() {
-                                self.selected = Some(i);
-                            }
-                        });
-                    });
+                let (r, resp) = ui.allocate_exact_size(
+                    egui::vec2(ui.available_width(), 48.0),
+                    egui::Sense::hover(),
+                );
+                let hov = ui
+                    .ctx()
+                    .animate_bool_responsive(resp.id.with("hov"), resp.hovered());
+                if hov > 0.02 || selected {
+                    ui.painter().rect_filled(
+                        r,
+                        egui::CornerRadius::same(8),
+                        theme::alpha(
+                            egui::Color32::WHITE,
+                            (5.0 * hov) as u8 + if selected { 6 } else { 0 },
+                        ),
+                    );
+                }
+                if selected {
+                    ui.painter().rect_filled(
+                        egui::Rect::from_center_size(
+                            egui::pos2(r.left() + 2.0, r.center().y),
+                            egui::vec2(2.5, 24.0),
+                        ),
+                        egui::CornerRadius::same(1),
+                        theme::ACCENT,
+                    );
+                }
+                let mut row_ui = ui.new_child(
+                    egui::UiBuilder::new()
+                        .max_rect(r.shrink2(egui::vec2(14.0, 0.0)))
+                        .layout(Layout::left_to_right(Align::Center)),
+                );
+                row_ui.vertical(|ui| {
+                    ui.label(
+                        RichText::new(&p.name)
+                            .size(13.5)
+                            .color(if selected { theme::TEXT } else { theme::SUB })
+                            .strong(),
+                    );
+                    ui.label(
+                        RichText::new(format!("{ep}  ·  {addr}"))
+                            .size(10.5)
+                            .color(theme::MUTE)
+                            .monospace(),
+                    );
                 });
-                ui.add_space(4.0);
+                row_ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    let now = ui.input(|inp| inp.time);
+                    let armed = matches!(self.confirm_delete, Some((idx, t0)) if idx == i && now - t0 < 3.0);
+                    if theme::danger_button(ui, if armed { "Confirm delete" } else { "Delete" }) {
+                        if armed {
+                            delete_idx = Some(i);
+                            self.confirm_delete = None;
+                        } else {
+                            self.confirm_delete = Some((i, now));
+                        }
+                    }
+                    if !connected
+                        && ui
+                            .add(egui::Button::new(RichText::new("Connect").size(12.0).color(theme::ACCENT))
+                                .fill(theme::alpha(theme::ACCENT, 18))
+                                .stroke(egui::Stroke::new(1.0, theme::alpha(theme::ACCENT, 90)))
+                                .corner_radius(egui::CornerRadius::same(8)))
+                            .clicked()
+                    {
+                        connect_idx = Some(i);
+                    }
+                    let sel_resp = ui.add(
+                        egui::Button::new(
+                            RichText::new(if selected { "Selected" } else { "Select" })
+                                .size(11.5)
+                                .color(if selected { theme::ACCENT } else { theme::SUB }),
+                        )
+                        .fill(if selected { theme::alpha(theme::ACCENT, 18) } else { theme::alpha(egui::Color32::WHITE, 6) })
+                        .stroke(egui::Stroke::new(1.0, theme::alpha(if selected { theme::ACCENT } else { theme::SUB }, 60)))
+                        .corner_radius(egui::CornerRadius::same(8)),
+                    );
+                    if sel_resp.clicked() {
+                        self.selected = Some(i);
+                    }
+                });
+                theme::hairline(ui);
             }
             if self.profiles.is_empty() {
                 theme::card_frame().show(ui, |ui| {
