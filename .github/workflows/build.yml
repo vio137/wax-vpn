@@ -113,8 +113,19 @@ jobs:
             waX-VPN-Setup-*.exe
             SHA256SUMS-*.txt
 
-      - name: Publish prerelease
+      - name: Decide publication
+        id: pub
         if: steps.staleness.outputs.skip != 'true'
+        shell: pwsh
+        run: |
+          $manual = "${{ github.event_name }}" -eq "workflow_dispatch"
+          $changed = git diff --name-only HEAD~1 HEAD
+          $codeChanged = ($changed | Where-Object { $_ -notmatch '^(\.github/|README|RELEASE_NOTES)' }).Count -gt 0
+          if ($manual -or $codeChanged) { "publish=true" | Out-File $env:GITHUB_OUTPUT -Append } else { "publish=false" | Out-File $env:GITHUB_OUTPUT -Append }
+          Write-Host "manual=$manual codeChanged=$codeChanged changed: $($changed -join ', ')"
+
+      - name: Publish prerelease
+        if: steps.staleness.outputs.skip != 'true' && steps.pub.outputs.publish == 'true'
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -216,6 +227,22 @@ jobs:
           if (-not $dnsAfter -or $dnsAfter.ServerAddresses.Count -eq 0) { Note 'PASS DNS restored on disconnect' } else { Note "FAIL DNS left behind: $($dnsAfter.ServerAddresses -join ',')" }
           $leftRules = Get-NetFirewallRule -DisplayName 'waX VPN KillSwitch*' -ErrorAction SilentlyContinue
           if (-not $leftRules) { Note 'PASS no firewall leftovers' } else { Note 'FAIL firewall leftovers' }
+
+          # 6. Crash leg: kill the tunnel owner mid-connection, then check for residue
+          $proc2 = Start-Process -FilePath "$PWD\bin\wax.exe" -ArgumentList 'connect','demo' -PassThru -WindowStyle Hidden
+          Start-Sleep -Seconds 12
+          if ($proc2.HasExited) { Note 'WARN crash-leg connect exited early' } else {
+            $proc2.Kill()
+            Start-Sleep -Seconds 3
+            $dnsCrash = Get-DnsClientServerAddress -InterfaceAlias 'waX VPN' -AddressFamily IPv4 -ErrorAction SilentlyContinue
+            $adapterCrash = Get-NetAdapter -Name 'waX VPN' -ErrorAction SilentlyContinue
+            .\bin\wax.exe disconnect | Out-Null
+            Start-Sleep -Seconds 2
+            $dnsCrashAfter = Get-DnsClientServerAddress -InterfaceAlias 'waX VPN' -AddressFamily IPv4 -ErrorAction SilentlyContinue
+            if (-not $dnsCrashAfter -or $dnsCrashAfter.ServerAddresses.Count -eq 0) { Note 'PASS DNS clean after simulated crash + cleanup' } else { Note "FAIL DNS residue after crash: $($dnsCrashAfter.ServerAddresses -join ',')" }
+            $rulesCrash = Get-NetFirewallRule -DisplayName 'waX VPN KillSwitch*' -ErrorAction SilentlyContinue
+            if (-not $rulesCrash) { Note 'PASS no firewall rules after crash cleanup' } else { Note 'FAIL firewall rules left after crash' }
+          }
 
           $results | Out-File -Encoding utf8 verify-results.txt
           if ($results -match '^FAIL') { exit 1 }
