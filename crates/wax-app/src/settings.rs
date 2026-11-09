@@ -3,10 +3,12 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(default)]
 pub struct Settings {
     pub kill_switch: bool,
     pub allow_lan: bool,
     pub autostart: bool,
+    pub auto_reconnect: bool,
     pub reduced_motion: bool,
     pub last_profile: Option<String>,
 }
@@ -17,6 +19,7 @@ impl Default for Settings {
             kill_switch: false,
             allow_lan: true,
             autostart: false,
+            auto_reconnect: true,
             reduced_motion: false,
             last_profile: None,
         }

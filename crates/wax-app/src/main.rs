@@ -40,6 +40,7 @@ enum Tab {
 
 enum AppEvent {
     Stage(&'static str),
+    TunnelLost,
     Connected,
     ConnectFailed(String),
     Disconnected,
@@ -68,6 +69,9 @@ pub struct WaxApp {
     tab: Tab,
     hidden: bool,
     connect_stages: Vec<&'static str>,
+    reconnect_attempts: u8,
+    picker_open: bool,
+    confirm_delete: Option<(usize, f64)>,
     #[cfg(windows)]
     tray: Option<tray::Tray>,
 }
@@ -111,6 +115,9 @@ impl WaxApp {
             tab: Tab::Connect,
             hidden: false,
             connect_stages: Vec::new(),
+            reconnect_attempts: 0,
+            picker_open: false,
+            confirm_delete: None,
             #[cfg(windows)]
             tray: tray::Tray::new(&cc.egui_ctx),
         };
@@ -153,6 +160,12 @@ impl WaxApp {
             let guard = tunnel.lock().unwrap();
             match guard.as_ref() {
                 Some(t) => {
+                    if !t.is_up() {
+                        drop(guard);
+                        let _ = Tunnel::force_disconnect();
+                        let _ = tx.send(AppEvent::TunnelLost);
+                        break;
+                    }
                     let stats = t.stats();
                     drop(guard);
                     if tx.send(AppEvent::Stats(stats)).is_err() {
@@ -201,6 +214,7 @@ impl WaxApp {
 
     fn disconnect(&mut self) {
         self.state = ConnState::Disconnecting;
+        self.reconnect_attempts = 0;
         self.status_line = "Disconnecting...".to_string();
         let tunnel = self.tunnel.clone();
         let tx = self.events_tx.clone();
@@ -264,9 +278,28 @@ impl WaxApp {
     fn handle_events(&mut self, ctx: &egui::Context) {
         while let Ok(event) = self.events_rx.try_recv() {
             match event {
+                AppEvent::TunnelLost => {
+                    if matches!(self.state, ConnState::Connected { .. }) && self.settings.auto_reconnect {
+                        self.reconnect_attempts += 1;
+                        if self.reconnect_attempts <= 3 {
+                            self.status_line = format!(
+                                "Connection lost - reconnecting ({}/3)",
+                                self.reconnect_attempts
+                            );
+                            self.connect();
+                        } else {
+                            self.state = ConnState::Failed(
+                                "Connection lost; 3 reconnect attempts failed".into(),
+                            );
+                        }
+                    } else if matches!(self.state, ConnState::Connected { .. }) {
+                        self.state = ConnState::Failed("Connection lost".into());
+                    }
+                }
                 AppEvent::Connected => {
                     self.state = ConnState::Connected { since: Instant::now() };
                     self.status_line = "Tunnel is up".to_string();
+                    self.reconnect_attempts = 0;
                     if let Some(idx) = self.selected {
                         if let Some(p) = self.profiles.get(idx) {
                             self.settings.last_profile = Some(p.name.clone());
@@ -564,10 +597,92 @@ impl WaxApp {
                 (p.name.clone(), ep)
             })
             .unwrap_or_else(|| ("No profile selected".to_string(), "import or register WARP".to_string()));
+        // Profile switcher: the profile name under the orb opens a picker
+        // while disconnected, so switching never needs a tab change.
+        let can_switch = matches!(self.state, ConnState::Disconnected | ConnState::Failed(_))
+            && self.profiles.len() > 1;
         ui.with_layout(Layout::top_down(Align::Center), |ui| {
-            ui.label(RichText::new(&pname).size(15.0).color(theme::TEXT).strong());
+            let name_text = RichText::new(&pname).size(15.0).color(theme::TEXT).strong();
+            if can_switch {
+                let resp = ui.add(
+                    egui::Label::new(name_text).sense(egui::Sense::click()),
+                );
+                let hov = ui.ctx().animate_bool_responsive(resp.id.with("hov"), resp.hovered());
+                if hov > 0.05 {
+                    let r = resp.rect;
+                    ui.painter().line_segment(
+                        [r.left_bottom() + egui::vec2(0.0, 1.0), r.right_bottom() + egui::vec2(0.0, 1.0)],
+                        egui::Stroke::new(1.0, theme::alpha(theme::ACCENT, (200.0 * hov) as u8)),
+                    );
+                }
+                if resp.clicked() {
+                    self.picker_open = !self.picker_open;
+                }
+                ui.label(RichText::new(if self.picker_open { "choose a profile" } else { "click to switch profile" })
+                    .size(9.5)
+                    .color(theme::alpha(theme::MUTE, 170)));
+            } else {
+                ui.label(name_text);
+            }
             ui.label(RichText::new(&pendpoint).size(11.0).color(theme::MUTE));
         });
+        if self.picker_open && can_switch {
+            ui.add_space(4.0);
+            theme::card_frame().show(ui, |ui| {
+                ui.set_max_width(280.0);
+                for i in 0..self.profiles.len() {
+                    let (name, ep) = {
+                        let p = &self.profiles[i];
+                        (
+                            p.name.clone(),
+                            p.config
+                                .peers
+                                .first()
+                                .and_then(|x| x.endpoint.clone())
+                                .unwrap_or_else(|| "-".into()),
+                        )
+                    };
+                    let sel = self.selected == Some(i);
+                    let (rect, resp) = ui.allocate_exact_size(
+                        egui::vec2(ui.available_width(), 30.0),
+                        egui::Sense::click(),
+                    );
+                    let hov = ui.ctx().animate_bool_responsive(resp.id.with("hov"), resp.hovered());
+                    if hov > 0.02 || sel {
+                        ui.painter().rect(
+                            rect,
+                            egui::CornerRadius::same(8),
+                            theme::alpha(egui::Color32::WHITE, (8.0 * hov) as u8 + if sel { 10 } else { 0 }),
+                            egui::Stroke::NONE,
+                            egui::StrokeKind::Inside,
+                        );
+                    }
+                    ui.painter().text(
+                        rect.left_center() + egui::vec2(10.0, 0.0),
+                        egui::Align2::LEFT_CENTER,
+                        &name,
+                        egui::FontId::proportional(13.0),
+                        if sel { theme::ACCENT } else { theme::SUB },
+                    );
+                    ui.painter().text(
+                        rect.right_center() + egui::vec2(-10.0, 0.0),
+                        egui::Align2::RIGHT_CENTER,
+                        &ep,
+                        egui::FontId::monospace(10.5),
+                        theme::MUTE,
+                    );
+                    if resp.clicked() {
+                        self.selected = Some(i);
+                        self.confirm_delete = None;
+                        self.settings.last_profile = Some(name);
+                        settings::save(&self.settings);
+                        self.picker_open = false;
+                        self.status_line = "Ready".into();
+                    }
+                }
+            });
+            ui.add_space(4.0);
+        }
 
         ui.add_space(4.0);
 
@@ -765,11 +880,18 @@ impl WaxApp {
                     ui.horizontal(|ui| {
                         ui.vertical(|ui| {
                             ui.label(RichText::new(&p.name).size(13.5).color(theme::TEXT).strong());
-                            ui.label(RichText::new(format!("{ep}  -  {addr}")).size(10.5).color(theme::MUTE));
+                            ui.label(RichText::new(format!("{ep}  -  {addr}")).size(10.5).color(theme::MUTE).monospace());
                         });
                         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                            if theme::danger_button(ui, "Delete") {
-                                delete_idx = Some(i);
+                            let now = ui.input(|inp| inp.time);
+                            let armed = matches!(self.confirm_delete, Some((idx, t0)) if idx == i && now - t0 < 3.0);
+                            if theme::danger_button(ui, if armed { "Confirm delete" } else { "Delete" }) {
+                                if armed {
+                                    delete_idx = Some(i);
+                                    self.confirm_delete = None;
+                                } else {
+                                    self.confirm_delete = Some((i, now));
+                                }
                             }
                             if !connected
                                 && ui
@@ -781,7 +903,17 @@ impl WaxApp {
                             {
                                 connect_idx = Some(i);
                             }
-                            if ui.selectable_label(selected, RichText::new(if selected { "Selected" } else { "Select" }).size(11.5)).clicked() {
+                            let sel_resp = ui.add(
+                                egui::Button::new(
+                                    RichText::new(if selected { "Selected" } else { "Select" })
+                                        .size(11.5)
+                                        .color(if selected { theme::ACCENT } else { theme::SUB }),
+                                )
+                                .fill(if selected { theme::alpha(theme::ACCENT, 18) } else { theme::alpha(egui::Color32::WHITE, 6) })
+                                .stroke(egui::Stroke::new(1.0, theme::alpha(if selected { theme::ACCENT } else { theme::SUB }, 60)))
+                                .corner_radius(egui::CornerRadius::same(8)),
+                            );
+                            if sel_resp.clicked() {
                                 self.selected = Some(i);
                             }
                         });
@@ -863,6 +995,15 @@ impl WaxApp {
             "Launch waX VPN when you sign in",
         ) {
             self.toggle_autostart();
+            settings::save(&self.settings);
+        }
+        ui.add_space(4.0);
+        if theme::toggle_row(
+            ui,
+            &mut self.settings.auto_reconnect,
+            "Auto-reconnect",
+            "Reconnect automatically if the tunnel drops (up to 3 attempts)",
+        ) {
             settings::save(&self.settings);
         }
         ui.add_space(4.0);
