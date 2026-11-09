@@ -368,8 +368,10 @@ impl WaxApp {
             }
             if want_show {
                 self.hidden = false;
+                ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(false));
                 ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
                 ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+                ctx.request_repaint();
             }
         }
         while let Ok(event) = self.events_rx.try_recv() {
@@ -1373,20 +1375,64 @@ impl WaxApp {
     fn tab_about(&mut self, ui: &mut egui::Ui) {
         theme::section_heading(ui, "About", "");
         theme::card_frame().show(ui, |ui| {
-            ui.label(RichText::new(format!("waX VPN v{VERSION}")).size(14.0).color(theme::TEXT).strong());
+            ui.horizontal(|ui| {
+                let (rect, _) =
+                    ui.allocate_exact_size(egui::vec2(40.0, 40.0), egui::Sense::hover());
+                rail_icon(ui.painter(), Tab::Connect, rect.center(), 14.0, theme::ACCENT);
+                ui.add_space(6.0);
+                ui.vertical(|ui| {
+                    ui.add_space(2.0);
+                    ui.label(RichText::new("waX VPN").size(17.0).color(theme::TEXT).strong());
+                    ui.label(
+                        RichText::new(format!("v{VERSION} · preview channel"))
+                            .size(11.0)
+                            .color(theme::MUTE),
+                    );
+                });
+            });
+            ui.add_space(10.0);
             ui.label(
                 RichText::new("A WireGuard client for Windows written in Rust, using the official wireguard-nt driver.")
                     .size(11.5)
                     .color(theme::SUB),
             );
-            ui.add_space(4.0);
+            ui.add_space(6.0);
             ui.hyperlink_to(
                 RichText::new("github.com/vio137/wax-vpn").size(12.0).color(theme::ACCENT),
                 "https://github.com/vio137/wax-vpn",
             );
-            ui.add_space(4.0);
+            ui.add_space(6.0);
             ui.label(
                 RichText::new("Not affiliated with Cloudflare or the WireGuard project.")
+                    .size(10.5)
+                    .color(theme::MUTE),
+            );
+        });
+        ui.add_space(10.0);
+        theme::card_frame().show(ui, |ui| {
+            ui.label(RichText::new("Built with").size(11.0).color(theme::MUTE));
+            ui.add_space(6.0);
+            let rows = [
+                ("Core", "Rust and the official wireguard-nt driver"),
+                ("Interface", "egui, pure Rust"),
+                ("Type", "Inter Display"),
+                ("License", "MIT"),
+            ];
+            for (k, v) in rows {
+                ui.horizontal(|ui| {
+                    ui.label(
+                        RichText::new(format!("{k:<10}"))
+                            .size(11.5)
+                            .color(theme::MUTE)
+                            .monospace(),
+                    );
+                    ui.label(RichText::new(v).size(11.5).color(theme::TEXT));
+                });
+                ui.add_space(2.0);
+            }
+            ui.add_space(4.0);
+            ui.label(
+                RichText::new("WireGuard is a registered trademark of Jason A. Donenfeld.")
                     .size(10.5)
                     .color(theme::MUTE),
             );

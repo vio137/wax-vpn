@@ -509,10 +509,13 @@ jobs:
               # Single instance: a second launch must signal the running instance
               # (window hidden by close-to-tray must reappear), then exit itself.
               $p2 = Start-Process -FilePath "$PWD\bin\wax-vpn.exe" -PassThru
-              Start-Sleep -Seconds 5
+              $siVisible = $false
+              for ($i = 0; $i -lt 12 -and -not $siVisible; $i++) {
+                Start-Sleep -Seconds 1
+                $siWin = [WaxCon]::FindWindowW($null, 'waX VPN')
+                $siVisible = ($siWin -ne [IntPtr]::Zero) -and [WaxCon]::IsWindowVisible($siWin)
+              }
               $p2.Refresh(); $pg.Refresh()
-              $siWin = [WaxCon]::FindWindowW($null, 'waX VPN')
-              $siVisible = ($siWin -ne [IntPtr]::Zero) -and [WaxCon]::IsWindowVisible($siWin)
               if (-not $pg.HasExited -and $p2.HasExited -and $siVisible) {
                 Note 'PASS single instance: second launch handed off, running instance showed its window, second process exited'
               } else {
