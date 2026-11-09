@@ -250,6 +250,17 @@ jobs:
             if (-not $rulesCrash) { Note 'PASS no firewall rules after crash cleanup' } else { Note 'FAIL firewall rules left after crash' }
           }
 
+          # 7. Kill switch leg: rules exist while connected, removed on disconnect
+          $proc3 = Start-Process -FilePath "$PWD\bin\wax.exe" -ArgumentList 'connect','demo','--kill-switch' -PassThru -WindowStyle Hidden
+          Start-Sleep -Seconds 12
+          $rulesOn = Get-NetFirewallRule -DisplayName 'waX VPN KillSwitch*' -ErrorAction SilentlyContinue
+          if ($rulesOn) { Note "PASS kill switch rules applied while connected ($(($rulesOn | Measure-Object).Count) rules)" } else { Note 'FAIL kill switch rules missing while connected' }
+          .\bin\wax.exe disconnect | Out-Null
+          Start-Sleep -Seconds 3
+          if (-not $proc3.HasExited) { $proc3.Kill() }
+          $rulesOff = Get-NetFirewallRule -DisplayName 'waX VPN KillSwitch*' -ErrorAction SilentlyContinue
+          if (-not $rulesOff) { Note 'PASS kill switch rules removed on disconnect' } else { Note 'FAIL kill switch rules left behind' }
+
           $results | Out-File -Encoding utf8 verify-results.txt
           if ($results -match '^FAIL') { exit 1 }
 

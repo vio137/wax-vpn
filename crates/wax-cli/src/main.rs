@@ -148,13 +148,13 @@ fn run() -> Result<(), String> {
             if !wax_tunnel::is_elevated() {
                 return Err("connecting needs administrator rights - re-run from an elevated terminal or use the waX VPN app, which offers a Restart as administrator button".into());
             }
+            if no_wait {
+                return Err("`--no-wait` is not safe yet: a tunnel stops when its owning process exits, so a fire-and-forget connect would die instantly. Omit --no-wait and keep this terminal open, or use the waX VPN app, which holds the tunnel while it runs. A proper background mode is planned.".into());
+            }
             let p = profile::load_profile(&name).map_err(|e| e.to_string())?;
             let opts = ConnectOptions { kill_switch, allow_lan };
             let tunnel = Tunnel::connect(&p, &opts).map_err(|e| e.to_string())?;
             println!("Connected to '{}'. Tunnel adapter '{}' is up.", p.name, wax_tunnel::ADAPTER_NAME);
-            if no_wait {
-                return Ok(());
-            }
             println!("Press Ctrl+C to disconnect.");
             // Keep the process (and driver handle) alive; Ctrl+C triggers shutdown.
             let running = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
