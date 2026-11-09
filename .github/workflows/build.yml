@@ -155,7 +155,9 @@ jobs:
           $tcp = New-Object System.Net.Sockets.TcpClient
           $tcp.Connect('demo.wireguard.com', 42912)
           $sw = New-Object System.IO.StreamWriter($tcp.GetStream())
+          $sw.NewLine = "`n"
           $sw.WriteLine($pub); $sw.Flush()
+          Note "sent pubkey: [$pub]"
           $sr = New-Object System.IO.StreamReader($tcp.GetStream())
           $line = $sr.ReadLine()
           $tcp.Close()
@@ -230,6 +232,7 @@ jobs:
           if (-not $p.HasExited) { $p.Kill() }
 
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: verification-evidence
           path: |
