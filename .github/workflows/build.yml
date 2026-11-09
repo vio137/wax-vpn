@@ -154,6 +154,8 @@ jobs:
           Copy-Item dl\installer\payload\wireguard.dll bin\
 
       - name: Real tunnel test against the official WireGuard demo server
+        env:
+          WAX_FULL_VERIFY: ${{ github.event_name != 'push' && '1' || '0' }}
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Continue'
@@ -236,6 +238,7 @@ jobs:
           $leftRules = Get-NetFirewallRule -DisplayName 'waX VPN KillSwitch*' -ErrorAction SilentlyContinue
           if (-not $leftRules) { Note 'PASS no firewall leftovers' } else { Note 'FAIL firewall leftovers' }
 
+          if ($env:WAX_FULL_VERIFY -eq '1') {
           # 6. Crash leg: kill the tunnel owner mid-connection, then check for residue
           $proc2 = Start-Process -FilePath "$PWD\bin\wax.exe" -ArgumentList 'connect','demo' -PassThru -WindowStyle Hidden
           Start-Sleep -Seconds 12
@@ -281,6 +284,10 @@ jobs:
           if (-not $proc3.HasExited) { $proc3.Kill() }
           $rulesOff = Get-NetFirewallRule -DisplayName 'waX VPN KillSwitch*' -ErrorAction SilentlyContinue
           if (-not $rulesOff) { Note 'PASS kill switch rules removed on disconnect' } else { Note 'FAIL kill switch rules left behind' }
+
+          } else {
+            Note 'INFO extended crash/kill-switch legs skipped on push builds (hourly schedule and manual dispatch run them)'
+          }
 
           $results | Out-File -Encoding utf8 verify-results.txt
           if ($results -match '^FAIL') { exit 1 }
