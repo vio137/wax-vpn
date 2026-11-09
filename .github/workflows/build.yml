@@ -455,61 +455,19 @@ jobs:
               } else {
                 Note 'FAIL close-to-tray: app exited when the window was closed'
               }
-              function Find-WaxTrayIcon {
-                foreach ($tbName in @('User Promoted Notification Area', 'Notification Area')) {
-                  $tb = $root.FindFirst([System.Windows.Automation.TreeScope]::Descendants, (New-Object System.Windows.Automation.AndCondition((New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, $tbName)), (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::ToolBar)))))
-                  if ($tb) {
-                    $ic = $tb.FindFirst([System.Windows.Automation.TreeScope]::Descendants, (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, 'waX VPN')))
-                    if ($ic) { return $ic }
-                  }
-                }
-                return $null
-              }
-              $quitDone = $false
-              $explorer = Get-Process explorer -ErrorAction SilentlyContinue
-              $trayWnd = [WaxCon]::FindWindowW('Shell_TrayWnd', $null)
-              $overflowWnd = [WaxCon]::FindWindowW('NotifyIconOverflowWindow', $null)
-              Note "INFO tray environment: explorer=$(if ($explorer) {'running'} else {'absent'}) Shell_TrayWnd=$(if ($trayWnd -ne [IntPtr]::Zero) {'present'} else {'absent'}) overflow=$(if ($overflowWnd -ne [IntPtr]::Zero) {'present'} else {'absent'})"
-              try {
-                $chev = $root.FindFirst([System.Windows.Automation.TreeScope]::Descendants, (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, 'Notification Chevron')))
-                if ($chev) { $chev.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke(); Start-Sleep -Seconds 2 }
-                $tray = Find-WaxTrayIcon
-                if (-not $tray) {
-                  $seen = @()
-                  foreach ($tbName in @('User Promoted Notification Area', 'Notification Area')) {
-                    $tb = $root.FindFirst([System.Windows.Automation.TreeScope]::Descendants, (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, $tbName)))
-                    if ($tb) { $seen += ($tb.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition) | ForEach-Object { $_.Current.Name } | Where-Object { $_ }) }
-                  }
-                  Note "WARN tray icon not found in notification area toolbars; icons seen: $($seen -join ' | ')"
-                }
-                if ($tray) {
-                  $pt = $tray.GetClickablePoint()
-                  [WaxCon]::RightClick([int]$pt.X, [int]$pt.Y)
-                  Start-Sleep -Seconds 2
-                  $open = $root.FindFirst([System.Windows.Automation.TreeScope]::Descendants, (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, 'Open waX VPN')))
-                  if ($open) {
-                    $open.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
-                    Start-Sleep -Seconds 3
-                    $w2 = $root.FindFirst([System.Windows.Automation.TreeScope]::Descendants, (New-Object System.Windows.Automation.AndCondition((New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, 'waX VPN')), (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Window)))))
-                    if ($w2) {
-                      Note 'PASS reopen: window restored via tray Open after close-to-tray'
-                      try { $w2.GetCurrentPattern([System.Windows.Automation.WindowPattern]::Pattern).Close() } catch { Note "WARN window re-close failed: $($_.Exception.Message)" }
-                      Start-Sleep -Seconds 2
-                    } else { Note 'WARN reopen: window not detected after tray Open' }
-                  } else { Note 'WARN tray Open menu item not found' }
-                  [WaxCon]::RightClick([int]$pt.X, [int]$pt.Y)
-                  Start-Sleep -Seconds 2
-                  $q = $root.FindFirst([System.Windows.Automation.TreeScope]::Descendants, (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, 'Quit waX VPN')))
-                  if ($q) { $q.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke(); $quitDone = $true }
-                }
-              } catch { Note "WARN tray automation error: $($_.Exception.Message)" }
-              Start-Sleep -Seconds 4
-              if ($quitDone -and $pg.HasExited) {
+              # The runner session has no notification area (Shell_TrayWnd absent), so
+              # tray-menu interaction cannot be automated here; it stays a manual check
+              # on real Windows. The graceful-quit path itself (same cleanup as tray
+              # Quit) is verified through the app's --quit request.
+              Note 'INFO tray menu Quit/Open: manual-only on real Windows (runner has no notification area)'
+              .\bin\wax-vpn.exe --quit
+              Start-Sleep -Seconds 5
+              if ($pg.HasExited) {
                 $ad2 = Get-NetAdapter -Name 'waX VPN' -ErrorAction SilentlyContinue
-                if (-not $ad2) { Note 'PASS tray Quit: app exited and adapter removed' } else { Note 'FAIL tray Quit: app exited but adapter remains' }
+                if (-not $ad2) { Note 'PASS graceful quit: app exited on --quit request and adapter removed' } else { Note 'FAIL graceful quit: app exited but adapter remains' }
               } else {
-                Note 'WARN tray Quit not completed by automation; Quit path needs manual confirmation'
-                if (-not $pg.HasExited) { $pg.Kill() }
+                Note 'FAIL graceful quit: app still running 5s after --quit request'
+                $pg.Kill()
               }
               .\bin\wax.exe disconnect | Out-Null
             }

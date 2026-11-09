@@ -46,6 +46,7 @@ enum AppEvent {
     ConnectFailed(String),
     Disconnected,
     Stats(TunnelStats),
+    ExitIp(Option<String>),
     WarpDone(Result<String, String>),
 }
 
@@ -75,6 +76,8 @@ pub struct WaxApp {
     picker_open: bool,
     split_edit: String,
     split_edit_for: Option<usize>,
+    exit_ip: Option<String>,
+    last_quit_poll: Instant,
     confirm_delete: Option<(usize, f64)>,
     cleanup_issue: Option<String>,
     scene: gargantua::Gargantua,
@@ -152,6 +155,8 @@ impl WaxApp {
             picker_open: false,
             split_edit: String::new(),
             split_edit_for: None,
+            exit_ip: None,
+            last_quit_poll: Instant::now(),
             confirm_delete: None,
             cleanup_issue: None,
             scene: gargantua::Gargantua::new(),
@@ -345,6 +350,13 @@ impl WaxApp {
     }
 
     fn handle_events(&mut self, ctx: &egui::Context) {
+        if self.last_quit_poll.elapsed().as_millis() >= 500 {
+            self.last_quit_poll = Instant::now();
+            if quit_request_path().exists() {
+                let _ = std::fs::remove_file(quit_request_path());
+                self.quit_app();
+            }
+        }
         while let Ok(event) = self.events_rx.try_recv() {
             match event {
                 AppEvent::TunnelLost => {
@@ -374,6 +386,21 @@ impl WaxApp {
                 AppEvent::Connected => {
                     self.state = ConnState::Connected { since: Instant::now() };
                     self.status_line = "Tunnel is up".to_string();
+                    self.exit_ip = None;
+                    {
+                        let tx = self.events_tx.clone();
+                        std::thread::spawn(move || {
+                            let ip = reqwest::blocking::Client::builder()
+                                .timeout(std::time::Duration::from_secs(4))
+                                .build()
+                                .ok()
+                                .and_then(|c| c.get("https://api.ipify.org").send().ok())
+                                .and_then(|r| r.text().ok())
+                                .map(|t| t.trim().to_string())
+                                .filter(|t| !t.is_empty() && t.len() < 46);
+                            let _ = tx.send(AppEvent::ExitIp(ip));
+                        });
+                    }
                     self.reconnect_attempts = 0;
                     self.reconnecting = false;
                     if let Some(idx) = self.selected {
@@ -418,6 +445,7 @@ impl WaxApp {
                     };
                     self.stats = TunnelStats::default();
                 }
+                AppEvent::ExitIp(ip) => self.exit_ip = ip,
                 AppEvent::Stats(s) => self.stats = s,
                 AppEvent::Stage(stage) => {
                     self.connect_stages.push(stage);
@@ -753,6 +781,11 @@ impl eframe::App for WaxApp {
 
 impl WaxApp {
     /// Explicit quit from the tray menu: disconnect cleanly, then exit.
+    #[cfg(not(windows))]
+    fn quit_app(&mut self) {
+        std::process::exit(0);
+    }
+
     #[cfg(windows)]
     fn quit_app(&mut self) {
         let taken = self.tunnel.lock().unwrap().take();
@@ -1032,6 +1065,15 @@ impl WaxApp {
                     .size(11.0)
                     .color(theme::GOOD),
             );
+            if let Some(ip) = &self.exit_ip {
+                ui.add_space(4.0);
+                ui.label(
+                    RichText::new(format!("Exit IP {ip}"))
+                        .size(11.0)
+                        .color(theme::SUB)
+                        .monospace(),
+                );
+            }
         }
 
     }
@@ -1490,7 +1532,31 @@ fn chrono_free_stamp() -> String {
     format!("{}", secs % 100_000)
 }
 
+/// File-based quit request: `wax-vpn.exe --quit` drops this file and the
+/// running instance exits gracefully (same cleanup path as tray Quit).
+fn quit_request_path() -> std::path::PathBuf {
+    wax_core::profile::config_dir().join("quit.request")
+}
+
 fn main() -> eframe::Result<()> {
+    if std::env::args().any(|a| a == "--quit") {
+        let dir = wax_core::profile::config_dir();
+        let _ = std::fs::create_dir_all(&dir);
+        let _ = std::fs::write(quit_request_path(), b"quit");
+        return Ok(());
+    }
+    // A stale request older than a few seconds must not kill a fresh launch.
+    if let Ok(meta) = std::fs::metadata(quit_request_path()) {
+        let stale = meta
+            .modified()
+            .ok()
+            .and_then(|m| m.elapsed().ok())
+            .map(|e| e.as_secs() > 5)
+            .unwrap_or(false);
+        if stale {
+            let _ = std::fs::remove_file(quit_request_path());
+        }
+    }
     let icon = eframe::icon_data::from_png_bytes(include_bytes!("../assets/icon-256.png"))
         .expect("embedded icon must decode");
     let options = eframe::NativeOptions {
