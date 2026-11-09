@@ -373,7 +373,6 @@ impl WaxApp {
                 ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
                 ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
                 ctx.request_repaint();
-                crate::single::show_own_window();
             }
         }
         while let Ok(event) = self.events_rx.try_recv() {
@@ -1374,6 +1373,23 @@ impl WaxApp {
                 if theme::primary_button(ui, "Register WARP and create profile", self.warp_tos && !self.warp_busy) {
                     self.warp_register();
                 }
+            }
+        });
+        ui.add_space(10.0);
+        theme::card_frame().show(ui, |ui| {
+            ui.label(RichText::new("What WARP does").size(11.0).color(theme::MUTE));
+            ui.add_space(6.0);
+            let rows = [
+                "Routes your traffic through Cloudflare's network over WireGuard.",
+                "Free. Registering creates a WARP account tied to this device.",
+                "Afterwards, 'Cloudflare WARP' shows up in Profiles and connects like any profile.",
+            ];
+            for r in rows {
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new("·").size(11.5).color(theme::ACCENT));
+                    ui.label(RichText::new(r).size(11.5).color(theme::SUB));
+                });
+                ui.add_space(2.0);
             }
         });
     }

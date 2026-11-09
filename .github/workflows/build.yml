@@ -391,6 +391,15 @@ jobs:
             [DllImport("user32.dll")] public static extern void mouse_event(uint f, uint dx, uint dy, uint d, IntPtr e);
             [DllImport("user32.dll")] public static extern int GetWindowTextW(IntPtr h, StringBuilder s, int n);
             [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+            public static bool AnyWindowVisibleOfPid(uint target) {
+              bool found = false;
+              EnumWindows((h,l) => {
+                uint pid; GetWindowThreadProcessId(h, out pid);
+                if (pid == target && IsWindowVisible(h)) found = true;
+                return true;
+              }, IntPtr.Zero);
+              return found;
+            }
             public static string ListWindows() {
               var lines = new System.Collections.Generic.List<string>();
               EnumWindows((h,l) => {
@@ -523,11 +532,12 @@ jobs:
               # Single instance: a second launch must signal the running instance
               # (window hidden by close-to-tray must reappear), then exit itself.
               $p2 = Start-Process -FilePath "$PWD\bin\wax-vpn.exe" -PassThru
+              # Check visibility by PID: a second same-titled helper window (never
+              # visible) makes FindWindowW-by-title read the wrong window.
               $siVisible = $false
               for ($i = 0; $i -lt 12 -and -not $siVisible; $i++) {
                 Start-Sleep -Seconds 1
-                $siWin = [WaxCon]::FindWindowW($null, 'waX VPN')
-                $siVisible = ($siWin -ne [IntPtr]::Zero) -and [WaxCon]::IsWindowVisible($siWin)
+                $siVisible = [WaxCon]::AnyWindowVisibleOfPid($pg.Id)
               }
               $p2.Refresh(); $pg.Refresh()
               if (-not $pg.HasExited -and $p2.HasExited -and $siVisible) {
