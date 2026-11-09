@@ -39,6 +39,9 @@ enum Commands {
         /// With --kill-switch, keep local network reachable
         #[arg(long, default_value_t = true)]
         allow_lan: bool,
+        /// Configure and bring the tunnel up, then exit (used by automation)
+        #[arg(long)]
+        no_wait: bool,
     },
     /// Disconnect the running tunnel
     Disconnect,
@@ -141,7 +144,7 @@ fn run() -> Result<(), String> {
             profile::delete_profile(&name).map_err(|e| e.to_string())?;
             println!("Removed profile '{name}'.");
         }
-        Commands::Connect { name, kill_switch, allow_lan } => {
+        Commands::Connect { name, kill_switch, allow_lan, no_wait } => {
             if !wax_tunnel::is_elevated() {
                 return Err("connecting needs administrator rights - re-run from an elevated terminal or use the waX VPN app, which offers a Restart as administrator button".into());
             }
@@ -149,6 +152,9 @@ fn run() -> Result<(), String> {
             let opts = ConnectOptions { kill_switch, allow_lan };
             let tunnel = Tunnel::connect(&p, &opts).map_err(|e| e.to_string())?;
             println!("Connected to '{}'. Tunnel adapter '{}' is up.", p.name, wax_tunnel::ADAPTER_NAME);
+            if no_wait {
+                return Ok(());
+            }
             println!("Press Ctrl+C to disconnect.");
             // Keep the process (and driver handle) alive; Ctrl+C triggers shutdown.
             let running = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));

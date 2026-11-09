@@ -86,9 +86,23 @@ jobs:
         run: |
           $version = "0.1.0"
           $tag = "v$version-preview.${{ github.run_number }}"
-          makensis /DWAX_VERSION="$version-preview.${{ github.run_number }}" installer\wax.nsi
+          $nsis = (Get-Command makensis -ErrorAction SilentlyContinue).Source
+          if (-not $nsis) { $nsis = @("C:\Program Files (x86)\NSIS\makensis.exe","C:\Program Files\NSIS\makensis.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1 }
+          if (-not $nsis) { throw "makensis not found" }
+          & $nsis /DWAX_VERSION="$version-preview.${{ github.run_number }}" installer\wax.nsi
+          if ($LASTEXITCODE -ne 0) { throw "makensis failed with $LASTEXITCODE" }
           Move-Item "installer\waX-VPN-Setup-$version-preview.${{ github.run_number }}-x64.exe" "waX-VPN-Setup-$tag-x64.exe" -Force
           Get-FileHash -Algorithm SHA256 "waX-VPN-Setup-$tag-x64.exe" | ForEach-Object { "$($_.Hash.ToLower())  waX-VPN-Setup-$tag-x64.exe" } | Out-File -Encoding ascii "SHA256SUMS-$tag.txt"
+
+      - name: Upload raw binaries
+        if: steps.staleness.outputs.skip != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: wax-vpn-binaries
+          path: |
+            target\release\wax.exe
+            target\release\wax-vpn.exe
+            installer\payload\wireguard.dll
 
       - name: Upload installer artifact
         if: steps.staleness.outputs.skip != 'true'
@@ -107,3 +121,110 @@ jobs:
         run: |
           $tag = "v0.1.0-preview.${{ github.run_number }}"
           gh release create $tag "waX-VPN-Setup-$tag-x64.exe" "SHA256SUMS-$tag.txt" --title "waX VPN $tag" --prerelease --notes-file RELEASE_NOTES.md
+
+  verify:
+    name: verify (demo tunnel + GUI)
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: wax-vpn-binaries
+          path: bin
+
+      - name: Real tunnel test against the official WireGuard demo server
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $results = @()
+          function Note($m) { Write-Host $m; $script:results += $m }
+
+          # 1. Register a fresh key with demo.wireguard.com (protocol from
+          #    wireguard-tools contrib/ncat-client-server)
+          $keyout = .in\wax.exe keygen
+          $priv = ($keyout | Select-String 'PrivateKey = (.+)$').Matches[0].Groups[1].Value.Trim()
+          $pub  = ($keyout | Select-String 'PublicKey\s+= (.+)$').Matches[0].Groups[1].Value.Trim()
+          $tcp = New-Object System.Net.Sockets.TcpClient
+          $tcp.Connect('demo.wireguard.com', 42912)
+          $sw = New-Object System.IO.StreamWriter($tcp.GetStream())
+          $sw.WriteLine($pub); $sw.Flush()
+          $sr = New-Object System.IO.StreamReader($tcp.GetStream())
+          $line = $sr.ReadLine()
+          $tcp.Close()
+          $parts = $line -split ':'
+          if ($parts[0] -ne 'OK') { Note "FAIL demo registration: $line"; exit 1 }
+          $serverPub = $parts[1]; $serverPort = $parts[2]; $internalIp = $parts[3]
+          Note "PASS demo registration (assigned $internalIp)"
+
+          $conf = @(
+            '[Interface]',
+            "PrivateKey = $priv",
+            "Address = $internalIp/24",
+            'DNS = 1.1.1.1, 1.0.0.1',
+            '',
+            '[Peer]',
+            "PublicKey = $serverPub",
+            "Endpoint = demo.wireguard.com:$serverPort",
+            'AllowedIPs = 0.0.0.0/0',
+            'PersistentKeepalive = 25'
+          )
+          $conf | Out-File -Encoding ascii demo.conf
+
+          .in\wax.exe import demo.conf --name demo
+          if ($LASTEXITCODE -ne 0) { Note 'FAIL import'; exit 1 }
+          Note 'PASS profile import'
+
+          # 2. Connect (runner is elevated)
+          .in\wax.exe connect demo --no-wait
+          if ($LASTEXITCODE -ne 0) { Note 'FAIL connect command'; exit 1 }
+          Note 'PASS connect command returned success'
+
+          # 3. Wait for a real handshake
+          $handshake = $false
+          for ($i = 0; $i -lt 18; $i++) {
+            Start-Sleep -Seconds 5
+            $status = .in\wax.exe status
+            if ($status -match 'Last handshake') { $handshake = $true; break }
+          }
+          if ($handshake) { Note "PASS live handshake: $($status -join ' | ')" } else { Note 'FAIL no handshake within 90s' }
+
+          # 4. Adapter + DNS state
+          $adapter = Get-NetAdapter -Name 'waX VPN' -ErrorAction SilentlyContinue
+          if ($adapter -and $adapter.Status -eq 'Up') { Note 'PASS adapter up' } else { Note 'FAIL adapter not up' }
+          $dns = Get-DnsClientServerAddress -InterfaceAlias 'waX VPN' -AddressFamily IPv4 -ErrorAction SilentlyContinue
+          if ($dns.ServerAddresses -contains '1.1.1.1') { Note 'PASS tunnel DNS applied' } else { Note 'FAIL tunnel DNS missing' }
+
+          # 5. Disconnect and verify restoration
+          .in\wax.exe disconnect
+          if ($LASTEXITCODE -ne 0) { Note 'FAIL disconnect command'; exit 1 }
+          Start-Sleep -Seconds 3
+          $dnsAfter = Get-DnsClientServerAddress -InterfaceAlias 'waX VPN' -AddressFamily IPv4 -ErrorAction SilentlyContinue
+          if (-not $dnsAfter -or $dnsAfter.ServerAddresses.Count -eq 0) { Note 'PASS DNS restored on disconnect' } else { Note "FAIL DNS left behind: $($dnsAfter.ServerAddresses -join ',')" }
+          $leftRules = Get-NetFirewallRule -DisplayName 'waX VPN KillSwitch*' -ErrorAction SilentlyContinue
+          if (-not $leftRules) { Note 'PASS no firewall leftovers' } else { Note 'FAIL firewall leftovers' }
+
+          $results | Out-File -Encoding utf8 verify-results.txt
+          if ($results -match '^FAIL') { exit 1 }
+
+      - name: GUI screenshot on the runner desktop
+        shell: pwsh
+        run: |
+          Copy-Item bin\wireguard.dll bin\ -Force
+          $p = Start-Process -FilePath "$PWDin\wax-vpn.exe" -PassThru
+          Start-Sleep -Seconds 8
+          Add-Type -AssemblyName System.Windows.Forms
+          Add-Type -AssemblyName System.Drawing
+          $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+          $bmp = New-Object System.Drawing.Bitmap $bounds.Width, $bounds.Height
+          $g = [System.Drawing.Graphics]::FromImage($bmp)
+          $g.CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size)
+          $bmp.Save('gui-screenshot.png')
+          $g.Dispose(); $bmp.Dispose()
+          if (-not $p.HasExited) { $p.Kill() }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: verification-evidence
+          path: |
+            verify-results.txt
+            gui-screenshot.png
