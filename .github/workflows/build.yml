@@ -360,6 +360,7 @@ jobs:
           using System.Text;
           using System.Runtime.InteropServices;
           public class WaxCon {
+            [DllImport("user32.dll", SetLastError=true)] public static extern IntPtr FindWindowW(string lpClassName, string lpWindowName);
             [DllImport("user32.dll")] public static extern bool EnumWindows(EnumProc cb, IntPtr l);
             public delegate bool EnumProc(IntPtr h, IntPtr l);
             [DllImport("user32.dll")] public static extern int GetClassNameW(IntPtr h, StringBuilder s, int n);
@@ -462,6 +463,10 @@ jobs:
                 return $null
               }
               $quitDone = $false
+              $explorer = Get-Process explorer -ErrorAction SilentlyContinue
+              $trayWnd = [WaxCon]::FindWindowW('Shell_TrayWnd', $null)
+              $overflowWnd = [WaxCon]::FindWindowW('NotifyIconOverflowWindow', $null)
+              Note "INFO tray environment: explorer=$(if ($explorer) {'running'} else {'absent'}) Shell_TrayWnd=$(if ($trayWnd -ne [IntPtr]::Zero) {'present'} else {'absent'}) overflow=$(if ($overflowWnd -ne [IntPtr]::Zero) {'present'} else {'absent'})"
               try {
                 $chev = $root.FindFirst([System.Windows.Automation.TreeScope]::Descendants, (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, 'Notification Chevron')))
                 if ($chev) { $chev.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke(); Start-Sleep -Seconds 2 }
