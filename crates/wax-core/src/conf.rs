@@ -45,7 +45,30 @@ fn parse_ip_prefix(value: &str) -> Option<IpNet> {
     })
 }
 
+// Import-only syntax validation. Existing saved profiles retain their load path.
+// This never resolves a host or changes the endpoint string.
+fn import_endpoint_is_valid(value: &str) -> bool {
+    let Some((host, port)) = value.rsplit_once(':') else { return false; };
+    if host.is_empty() || port.parse::<u16>().is_err() { return false; }
+    if host.starts_with('[') || host.ends_with(']') || host.contains(':') {
+        let Some(inner) = host.strip_prefix('[').and_then(|h| h.strip_suffix(']')) else { return false; };
+        // WireGuard accepts an IPv6 zone suffix. Keep it verbatim, without lookup.
+        let address = inner.rsplit_once('%').map_or(inner, |(address, _)| address);
+        return address.parse::<std::net::Ipv6Addr>().is_ok();
+    }
+    !host.contains(['[', ']'])
+}
+
 impl WireGuardConfig {
+    pub(crate) fn validate_import_endpoints(&self) -> Result<(), CoreError> {
+        for (index, peer) in self.peers.iter().enumerate() {
+            if peer.endpoint.as_deref().is_some_and(|value| !import_endpoint_is_valid(value)) {
+                return Err(CoreError::Parse(format!("peer {}: invalid Endpoint; expected host:port or [IPv6]:port with port 0-65535", index + 1)));
+            }
+        }
+        Ok(())
+    }
+
     pub fn parse(text: &str) -> Result<WireGuardConfig, CoreError> {
         enum Section { None, Interface, Peer }
 
@@ -361,6 +384,36 @@ mod tests {
     }
 
     #[test]
+    fn import_endpoint_syntax_preserves_valid_values_and_legacy_parse() {
+        let plain = sample();
+        let with_endpoint = |value: &str| plain.lines().map(|line| {
+            if line.starts_with("Endpoint =") { format!("eNdPoInT = {value}") }
+            else { line.to_string() }
+        }).collect::<Vec<_>>().join("\n");
+        for value in ["192.0.2.1:0", "vpn.Example:65535", "[2001:db8::1]:51820", "[fe80::1%12]:51820", "[fe80::1%Ethernet 3]:51820", "[::ffff:192.0.2.1]:1234"] {
+            let parsed = WireGuardConfig::parse(&with_endpoint(value)).unwrap();
+            parsed.validate_import_endpoints().unwrap();
+            assert_eq!(parsed.peers[0].endpoint.as_deref(), Some(value));
+            assert_eq!(WireGuardConfig::parse(&parsed.to_conf_string()).unwrap(), parsed);
+        }
+        for value in ["", "never-echo.invalid", ":1234", "host:", "host:bad", "host:65536", "host:-1", "[192.0.2.1]:1234", "[not-v6]:1234", "[::1:1234", "::1:1234", "host]:1234", "[::1]junk:1234"] {
+            // Loading existing profiles remains permissive, including odd values.
+            let parsed = WireGuardConfig::parse(&with_endpoint(value)).unwrap();
+            assert_eq!(parsed.peers[0].endpoint.as_deref(), Some(value));
+            let error = parsed.validate_import_endpoints().unwrap_err().to_string();
+            assert!(error.contains("peer 1: invalid Endpoint; expected host:port or [IPv6]:port with port 0-65535"));
+            assert!(!error.contains("never-echo.invalid"));
+        }
+        let absent = plain.lines().filter(|line| !line.starts_with("Endpoint =")).collect::<Vec<_>>().join("\n");
+        WireGuardConfig::parse(&absent).unwrap().validate_import_endpoints().unwrap();
+        let mut multi = WireGuardConfig::parse(&plain).unwrap();
+        let mut bad = multi.peers[0].clone();
+        bad.endpoint = Some("never-echo.invalid".into());
+        multi.peers.push(bad);
+        assert!(multi.validate_import_endpoints().unwrap_err().to_string().contains("peer 2: invalid Endpoint"));
+    }
+
+    #[test]
     fn parse_roundtrip() {
         let text = sample();
         let cfg = WireGuardConfig::parse(&text).unwrap();
@@ -571,4 +624,4 @@ mod tests {
         let text = format!("[Interface]\nPrivateKey = {priv_b64}\nAddress = 10.0.0.2/32\n");
         assert!(WireGuardConfig::parse(&text).is_err());
     }
-        }
+}
