@@ -65,33 +65,45 @@ pub fn load_profile(name: &str) -> Result<Profile, CoreError> {
     Ok(Profile { name: name.to_string(), config })
 }
 
+/// Loading may succeed partially. Counts never include file names or contents.
+#[derive(Debug, Default)]
+pub struct ProfileLoadReport {
+    pub profiles: Vec<Profile>,
+    pub skipped: usize,
+}
+
 pub fn load_profiles() -> Result<Vec<Profile>, CoreError> {
-    let dir = profiles_dir();
-    let mut out = Vec::new();
-    if !dir.exists() {
-        return Ok(out);
-    }
-    for entry in fs::read_dir(&dir)? {
-        let entry = entry?;
-        let path = entry.path();
+    Ok(load_profiles_report()?.profiles)
+}
+
+pub fn load_profiles_report() -> Result<ProfileLoadReport, CoreError> {
+    load_profiles_from(&profiles_dir())
+}
+
+fn load_profiles_from(dir: &Path) -> Result<ProfileLoadReport, CoreError> {
+    let entries = match fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(ProfileLoadReport::default()),
+        Err(e) => return Err(e.into()),
+    };
+    let mut report = ProfileLoadReport::default();
+    for entry in entries {
+        // A directory enumeration failure is not an empty or complete list.
+        let path = entry?.path();
         if path.extension().and_then(|e| e.to_str()) != Some("conf") {
             continue;
         }
-        let name = path
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .unwrap_or("profile")
-            .to_string();
-        match fs::read_to_string(&path) {
-            Ok(text) => match WireGuardConfig::parse(&text) {
-                Ok(config) => out.push(Profile { name, config }),
-                Err(e) => log::warn!("skipping unparsable profile {}: {}", path.display(), e),
-            },
-            Err(e) => log::warn!("skipping unreadable profile {}: {}", path.display(), e),
+        let Some(name) = path.file_stem().and_then(|s| s.to_str()) else {
+            report.skipped += 1;
+            continue;
+        };
+        match fs::read_to_string(&path).ok().and_then(|text| WireGuardConfig::parse(&text).ok()) {
+            Some(config) => report.profiles.push(Profile { name: name.to_string(), config }),
+            None => report.skipped += 1,
         }
     }
-    out.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
-    Ok(out)
+    report.profiles.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    Ok(report)
 }
 
 pub fn delete_profile(name: &str) -> Result<(), CoreError> {
@@ -173,6 +185,32 @@ mod tests {
         assert!(!names.contains("office_name"));
         assert!(!names.contains("office_name - 2"));
         assert_eq!(fs::read(dir.join("office_name.conf")).unwrap(), original);
+    }
+    #[test]
+    fn profile_load_report_preserves_bad_files_and_distinguishes_directory_failure() {
+        let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+        let dir = std::env::temp_dir().join(format!("wax-load-{}-{stamp}", std::process::id()));
+        struct Cleanup(PathBuf);
+        impl Drop for Cleanup { fn drop(&mut self) { let _ = fs::remove_dir_all(&self.0); } }
+        let _cleanup = Cleanup(dir.clone());
+        assert!(load_profiles_from(&dir).unwrap().profiles.is_empty());
+        fs::create_dir_all(&dir).unwrap();
+        let config = WireGuardConfig {
+            interface: crate::InterfaceConfig { private_key:[1;32], addresses:vec![], dns:vec![], mtu:None, listen_port:None },
+            peers:vec![],
+        }.to_conf_string();
+        fs::write(dir.join("Zulu.conf"), &config).unwrap();
+        fs::write(dir.join("alpha.conf"), &config).unwrap();
+        fs::write(dir.join("bad.conf"), b"not a configuration").unwrap();
+        fs::write(dir.join("ignored.txt"), b"ignored").unwrap();
+        fs::create_dir(dir.join("unreadable.conf")).unwrap();
+        let report = load_profiles_from(&dir).unwrap();
+        assert_eq!(report.profiles.iter().map(|p| p.name.as_str()).collect::<Vec<_>>(), vec!["alpha", "Zulu"]);
+        assert_eq!(report.skipped, 2);
+        assert_eq!(fs::read(dir.join("bad.conf")).unwrap(), b"not a configuration");
+        assert!(dir.join("unreadable.conf").is_dir());
+        assert!(load_profiles_from(&dir.join("ignored.txt")).is_err());
+        assert_eq!(fs::read(dir.join("Zulu.conf")).unwrap(), config.as_bytes());
     }
     #[test]
     fn profile_filenames_are_windows_safe() {
