@@ -213,6 +213,7 @@ jobs:
             "PrivateKey = $priv",
             "Address = $internalIp/24",
             'DNS = 1.1.1.1, 1.0.0.1',
+            'MTU = 1380',
             '',
             '[Peer]',
             "PublicKey = $serverPub",
@@ -253,6 +254,9 @@ jobs:
           if ($adapter -and $adapter.Status -eq 'Up') { Note 'PASS adapter up' } else { Note 'FAIL adapter not up' }
           $dns = Get-DnsClientServerAddress -InterfaceAlias 'waX VPN' -AddressFamily IPv4 -ErrorAction SilentlyContinue
           if ($dns.ServerAddresses -contains '1.1.1.1') { Note 'PASS tunnel DNS applied' } else { Note 'FAIL tunnel DNS missing' }
+
+          $tunnelIp = Get-NetIPInterface -InterfaceAlias 'waX VPN' -AddressFamily IPv4 -ErrorAction SilentlyContinue
+          if ($tunnelIp.NlMtuBytes -eq 1380) { Note 'PASS configured tunnel IPv4 MTU applied (1380 bytes)' } else { Note "FAIL tunnel MTU mismatch: $($tunnelIp.NlMtuBytes)" }
 
           # 5. Disconnect and verify restoration
           .\bin\wax.exe disconnect

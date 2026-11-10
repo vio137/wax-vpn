@@ -149,6 +149,12 @@ impl WireGuardConfig {
         if peers.is_empty() {
             return Err(CoreError::Parse("no [Peer] section".into()));
         }
+        if let Some(mtu) = mtu {
+            let minimum = if addresses.iter().any(|a| a.addr().is_ipv6()) { 1280 } else { 576 };
+            if mtu < minimum {
+                return Err(CoreError::Parse(format!("MTU must be at least {minimum} for this profile's address families")));
+            }
+        }
         Ok(WireGuardConfig {
             interface: InterfaceConfig { private_key, addresses, dns, mtu, listen_port },
             peers,
@@ -248,6 +254,14 @@ mod tests {
             assert!(!error.contains("internal.private"));
             assert!(!error.contains("not-an-ip"));
         }
+    }
+
+    #[test]
+    fn validates_mtu_for_profile_address_families() {
+        assert!(WireGuardConfig::parse(&sample().replace("MTU = 1280", "MTU = 1279")).is_err());
+        let ipv4 = sample().replace(", fd00::2/128", "").replace("MTU = 1280", "MTU = 576");
+        assert!(WireGuardConfig::parse(&ipv4).is_ok());
+        assert!(WireGuardConfig::parse(&ipv4.replace("MTU = 576", "MTU = 575")).is_err());
     }
 
     #[test]

@@ -234,6 +234,18 @@ impl Tunnel {
             .set_default_route(&cfg.interface.addresses, &set_if)
             .map_err(|e| TunnelError::Driver(format!("set routes: {e}")))?;
 
+        if let Some(mtu) = cfg.interface.mtu {
+            progress("Applying tunnel MTU");
+            // Only touch address families present in this profile, and only
+            // the dedicated tunnel interface. Never change physical NICs.
+            for family in ["IPv4", "IPv6"] {
+                let present = cfg.interface.addresses.iter().any(|a| a.addr().is_ipv4() == (family == "IPv4"));
+                if present {
+                    powershell(&format!("$ErrorActionPreference='Stop'; Set-NetIPInterface -InterfaceAlias '{ADAPTER_NAME}' -AddressFamily {family} -NlMtuBytes {mtu}"))?;
+                }
+            }
+        }
+
         if !cfg.interface.dns.is_empty() {
             progress("Applying tunnel DNS");
             set_dns(ADAPTER_NAME, &cfg.interface.dns)?;
