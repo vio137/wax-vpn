@@ -771,12 +771,19 @@ impl eframe::App for WaxApp {
                 let fade = theme::enter(ui, ui.scope_id().with(("tab", self.tab)), self.settings.reduced_motion);
                 ui.scope(|ui| {
                     ui.set_opacity(fade);
-                    match self.tab {
-                        Tab::Connect => self.tab_connect(ui, t, phase, twinkle_t),
-                        Tab::Profiles => self.tab_profiles(ui),
-                        Tab::Features => self.tab_features(ui),
-                        Tab::Warp => self.tab_warp(ui),
-                        Tab::About => self.tab_about(ui),
+                    if self.tab == Tab::Connect {
+                        self.tab_connect(ui, t, phase, twinkle_t);
+                    } else {
+                        egui::ScrollArea::vertical()
+                            .id_salt(("tab-content", self.tab))
+                            .auto_shrink([false, false])
+                            .show(ui, |ui| match self.tab {
+                                Tab::Profiles => self.tab_profiles(ui),
+                                Tab::Features => self.tab_features(ui),
+                                Tab::Warp => self.tab_warp(ui),
+                                Tab::About => self.tab_about(ui),
+                                Tab::Connect => unreachable!(),
+                            });
                     }
                 });
             });
