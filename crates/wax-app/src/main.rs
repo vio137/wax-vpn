@@ -495,6 +495,8 @@ impl WaxApp {
                     self.warp_busy = false;
                     self.warp_notice = Some((e.clone(), true));
                     self.status_line = format!("WARP: {e}");
+                    self.refresh_warp_summary();
+                    self.reload_profiles();
                 }
             }
         }
@@ -546,9 +548,14 @@ impl WaxApp {
                     .map_err(|e| e.to_string())?
                     .ok_or("not registered")?;
                 let client = wax_warp::WarpClient::new().map_err(|e| e.to_string())?;
-                let _ = client.delete_device(&account.device_id, &account.token);
-                wax_warp::delete_account().map_err(|e| e.to_string())?;
-                let _ = profile::delete_profile("Cloudflare WARP");
+                client.delete_device(&account.device_id, &account.token)
+                    .map_err(|e| format!("Could not remove remote registration: {e}. Local account kept for retry"))?;
+                wax_warp::delete_account().map_err(|e| format!(
+                    "Remote registration removed, but local account cleanup failed: {e}"
+                ))?;
+                profile::delete_profile("Cloudflare WARP").map_err(|e| format!(
+                    "Registration removed, but local WARP profile cleanup failed: {e}"
+                ))?;
                 Ok("WARP registration removed".to_string())
             })();
             let _ = tx.send(AppEvent::WarpDone(result));
@@ -1531,8 +1538,15 @@ impl WaxApp {
             }
             ui.add_space(6.0);
             if self.warp_registered {
-                if theme::danger_button(ui, "Unregister WARP") && !self.warp_busy {
+                let idle = matches!(self.state, ConnState::Disconnected | ConnState::Failed(_));
+                let unregister = ui.add_enabled_ui(!self.warp_busy && idle, |ui| {
+                    theme::danger_button(ui, "Unregister WARP")
+                }).inner;
+                if unregister {
                     self.warp_unregister();
+                }
+                if !idle {
+                    ui.label(RichText::new("Disconnect before removing WARP registration").size(11.0).color(theme::MUTE));
                 }
             } else {
                 ui.horizontal(|ui| {
