@@ -553,7 +553,35 @@ jobs:
               [WaxConsoleSampler]::Start()
               # Ensure the sampler ran before triggering connection.
               for ($i=0; $i -lt 20 -and [WaxConsoleSampler]::Samples -eq 0; $i++) { Start-Sleep -Milliseconds 20 }
+              Add-Type -TypeDefinition @"
+              using System;
+              using System.Runtime.InteropServices;
+              public static class WaxLayoutCapture {
+                [DllImport("user32.dll")] public static extern bool MoveWindow(IntPtr h, int x, int y, int w, int ht, bool repaint);
+              }
+          "@
+              function Capture-StateSizes([string]$stateName) {
+                foreach ($size in @(@(760,540),@(880,600),@(960,700))) {
+                  [WaxLayoutCapture]::MoveWindow([IntPtr]$win.Current.NativeWindowHandle,0,0,$size[0],$size[1],$true) | Out-Null
+                  Start-Sleep -Milliseconds 200
+                  $bounds = $win.Current.BoundingRectangle
+                  $image = New-Object System.Drawing.Bitmap ([int]$bounds.Width),([int]$bounds.Height)
+                  $graphics = [System.Drawing.Graphics]::FromImage($image)
+                  $graphics.CopyFromScreen([int]$bounds.X,[int]$bounds.Y,0,0,$image.Size)
+                  $image.Save("layout-$stateName-$($size[0])x$($size[1]).png")
+                  $textCondition = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Text)
+                  $stateTexts = $win.FindAll([System.Windows.Automation.TreeScope]::Descendants, $textCondition)
+                  "$stateName $($size[0])x$($size[1]): $(@($stateTexts | ForEach-Object { $_.Current.Name }) -join ' | ')" | Out-File layout-state-evidence.txt -Append
+                  $anchors = $stateTexts | Where-Object { $_.Current.Name -in @('Session','Received','Sent') }
+                  $anchors | ForEach-Object { "$stateName $($size[0])x$($size[1]) anchor=$($_.Current.Name) bounds=$($_.Current.BoundingRectangle)" | Out-File layout-state-evidence.txt -Append }
+                  $graphics.Dispose(); $image.Dispose()
+                }
+                [WaxLayoutCapture]::MoveWindow([IntPtr]$win.Current.NativeWindowHandle,0,0,880,600,$true) | Out-Null
+              }
+              Capture-StateSizes 'disconnected'
               $btn.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+              Start-Sleep -Milliseconds 100
+              Capture-StateSizes 'connecting'
               $up = $false
               for ($i = 0; $i -lt 24 -and -not $up; $i++) {
                 Start-Sleep -Seconds 5
@@ -562,6 +590,7 @@ jobs:
               }
               if ($up) { Note 'PASS GUI-driven connect: handshake after clicking Connect in the app' } else { Note 'FAIL GUI-driven connect: no handshake within 120s of clicking Connect' }
               if ($up) {
+                Capture-StateSizes 'connected'
                 Start-Sleep -Seconds 2
                 Add-Type -AssemblyName System.Drawing
                 $windowBounds = $win.Current.BoundingRectangle
@@ -686,6 +715,8 @@ jobs:
             gui-screenshot-profiles.png
             gui-screenshot-features.png
             gui-screenshot-warp.png
+            layout-*.png
+            layout-state-evidence.txt
             gui-screenshot-diagnostics.png
             gui-screenshot-about.png
             gui-screenshot-connected.png

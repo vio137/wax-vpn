@@ -975,29 +975,12 @@ impl WaxApp {
         std::process::exit(0);
     }
 
-    fn tab_connect(&mut self, ui: &mut egui::Ui, t: f32, phase: f32, twinkle_t: f32) {
+    fn tab_connect(&mut self, ui: &mut egui::Ui, _t: f32, phase: f32, twinkle_t: f32) {
         let rect = ui.max_rect().shrink2(egui::vec2(24.0, 18.0));
         let col_w = 400.0_f32.min(rect.width());
-        // Estimate the content block height so the column sits optically
-        // centered instead of hugging the top with dead space below.
-        let mut content_h = 66.0 + 16.0 + 42.0 + 8.0 + 22.0 + 18.0 + 26.0 + 52.0 + 8.0;
-        if self.profiles.len() > 1
-            && matches!(self.state, ConnState::Disconnected | ConnState::Failed(_))
-        {
-            content_h += 14.0; // switch hint
-            if self.picker_open {
-                content_h += 6.0 + self.profiles.len() as f32 * 30.0 + 24.0;
-            }
-        }
-        if matches!(self.state, ConnState::Connected { .. }) {
-            content_h += 22.0 + 1.0 + 14.0 + 40.0 + 12.0 + 1.0 + 10.0 + 18.0;
-        }
-        if matches!(self.state, ConnState::Connecting) {
-            content_h += 28.0;
-        }
-        if matches!(self.state, ConnState::Failed(_)) {
-            content_h += 24.0;
-        }
+        // One reserved composition for every connection state. Changing text
+        // must never move the title, action, stats or status baseline.
+        let content_h: f32 = 460.0;
         // Quiet facts pin to the window bottom, independent of the column.
         {
             let strip = egui::Rect::from_center_size(
@@ -1101,13 +1084,11 @@ impl WaxApp {
             self.picker_open = !self.picker_open;
         }
         ui.label(RichText::new(&pendpoint).size(11.5).color(theme::MUTE).monospace());
-        if can_switch {
-            ui.label(
-                RichText::new(if self.picker_open { "choose a profile" } else { "click to switch" })
-                    .size(10.0)
-                    .color(theme::MUTE),
-            );
-        }
+        ui.allocate_ui_with_layout(egui::vec2(col_w, 16.0), Layout::top_down(Align::Center), |ui| {
+            if can_switch {
+                ui.label(RichText::new(if self.picker_open { "choose a profile" } else { "click to switch" }).size(10.0).color(theme::MUTE));
+            }
+        });
         if self.picker_open && can_switch {
             ui.add_space(6.0);
             theme::card_frame().show(ui, |ui| {
@@ -1201,85 +1182,45 @@ impl WaxApp {
             }
         }
         ui.add_space(8.0);
-        if self.selected.is_none() {
-            ui.label(
-                RichText::new("Add a profile from the Profiles tab to connect")
-                    .size(11.0)
-                    .color(theme::MUTE),
-            );
-        } else if !self.is_admin {
-            if ui
-                .link(RichText::new("Restart as administrator to connect").size(11.5).color(theme::WARN))
-                .clicked()
-            {
-                self.restart_as_admin();
-            }
-        }
-
-        if let ConnState::Failed(msg) = &self.state {
-            let msg = msg.clone();
-            ui.add_space(6.0);
-            ui.label(RichText::new(msg).size(12.0).color(theme::BAD));
-        }
-        if matches!(self.state, ConnState::Connecting) {
-            let stage = self.connect_stages.last().copied().unwrap_or("Starting");
-            ui.add_space(6.0);
-            ui.horizontal(|ui| {
-                let (r, _) = ui.allocate_exact_size(egui::vec2(14.0, 14.0), egui::Sense::hover());
-                let pulse = 0.5 + 0.5 * (t * 3.0).sin();
-                ui.painter()
-                    .circle_filled(r.center(), 3.0 + pulse, theme::alpha(theme::ACCENT, 150));
+        ui.allocate_ui_with_layout(egui::vec2(col_w, 32.0), Layout::top_down(Align::Center), |ui| {
+            if self.selected.is_none() {
+                ui.label(RichText::new("Add a profile from the Profiles tab to connect").size(11.0).color(theme::MUTE));
+            } else if !self.is_admin {
+                if ui.link(RichText::new("Restart as administrator to connect").size(11.5).color(theme::WARN)).clicked() { self.restart_as_admin(); }
+            } else if let ConnState::Failed(msg) = &self.state {
+                ui.add(egui::Label::new(RichText::new(msg).size(11.0).color(theme::BAD)).wrap());
+            } else if matches!(self.state, ConnState::Connecting) {
+                let stage = if self.recovery.is_pending() { self.status_line.as_str() } else { self.connect_stages.last().copied().unwrap_or("Starting") };
                 ui.label(RichText::new(stage).size(12.0).color(theme::SUB));
-            });
-        }
-
-        if let ConnState::Connected { since } = self.state {
-            ui.add_space(22.0);
-            theme::hairline(ui);
-            ui.add_space(14.0);
-            let session = fmt_duration(since.elapsed());
-            let rx = fmt_bytes(self.stats.rx_bytes);
-            let txb = fmt_bytes(self.stats.tx_bytes);
-            ui.horizontal(|ui| {
-                let w = ui.available_width() / 3.0;
-                ui.allocate_ui_with_layout(
-                    egui::vec2(w, 40.0),
-                    Layout::top_down(Align::Center),
-                    |ui| mini_stat(ui, "Session", &session),
-                );
-                ui.allocate_ui_with_layout(
-                    egui::vec2(w, 40.0),
-                    Layout::top_down(Align::Center),
-                    |ui| mini_stat(ui, "Received", &rx),
-                );
-                ui.allocate_ui_with_layout(
-                    egui::vec2(w, 40.0),
-                    Layout::top_down(Align::Center),
-                    |ui| mini_stat(ui, "Sent", &txb),
-                );
-            });
-            ui.add_space(12.0);
-            theme::hairline(ui);
-            ui.add_space(10.0);
-            let now = SystemTime::now();
-            let age = self.stats.last_handshake.and_then(|h| now.duration_since(h).ok());
-            let (detail, color) = match connection_health::health(self.stats.last_handshake, now) {
-                connection_health::Health::AwaitingHandshake => (
-                    "Waiting for peer handshake. Check the endpoint and peer keys if this continues.".to_string(),
-                    theme::WARN,
-                ),
-                connection_health::Health::RecentHandshake => (
-                    format!("Peer handshake {} ago. Internet reachability is not tested.", age.map(fmt_duration).unwrap_or_default()),
-                    theme::SUB,
-                ),
-                connection_health::Health::OlderHandshake => (
-                    format!("Last peer handshake {} ago. Idle peers may not handshake; try traffic or reconnect if needed.", age.map(fmt_duration).unwrap_or_default()),
-                    theme::WARN,
-                ),
-            };
-            ui.label(RichText::new(detail).size(11.0).color(color));
-        }
-
+            }
+        });
+        ui.add_space(8.0);
+        theme::hairline(ui);
+        ui.add_space(12.0);
+        let connected = matches!(self.state, ConnState::Connected { .. });
+        let session = match self.state { ConnState::Connected { since } => fmt_duration(since.elapsed()), _ => "-".into() };
+        let rx = if connected { fmt_bytes(self.stats.rx_bytes) } else { "-".into() };
+        let txb = if connected { fmt_bytes(self.stats.tx_bytes) } else { "-".into() };
+        ui.columns(3, |columns| {
+            mini_stat(&mut columns[0], "Session", &session);
+            mini_stat(&mut columns[1], "Received", &rx);
+            mini_stat(&mut columns[2], "Sent", &txb);
+        });
+        ui.add_space(12.0);
+        theme::hairline(ui);
+        ui.add_space(8.0);
+        ui.allocate_ui_with_layout(egui::vec2(col_w, 40.0), Layout::top_down(Align::Center), |ui| {
+            if connected {
+                let now = SystemTime::now();
+                let age = self.stats.last_handshake.and_then(|h| now.duration_since(h).ok());
+                let (detail, color) = match connection_health::health(self.stats.last_handshake, now) {
+                    connection_health::Health::AwaitingHandshake => ("Waiting for peer handshake. Check endpoint and peer keys if this continues.".to_string(), theme::WARN),
+                    connection_health::Health::RecentHandshake => (format!("Peer handshake {} ago. Internet reachability is not tested.", age.map(fmt_duration).unwrap_or_default()), theme::SUB),
+                    connection_health::Health::OlderHandshake => (format!("Last handshake {} ago. Idle peers may not handshake.", age.map(fmt_duration).unwrap_or_default()), theme::WARN),
+                };
+                ui.add(egui::Label::new(RichText::new(detail).size(11.0).color(color)).wrap());
+            }
+        });
     }
 
     fn tab_profiles(&mut self, ui: &mut egui::Ui) {
@@ -1807,7 +1748,8 @@ impl WaxApp {
 }
 
 fn mini_stat(ui: &mut egui::Ui, label: &str, value: &str) {
-    ui.vertical(|ui| {
+    ui.with_layout(Layout::top_down(Align::Center), |ui| {
+        ui.set_min_width(ui.available_width());
         ui.label(RichText::new(label).size(11.0).color(theme::MUTE));
         ui.label(RichText::new(value).size(14.0).color(theme::TEXT).monospace());
     });
