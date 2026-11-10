@@ -102,8 +102,8 @@ impl WireGuardConfig {
                 finish_peer(&mut in_peer, &mut cur_public, &mut cur_psk, &mut cur_allowed,
                             &mut cur_endpoint, &mut cur_keepalive, &mut peers)?;
                 section = match line {
-                    "[Interface]" => Section::Interface,
-                    "[Peer]" => { in_peer = true; Section::Peer }
+                    name if name.eq_ignore_ascii_case("[Interface]") => Section::Interface,
+                    name if name.eq_ignore_ascii_case("[Peer]") => { in_peer = true; Section::Peer }
                     other => return Err(err(&format!("unknown section {}", other))),
                 };
                 continue;
@@ -111,7 +111,12 @@ impl WireGuardConfig {
             let (key, value) = line
                 .split_once('=')
                 .ok_or_else(|| err("expected Key = Value"))?;
-            let key = key.trim();
+            // Normalize known names only. Values and unknown names stay untouched.
+            let raw_key = key.trim();
+            let key = ["PrivateKey", "Address", "DNS", "MTU", "ListenPort", "PublicKey",
+                "PresharedKey", "AllowedIPs", "Endpoint", "PersistentKeepalive", "PreUp",
+                "PostUp", "PreDown", "PostDown", "Table", "SaveConfig", "FwMark"]
+                .into_iter().find(|known| known.eq_ignore_ascii_case(raw_key)).unwrap_or(raw_key);
             let value = value.trim();
             // Repeated scalar keys used to silently replace the earlier value.
             // Reject them before parsing or echoing any potentially secret value.
@@ -248,6 +253,52 @@ mod tests {
         format!(
             "[Interface]\nPrivateKey = {priv_b64}\nAddress = 10.0.0.2/32, fd00::2/128\nDNS = 1.1.1.1, 2606:4700:4700::1111\nMTU = 1280\n\n[Peer]\nPublicKey = {pub_b64}\nAllowedIPs = 0.0.0.0/0, ::/0\nEndpoint = engage.cloudflareclient.com:2408\nPersistentKeepalive = 25\n"
         )
+    }
+
+    #[test]
+    fn known_names_ignore_ascii_case_without_changing_values_or_validation() {
+        let plain = sample().replace("MTU = 1280", "MTU = 1280\nListenPort = 12345")
+            .replace("[Peer]", &format!("[Peer]\nPresharedKey = {}", keys::key_to_base64(&[3; 32])))
+            .replace("engage.cloudflareclient.com", "MiXeD.Example")
+            .replace("PersistentKeepalive = 25", "PersistentKeepalive = off");
+        let mixed = plain.lines().map(|line| {
+            if line.starts_with('[') { line.to_ascii_lowercase() }
+            else if let Some((key, value)) = line.split_once('=') {
+                format!("{}={value}", key.to_ascii_lowercase())
+            } else { line.to_string() }
+        }).collect::<Vec<_>>().join("\n");
+        let parsed = WireGuardConfig::parse(&mixed).unwrap();
+        assert_eq!(parsed, WireGuardConfig::parse(&plain).unwrap());
+        assert_eq!(parsed.peers[0].endpoint.as_deref(), Some("MiXeD.Example:2408"));
+        let rendered = parsed.to_conf_string();
+        assert!(rendered.contains("[Interface]\nPrivateKey = "));
+        assert!(rendered.contains("[Peer]\nPublicKey = "));
+        assert_eq!(WireGuardConfig::parse(&rendered).unwrap(), parsed);
+        for key in ["PrivateKey", "MTU", "ListenPort", "PublicKey", "PresharedKey", "Endpoint", "PersistentKeepalive"] {
+            let source = plain.lines().find(|line| line.starts_with(&format!("{key} ="))).unwrap();
+            let duplicate = plain.replace(source, &format!("{source}\n{} = do-not-echo-private-value", key.to_ascii_uppercase()));
+            let error = WireGuardConfig::parse(&duplicate).unwrap_err().to_string();
+            assert!(error.contains(&format!("duplicate {key} in [")), "{error}");
+            assert!(!error.contains("do-not-echo-private-value"));
+        }
+        for directive in ["PreUp", "PostUp", "PreDown", "PostDown", "Table", "SaveConfig", "FwMark"] {
+            let invalid = plain.replace("MTU = 1280", &format!("{} = do-not-echo-private-value", directive.to_ascii_lowercase()));
+            let error = WireGuardConfig::parse(&invalid).unwrap_err().to_string();
+            assert!(error.contains(&format!("unsupported wg-quick directive {directive}")), "{error}");
+            assert!(!error.contains("do-not-echo-private-value"));
+        }
+        for (old, new) in [("mtu = 1280", "mtu = 0"), ("persistentkeepalive = off", "persistentkeepalive = OFF"),
+            ("dns = 1.1.1.1, 2606:4700:4700::1111", "dns = 1.1.1.1,,8.8.8.8"),
+            ("listenport = 12345", "unknownfield = do-not-echo-private-value"), ("[peer]", "[unknown]")] {
+            assert!(mixed.contains(old), "fixture missing {old}");
+            assert!(WireGuardConfig::parse(&mixed.replace(old, new)).is_err(), "accepted {new}");
+        }
+        let repeated = mixed.replace("[peer]", "aDdReSs = 10.1.0.2/32\ndNs = 8.8.8.8\n[pEeR]")
+            .replace("endpoint =", "aLlOwEdIpS = 192.0.2.1\nendpoint =");
+        let repeated = WireGuardConfig::parse(&repeated).unwrap();
+        assert_eq!(repeated.interface.addresses.len(), 3);
+        assert_eq!(repeated.interface.dns.len(), 3);
+        assert_eq!(repeated.peers[0].allowed_ips.len(), 3);
     }
 
     #[test]
@@ -461,4 +512,4 @@ mod tests {
         let text = format!("[Interface]\nPrivateKey = {priv_b64}\nAddress = 10.0.0.2/32\n");
         assert!(WireGuardConfig::parse(&text).is_err());
     }
-            }
+    }
