@@ -103,7 +103,7 @@ jobs:
           Copy-Item "target\release\wax.exe" "installer\payload\wax.exe"
           Copy-Item "vendor\wireguard-nt\wireguard-nt\bin\amd64\wireguard.dll" "installer\payload\wireguard.dll"
           Copy-Item "LICENSE" "installer\payload\LICENSE.txt"
-          Copy-Item "docsendor-licensesstryx-MIT.txt" "installer\payload\LICENSE-astryx.txt"
+          Copy-Item "docs/vendor-licenses/astryx-MIT.txt" "installer\payload\LICENSE-astryx.txt"
           Copy-Item "assets\icon.ico" "installer\payload\wax.ico"
           Copy-Item "assets\installer-wizard.bmp" "installer\payload\installer-wizard.bmp"
           Copy-Item "assets\installer-header.bmp" "installer\payload\installer-header.bmp"
