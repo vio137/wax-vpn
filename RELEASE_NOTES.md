@@ -1,17 +1,17 @@
-# waX VPN v0.1.22
+# waX VPN v0.1.23
 
-Unsigned Windows x64 key-import error checkpoint. Windows may show an unknown-publisher warning. The official WireGuardNT driver is independently signed by its vendor. No kill switch: traffic can use the normal connection if the tunnel drops.
+Unsigned Windows x64 incomplete-peer error checkpoint. Windows may show an unknown-publisher warning. The official WireGuardNT driver is independently signed by its vendor. No kill switch: traffic can use the normal connection if the tunnel drops.
 
 ## Changes
 
-- Invalid PrivateKey, PublicKey and PresharedKey values now report their line and canonical field name with a fixed expectation: a base64-encoded 32-byte key. Errors do not include the submitted key or decoder detail.
-- Error wording only. The same decoder accepts and rejects the same inputs. No crypto, serializer, tunnel, DNS, network-service or reconnect-policy change.
+- A [Peer] missing its required PublicKey now reports the source line of that peer's section header. This helps locate the incomplete peer in multi-peer configs, whether parsing reaches the next section or the end of the file.
+- Error wording only. Accepted and rejected configs are unchanged. Errors do not include key material or config payloads. No crypto, serializer, profile-write, tunnel, DNS, network-service or reconnect-policy change.
 
 ## Verification
 
-Source 72fc568737a12caa54512d116a40b2174c20dfce / full preview 42911904253 passed all required jobs. The new key-error fixture passed with all 28 Windows core tests. It covers all three key fields with mixed-case spelling, malformed base64, 31/33-byte decoded lengths and empty input; line and canonical field messages; no payload echo; valid three-key roundtrip. Fixture proof only, not a separate malformed-key GUI import screenshot.
+Source 2518de2fa7d9b418cbd6b8985bd856a2171ad4d2 / full preview 42917271916 passed all required jobs. The new missing-public-key fixture passed with all 29 Windows core tests. It covers first, middle and last incomplete peers; EOF and next-section boundaries; mixed-case headers, comments, BOM and line counting; no key/endpoint payload echo; valid three-peer roundtrip. Fixture proof only, not a separate malformed-peer GUI import screenshot.
 
-Full preview: peer handshake and tunnel-side ping, DNS and IPv4 MTU 1380, split exclusions, owned adapter-loss recovery after 4 seconds, pending-retry disable across 48 samples/12 seconds, manual reconnect with recovery off, original main HWND/PID plus Connect rail restoration, graceful quit/adapter removal, profile/settings warnings and BOM-backed settings GUI startup passed. No console windows observed in 414 samples at about 100 ms; shorter windows could be missed. Crash evidence is a clean 3-second pre-cleanup snapshot. All 14 normal, warning, BOM and installed screenshots were inspected. Fresh install/quit/uninstall passed; installed quit diagnostics show driver open 1 ms, absence confirmed 2 ms and legacy cleanup finished at 5625 ms. Exact unsigned v0.1.22 release gate 42914037237 at 51804e01e61db06c3642bd087709a99e72227fa0 passed all four required jobs and published the release. Exact raw evidence and all 14 screenshots were inspected: recovery 4 seconds, pending-retry disable 48 samples/12 seconds, explicit manual reconnect with recovery off, original main HWND/PID plus Connect rail restoration, graceful quit/adapter removal, profile/settings warning and BOM checks, and fresh install/quit/uninstall passed. No console windows observed in 437 samples at about 100 ms; shorter windows could be missed. Installed quit diagnostics show driver open 1 ms, absence confirmed 3 ms and legacy cleanup finished at 4577 ms. A fresh published installer download was 10,957,848 bytes; SHA256 1868ec9b7e2eea0941997b3fa8c5f66dcee0ce1076e2e92d174233b87d66067b matched the fresh published checksum file.
+Full preview: peer handshake and tunnel-side ping, DNS and IPv4 MTU 1380, split exclusions, owned adapter-loss recovery after 5 seconds, pending-retry disable across 48 samples/12 seconds, manual reconnect with recovery off, original main HWND/PID plus Connect rail restoration, graceful quit/adapter removal, profile/settings warnings and BOM-backed settings GUI startup passed. No console windows observed in 441 samples at about 100 ms; shorter windows could be missed. Crash evidence is a clean 3-second pre-cleanup snapshot. All 14 normal, warning, BOM and installed screenshots were inspected. Fresh install/quit/uninstall passed; installed quit diagnostics show driver open 1 ms, absence confirmed 2 ms and legacy cleanup finished at 4226 ms. Exact v0.1.23 gate remains pending at preparation time.
 
 ## Limits and earlier failures
 
