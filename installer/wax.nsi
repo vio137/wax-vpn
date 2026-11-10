@@ -78,8 +78,8 @@ Section "waX VPN" SecMain
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\waX VPN" "DisplayName" "waX VPN"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\waX VPN" "DisplayVersion" "${WAX_VERSION}"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\waX VPN" "Publisher" "vio137"
-    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\waX VPN" "UninstallString" '$"$INSTDIR\uninstall.exe$"'
-    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\waX VPN" "QuietUninstallString" '$"$INSTDIR\uninstall.exe$" /S'
+    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\waX VPN" "UninstallString" '$\"$INSTDIR\uninstall.exe$\"'
+    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\waX VPN" "QuietUninstallString" '$\"$INSTDIR\uninstall.exe$\" /S'
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\waX VPN" "InstallLocation" "$INSTDIR"
     WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\waX VPN" "NoModify" 1
     WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\waX VPN" "NoRepair" 1

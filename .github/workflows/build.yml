@@ -625,6 +625,7 @@ jobs:
           if ($install.ExitCode -ne 0) { throw "Installer exit $($install.ExitCode)" }
           $uninstallInfo = Get-ItemProperty 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\waX VPN'
           $expectedUninstall = '"' + (Join-Path $dir 'uninstall.exe') + '"'
+          Write-Host "Registry UninstallString=[$($uninstallInfo.UninstallString)] QuietUninstallString=[$($uninstallInfo.QuietUninstallString)]"
           if ($uninstallInfo.UninstallString -ne $expectedUninstall -or $uninstallInfo.QuietUninstallString -ne "$expectedUninstall /S") { throw 'Uninstall registry commands must quote paths with spaces' }
           $exe = Join-Path $dir 'waX VPN.exe'
           if (-not (Test-Path $exe)) { throw 'Installed GUI missing' }
