@@ -570,7 +570,6 @@ impl WaxApp {
                 self.connect_prepared(profile);
             }
         }
-        ctx.request_repaint_after(Duration::from_millis(66));
     }
 
     fn warp_register(&mut self) {
@@ -691,6 +690,27 @@ fn fmt_duration(d: Duration) -> String {
         format!("{}m {:02}s", s / 60, s % 60)
     } else {
         format!("{}h {:02}m", s / 3600, (s % 3600) / 60)
+    }
+}
+
+/// Periodic polling only, not a frame-rate or CPU-use guarantee. Hidden mode
+/// still polls tray and cross-instance signals within a one-second interval.
+fn repaint_delay(hidden: bool, reduced_motion: bool, disconnected: bool) -> Duration {
+    Duration::from_millis(if hidden { 1000 } else if reduced_motion && disconnected { 250 } else { 33 })
+}
+
+#[cfg(test)]
+mod repaint_tests {
+    use super::*;
+    #[test]
+    fn periodic_repaint_policy_keeps_active_ui_responsive_and_hidden_polling_bounded() {
+        for reduced in [false, true] {
+            for disconnected in [false, true] {
+                assert_eq!(repaint_delay(true, reduced, disconnected), Duration::from_millis(1000));
+                let expected = if reduced && disconnected { 250 } else { 33 };
+                assert_eq!(repaint_delay(false, reduced, disconnected), Duration::from_millis(expected));
+            }
+        }
     }
 }
 
@@ -917,14 +937,13 @@ impl eframe::App for WaxApp {
                 ctx.send_viewport_cmd(egui::ViewportCommand::BeginResize(dir));
             }
         }
-        let idle_still = matches!(self.state, ConnState::Disconnected) && self.settings.reduced_motion;
-        ctx.request_repaint_after(if self.hidden {
-            Duration::from_millis(1000)
-        } else if idle_still {
-            Duration::from_millis(250)
-        } else {
-            Duration::from_millis(33)
-        });
+        // One periodic request: an earlier shorter delay would override this
+        // policy. egui input/animation requests may still wake the UI sooner.
+        ctx.request_repaint_after(repaint_delay(
+            self.hidden,
+            self.settings.reduced_motion,
+            matches!(self.state, ConnState::Disconnected),
+        ));
     }
 }
 
@@ -1847,4 +1866,4 @@ fn main() -> eframe::Result<()> {
         options,
         Box::new(|cc| Ok(Box::new(WaxApp::new(cc, instance)))),
     )
-        }
+                        }
