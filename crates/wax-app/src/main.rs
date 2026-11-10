@@ -602,8 +602,10 @@ impl eframe::App for WaxApp {
             }
             if open {
                 self.hidden = false;
+                ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(false));
                 ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
                 ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+                ctx.request_repaint();
             }
             if toggle {
                 match self.state {
@@ -1346,11 +1348,26 @@ impl WaxApp {
         theme::card_frame().show(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.label(RichText::new("Profile name").size(11.5).color(theme::SUB));
-                let resp = ui.add(
-                    egui::TextEdit::singleline(&mut self.import_name)
-                        .hint_text("Optional, e.g. Home")
-                        .desired_width(220.0),
-                );
+                let name_id = ui.make_persistent_id("wireguard-import-name");
+                let name_focused = ui.memory(|m| m.has_focus(name_id));
+                let resp = egui::Frame::default()
+                    .fill(theme::PANEL)
+                    .stroke(egui::Stroke::new(1.0, theme::alpha(
+                        if name_focused { theme::ACCENT } else { theme::SUB },
+                        if name_focused { 140 } else { 45 },
+                    )))
+                    .corner_radius(egui::CornerRadius::same(8))
+                    .inner_margin(egui::Margin::symmetric(8, 4))
+                    .show(ui, |ui| {
+                        ui.add(
+                            egui::TextEdit::singleline(&mut self.import_name)
+                                .id(name_id)
+                                .frame(egui::Frame::NONE)
+                                .text_color(theme::TEXT)
+                                .hint_text("Optional, e.g. Home")
+                                .desired_width(220.0),
+                        )
+                    }).inner;
                 resp.widget_info(|| egui::WidgetInfo::labeled(
                     egui::Role::TextInput, true, "Imported profile name"
                 ));
