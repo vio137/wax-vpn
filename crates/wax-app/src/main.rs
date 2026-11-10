@@ -550,6 +550,30 @@ impl WaxApp {
         });
     }
 
+    fn warp_restore_profile(&mut self) {
+        if self.warp_busy || !matches!(self.state, ConnState::Disconnected | ConnState::Failed(_)) {
+            return;
+        }
+        self.warp_busy = true;
+        self.warp_notice = Some(("Restoring local WARP profile...".into(), false));
+        let tx = self.events_tx.clone();
+        std::thread::spawn(move || {
+            let result = (|| -> Result<String, String> {
+                if profile::profile_path("Cloudflare WARP").exists() {
+                    return Err("A 'Cloudflare WARP' profile already exists; it was not overwritten".into());
+                }
+                let account = wax_warp::load_account()
+                    .map_err(|e| e.to_string())?
+                    .ok_or("No saved WARP account to restore from")?;
+                let restored = wax_warp::store::warp_profile(&account, "Cloudflare WARP")
+                    .map_err(|e| e.to_string())?;
+                profile::save_profile(&restored).map_err(|e| e.to_string())?;
+                Ok("WARP profile restored from the saved account. No new registration created".into())
+            })();
+            let _ = tx.send(AppEvent::WarpDone(result));
+        });
+    }
+
     fn warp_unregister(&mut self) {
         if self.warp_busy || !matches!(self.state, ConnState::Disconnected | ConnState::Failed(_)) {
             return;
@@ -1554,6 +1578,14 @@ impl WaxApp {
             ui.add_space(6.0);
             if self.warp_registered {
                 let idle = matches!(self.state, ConnState::Disconnected | ConnState::Failed(_));
+                if !self.profiles.iter().any(|p| p.name == "Cloudflare WARP") {
+                    ui.label(RichText::new("The local WARP profile is missing").size(11.5).color(theme::SUB));
+                    if theme::primary_button(ui, "Restore WARP profile", !self.warp_busy && idle) {
+                        self.warp_restore_profile();
+                    }
+                    ui.label(RichText::new("Uses the saved account on this device, without a new registration").size(11.0).color(theme::MUTE));
+                    ui.add_space(8.0);
+                }
                 let unregister = ui.add_enabled_ui(!self.warp_busy && idle, |ui| {
                     theme::danger_button(ui, "Unregister WARP")
                 }).inner;
