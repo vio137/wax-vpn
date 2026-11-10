@@ -58,3 +58,7 @@ GUI startup detected an already-running adapter but its stats thread exited beca
 ## v0.1.3 checkpoint
 
 Released https://github.com/vio137/wax-vpn/releases/tag/v0.1.3 after full manual gate. Fresh installer SHA25626b1ff1055362b5d98825df6ff7ac2f564400adab2231d0b38989e1875ac6668,10,922,699bytes. Connected/About/installed pixels inspected, all0.1.3. Crash snapshot before cleanup showed adapter gone,DNS none; IPv6 test skipped without proven baseline. Real tray menu remains manual-only. Reduced study evidence https://github.com/vio137/wax-vpn/actions/runs/42767639636 supports static MTU/PMTUD and staged connection/error categories, not runtime behavior or implementation copying.
+
+## v0.1.4 checkpoint
+
+Released https://github.com/vio137/wax-vpn/releases/tag/v0.1.4 sourcee84e2c3 after full stable gate42773347398. SHA256090a469c7f81ad483a4cf1218a1f389fbb78149c576aaa535935a6398f4a97dc,10,942,141bytes. Stable Diagnostics/Connected/installed pixels inspected. Actual adapter-loss recovery4seconds/original process alive; fresh install/quit/uninstall pass; crash snapshot3seconds adaptergone/DNSnone/rules0 before cleanup, cleanup pass. IPv6SKIP no baseline/no kill switch. Earlier fresh-install quit timeout remains unresolved intermittent history. The Connect stats/state layout feedback is addressed separately in1a39ed3, pending Windows multi-state/multi-size pixel checks forv0.1.5.
