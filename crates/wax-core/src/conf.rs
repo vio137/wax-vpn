@@ -156,7 +156,10 @@ impl WireGuardConfig {
                     }
                     "Endpoint" => cur_endpoint = Some(value.to_string()),
                     "PersistentKeepalive" => {
-                        cur_keepalive = Some(value.parse().map_err(|_| err("bad PersistentKeepalive"))?)
+                        // The explicit disabled form used by WireGuard configs.
+                        cur_keepalive = Some(if value == "off" { 0 } else {
+                            value.parse().map_err(|_| err("bad PersistentKeepalive"))?
+                        })
                     }
                     other => return Err(err(&format!("unknown Peer key {other}"))),
                 },
@@ -290,6 +293,27 @@ mod tests {
         assert_eq!(parsed.peers[0].allowed_ips.len(), 3);
         assert_eq!(parsed.peers[1].persistent_keepalive, Some(0));
         assert_eq!(WireGuardConfig::parse(&parsed.to_conf_string()).unwrap(), parsed);
+    }
+
+    #[test]
+    fn keepalive_off_disables_and_roundtrips_without_relaxing_validation() {
+        let text = sample().replace("PersistentKeepalive = 25", "PersistentKeepalive = off");
+        let parsed = WireGuardConfig::parse(&text).unwrap();
+        assert_eq!(parsed.peers[0].persistent_keepalive, Some(0));
+        let rendered = parsed.to_conf_string();
+        assert!(rendered.contains("PersistentKeepalive = 0"));
+        assert_eq!(WireGuardConfig::parse(&rendered).unwrap(), parsed);
+        for value in ["OFF", "disabled", "on", "-1", "65536", ""] {
+            let invalid = text.replace("PersistentKeepalive = off", &format!("PersistentKeepalive = {value}"));
+            assert!(WireGuardConfig::parse(&invalid).is_err(), "accepted {value}");
+        }
+        for value in ["0", "25", "65535"] {
+            let numeric = text.replace("PersistentKeepalive = off", &format!("PersistentKeepalive = {value}"));
+            assert_eq!(WireGuardConfig::parse(&numeric).unwrap().peers[0].persistent_keepalive,
+                Some(value.parse().unwrap()));
+        }
+        let duplicate = text.replace("PersistentKeepalive = off", "PersistentKeepalive = off\nPersistentKeepalive = 25");
+        assert!(WireGuardConfig::parse(&duplicate).unwrap_err().to_string().contains("duplicate PersistentKeepalive in [Peer]"));
     }
 
     #[test]
