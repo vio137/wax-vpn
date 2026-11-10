@@ -1182,7 +1182,9 @@ impl WaxApp {
             }
         }
         ui.add_space(8.0);
-        ui.allocate_ui_with_layout(egui::vec2(col_w, 32.0), Layout::top_down(Align::Center), |ui| {
+        let (stage_rect, _) = ui.allocate_exact_size(egui::vec2(col_w, 32.0), egui::Sense::hover());
+        let mut stage_ui = ui.new_child(egui::UiBuilder::new().max_rect(stage_rect).layout(Layout::top_down(Align::Center)));
+        { let ui = &mut stage_ui;
             if self.selected.is_none() {
                 ui.label(RichText::new("Add a profile from the Profiles tab to connect").size(11.0).color(theme::MUTE));
             } else if !self.is_admin {
@@ -1193,7 +1195,7 @@ impl WaxApp {
                 let stage = if self.recovery.is_pending() { self.status_line.as_str() } else { self.connect_stages.last().copied().unwrap_or("Starting") };
                 ui.label(RichText::new(stage).size(12.0).color(theme::SUB));
             }
-        });
+        }
         ui.add_space(8.0);
         theme::hairline(ui);
         ui.add_space(12.0);
