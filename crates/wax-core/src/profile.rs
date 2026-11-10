@@ -124,6 +124,7 @@ pub fn import_conf(name: &str, text: &str) -> Result<Profile, CoreError> {
 
 fn import_into(dir: &Path, name: &str, text: &str) -> Result<Profile, CoreError> {
     let config = WireGuardConfig::parse(text)?;
+    config.validate_import_endpoints()?;
     let serialized = config.to_conf_string();
     fs::create_dir_all(dir)?;
     let base = sanitize_filename(name);
@@ -280,6 +281,42 @@ mod tests {
             assert!(!dir.join("invalid.conf").exists());
             assert_eq!(fs::read_dir(&dir).unwrap().count(), 1);
             assert_eq!(fs::read(&path).unwrap(), old.as_bytes());
+        }
+    }
+
+    #[test]
+    fn import_rejects_bad_endpoints_but_saved_odd_endpoints_still_load() {
+        let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+        let dir = std::env::temp_dir().join(format!("wax-endpoint-import-{}-{stamp}", std::process::id()));
+        struct Cleanup(PathBuf);
+        impl Drop for Cleanup { fn drop(&mut self) { let _ = fs::remove_dir_all(&self.0); } }
+        let _cleanup = Cleanup(dir.clone());
+        let private = crate::keys::key_to_base64(&[1;32]);
+        let public = crate::keys::key_to_base64(&[2;32]);
+        let config = |endpoint: &str| format!("[Interface]\nPrivateKey = {private}\n[Peer]\nPublicKey = {public}\nEndpoint = {endpoint}\n");
+        let invalid = config("never-echo.invalid");
+        assert!(import_into(&dir, "invalid", &invalid).is_err());
+        assert!(!dir.exists());
+        fs::create_dir_all(&dir).unwrap();
+        let old_path = dir.join("legacy.conf");
+        fs::write(&old_path, &invalid).unwrap();
+        let report = load_profiles_from(&dir).unwrap();
+        assert_eq!(report.skipped, 0);
+        assert_eq!(report.profiles.len(), 1);
+        assert_eq!(report.profiles[0].config.peers[0].endpoint.as_deref(), Some("never-echo.invalid"));
+        for endpoint in ["never-echo.invalid", ":1234", "host:", "host:65536", "[not-v6]:1234", "::1:1234"] {
+            let error = import_into(&dir, "legacy", &config(endpoint)).unwrap_err().to_string();
+            assert!(error.contains("peer 1: invalid Endpoint"));
+            assert!(!error.contains("never-echo.invalid"));
+            assert_eq!(fs::read_dir(&dir).unwrap().count(), 1);
+            assert_eq!(fs::read(&old_path).unwrap(), invalid.as_bytes());
+        }
+        for endpoint in ["vpn.Example:65535", "192.0.2.1:0", "[2001:db8::1]:1234", "[fe80::1%12]:51820", "[fe80::1%Ethernet 3]:51820"] {
+            let imported = import_into(&dir, "valid", &config(endpoint)).unwrap();
+            assert_eq!(imported.config.peers[0].endpoint.as_deref(), Some(endpoint));
+            let saved = fs::read_to_string(dir.join(format!("{}.conf", imported.name))).unwrap();
+            assert_eq!(WireGuardConfig::parse(&saved).unwrap(), imported.config);
+            assert_eq!(fs::read(&old_path).unwrap(), invalid.as_bytes());
         }
     }
 
