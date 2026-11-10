@@ -256,7 +256,7 @@ jobs:
           if ($dns.ServerAddresses -contains '1.1.1.1') { Note 'PASS tunnel DNS applied' } else { Note 'FAIL tunnel DNS missing' }
 
           $tunnelIp = Get-NetIPInterface -InterfaceAlias 'waX VPN' -AddressFamily IPv4 -ErrorAction SilentlyContinue
-          if ($tunnelIp.NlMtuBytes -eq 1380) { Note 'PASS configured tunnel IPv4 MTU applied (1380 bytes)' } else { Note "FAIL tunnel MTU mismatch: $($tunnelIp.NlMtuBytes)" }
+          if ($tunnelIp.NlMtu -eq 1380) { Note 'PASS configured tunnel IPv4 MTU applied (1380 bytes)' } else { Note "FAIL tunnel MTU mismatch: $($tunnelIp.NlMtu)" }
 
           # 5. Disconnect and verify restoration
           .\bin\wax.exe disconnect
