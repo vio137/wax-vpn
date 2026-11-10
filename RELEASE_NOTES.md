@@ -1,19 +1,19 @@
-## waX VPN v0.1.1 for Windows x64
+## waX VPN v0.1.2 for Windows x64
 
 Unsigned release, as approved by the maintainer while SignPath Foundation review is pending. No code-signing certificate is present. Windows SmartScreen and publisher warnings are expected. Administrator rights are required to connect.
 
 Pure-Rust egui interface, official WireGuardNT driver, importable WireGuard profiles, per-profile CIDR exclusions, single-instance window reopening, and optional ToS-gated WARP setup.
 
-### Changes since v0.1.0
+### Changes since v0.1.1
 
-- Profile imports map Windows-reserved names (CON, NUL, COM1, LPT9 and similar) to safe filenames; empty/dot-only names and trailing dots/spaces are handled too.
-- The x64 installer explicitly registers its uninstall entry in the 64-bit registry view and removes only this product's stale 32-bit preview registration.
-- Uninstall commands quote executable paths with spaces; a silent uninstall command is registered and checked in the fresh-runner installer test.
-- Automatic checkpoints validate artifacts without publishing run-number previews over the stable channel.
+- Import now rejects unsupported wg-quick directives (PreUp, PostUp, PreDown, PostDown, Table, SaveConfig, FwMark) rather than silently dropping behavior. Scripts are never executed.
+- DNS hostnames/search domains now fail import explicitly rather than being silently discarded or partially applied. Only literal IPv4/IPv6 DNS server addresses are supported.
+- Error messages identify the field/directive without echoing its private value. Do not blindly delete unsupported settings; the profile can behave differently without them.
+- CI console-window observation uses an in-process sampler and reports sample counts. Missing samples are marked unverified, never passed. Windows shorter than the sample interval can still be missed.
 
 ### Protection limit
 
-There is no kill switch in v0.1.1. It has been removed from the interface, settings, CLI and tunnel backend. Old preview settings are ignored and rewritten without those fields. Only cleanup of stale preview firewall rules remains. If the tunnel drops, traffic may use the normal connection. This is NOT fail-closed protection. IPv6 leak protection is not claimed. Do not use this build where either is required.
+There is no kill switch in v0.1.2. It has been removed from the interface, settings, CLI and tunnel backend. Old preview settings are ignored and rewritten without those fields. Only cleanup of stale preview firewall rules remains. If the tunnel drops, traffic may use the normal connection. This is NOT fail-closed protection. IPv6 leak protection is not claimed. Do not use this build where either is required.
 
 ### Release verification gates
 
