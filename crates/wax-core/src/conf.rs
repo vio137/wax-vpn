@@ -177,8 +177,8 @@ impl WireGuardConfig {
                             dns.push(ip);
                         }
                     }
-                    "MTU" => mtu = Some(value.parse().map_err(|_| err("bad MTU"))?),
-                    "ListenPort" => listen_port = Some(value.parse().map_err(|_| err("bad ListenPort"))?),
+                    "MTU" => mtu = Some(value.parse().map_err(|_| err("bad MTU; expected an integer from 576 to 65535 (1280 minimum with an IPv6 interface address)"))?),
+                    "ListenPort" => listen_port = Some(value.parse().map_err(|_| err("bad ListenPort; expected an integer from 0 to 65535"))?),
                     // Never silently strip instructions that can change a
                     // profile's routing, firewall, DNS or lifecycle behavior.
                     "PreUp" | "PostUp" | "PreDown" | "PostDown" | "Table" | "SaveConfig" | "FwMark" => {
@@ -200,7 +200,7 @@ impl WireGuardConfig {
                     "PersistentKeepalive" => {
                         // The explicit disabled form used by WireGuard configs.
                         cur_keepalive = Some(if value == "off" { 0 } else {
-                            value.parse().map_err(|_| err("bad PersistentKeepalive"))?
+                            value.parse().map_err(|_| err("bad PersistentKeepalive; expected off or an integer from 0 to 65535 seconds"))?
                         })
                     }
                     other => return Err(err(&format!("unknown Peer key {other}"))),
@@ -624,4 +624,44 @@ mod tests {
         let text = format!("[Interface]\nPrivateKey = {priv_b64}\nAddress = 10.0.0.2/32\n");
         assert!(WireGuardConfig::parse(&text).is_err());
     }
+
+    #[test]
+    fn numeric_errors_explain_ranges_without_echoing_values() {
+        for (key, existing, expected) in [
+            ("MTU", "MTU = 1280", "bad MTU; expected an integer from 576 to 65535 (1280 minimum with an IPv6 interface address)"),
+            ("ListenPort", "MTU = 1280", "bad ListenPort; expected an integer from 0 to 65535"),
+            ("PersistentKeepalive", "PersistentKeepalive = 25", "bad PersistentKeepalive; expected off or an integer from 0 to 65535 seconds"),
+        ] {
+            for value in ["-17", "do-not-echo-private-value", "65536", "12.5", ""] {
+                let replacement = if key == "ListenPort" { format!("MTU = 1280\nListenPort = {value}") }
+                    else { format!("{key} = {value}") };
+                let text = sample().replace(existing, &replacement);
+                let line = text.lines().position(|line| line.starts_with(&format!("{key} ="))).unwrap() + 1;
+                let error = WireGuardConfig::parse(&text).unwrap_err().to_string();
+                assert!(error.contains(&format!("line {line}: {expected}")), "{error}");
+                if !value.is_empty() { assert!(!error.contains(value), "{error}"); }
+            }
+        }
+        for value in ["0", "65535"] {
+            let text = sample().replace("MTU = 1280", &format!("MTU = 1280\nListenPort = {value}"))
+                .replace("PersistentKeepalive = 25", &format!("PersistentKeepalive = {value}"));
+            let parsed = WireGuardConfig::parse(&text).unwrap();
+            assert_eq!(parsed.interface.listen_port, Some(value.parse().unwrap()));
+            assert_eq!(parsed.peers[0].persistent_keepalive, Some(value.parse().unwrap()));
+        }
+        assert_eq!(WireGuardConfig::parse(&sample().replace("PersistentKeepalive = 25", "PersistentKeepalive = off")).unwrap().peers[0].persistent_keepalive, Some(0));
+        assert_eq!(WireGuardConfig::parse(&sample().replace("MTU = 1280", "MTU = 65535")).unwrap().interface.mtu, Some(65535));
+        for (base, valid, invalid, minimum) in [
+            (sample(), "1280", "1279", "1280"),
+            (sample().replace(", fd00::2/128", ""), "576", "575", "576"),
+        ] {
+            assert!(WireGuardConfig::parse(&base.replace("MTU = 1280", &format!("MTU = {valid}"))).is_ok());
+            for value in [invalid, "0"] {
+                let error = WireGuardConfig::parse(&base.replace("MTU = 1280", &format!("MTU = {value}"))).unwrap_err().to_string();
+                assert!(error.contains(&format!("MTU must be at least {minimum} for this profile's address families")));
+                assert!(!error.contains("bad MTU;"));
+            }
+        }
+    }
+
 }
