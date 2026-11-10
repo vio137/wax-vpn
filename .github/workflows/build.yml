@@ -302,6 +302,9 @@ jobs:
 
           $results | Out-File -Encoding utf8 verify-results.txt
           if ($results -match '^FAIL') { exit 1 }
+          # The removed-option negative test deliberately returns nonzero.
+          # Do not let Actions propagate that expected native exit code.
+          exit 0
 
       - name: GUI screenshot (app window only)
         if: always()
