@@ -63,8 +63,9 @@ impl WireGuardConfig {
         let mut cur_endpoint: Option<String> = None;
         let mut cur_keepalive: Option<u16> = None;
         let mut in_peer = false;
+        let mut peer_header_line = 0usize;
 
-        let finish_peer = |in_peer: &mut bool,
+        let finish_peer = |in_peer: &mut bool, peer_header_line: usize,
                            cur_public: &mut Option<[u8; 32]>,
                            cur_psk: &mut Option<[u8; 32]>,
                            cur_allowed: &mut Vec<IpNet>,
@@ -75,7 +76,7 @@ impl WireGuardConfig {
             if *in_peer {
                 let public_key = cur_public
                     .take()
-                    .ok_or_else(|| CoreError::Parse("peer missing PublicKey".into()))?;
+                    .ok_or_else(|| CoreError::Parse(format!("line {peer_header_line}: [Peer] missing PublicKey")))?;
                 peers.push(PeerConfig {
                     public_key,
                     preshared_key: cur_psk.take(),
@@ -99,11 +100,11 @@ impl WireGuardConfig {
             }
             let err = |m: &str| CoreError::Parse(format!("line {}: {}", lineno + 1, m));
             if line.starts_with('[') {
-                finish_peer(&mut in_peer, &mut cur_public, &mut cur_psk, &mut cur_allowed,
+                finish_peer(&mut in_peer, peer_header_line, &mut cur_public, &mut cur_psk, &mut cur_allowed,
                             &mut cur_endpoint, &mut cur_keepalive, &mut peers)?;
                 section = match line {
                     name if name.eq_ignore_ascii_case("[Interface]") => Section::Interface,
-                    name if name.eq_ignore_ascii_case("[Peer]") => { in_peer = true; Section::Peer }
+                    name if name.eq_ignore_ascii_case("[Peer]") => { in_peer = true; peer_header_line = lineno + 1; Section::Peer }
                     other => return Err(err(&format!("unknown section {}", other))),
                 };
                 continue;
@@ -184,7 +185,7 @@ impl WireGuardConfig {
                 Section::None => return Err(err("key outside of any section")),
             }
         }
-        finish_peer(&mut in_peer, &mut cur_public, &mut cur_psk, &mut cur_allowed,
+        finish_peer(&mut in_peer, peer_header_line, &mut cur_public, &mut cur_psk, &mut cur_allowed,
                     &mut cur_endpoint, &mut cur_keepalive, &mut peers)?;
 
         let private_key = private_key.ok_or_else(|| CoreError::Parse("interface missing PrivateKey".into()))?;
@@ -324,6 +325,38 @@ mod tests {
             }
         }
         let parsed = WireGuardConfig::parse(&plain).unwrap();
+        assert_eq!(WireGuardConfig::parse(&parsed.to_conf_string()).unwrap(), parsed);
+    }
+
+    #[test]
+    fn missing_public_key_identifies_peer_header_without_payloads() {
+        let private = keys::key_to_base64(&[1; 32]);
+        let public = keys::key_to_base64(&[2; 32]);
+        let header = format!("\u{feff}# comment\n[interface] # interface\nPrivateKey = {private}\n");
+        let complete = format!("[pEeR] # peer\nPublicKey = {public}\nAllowedIPs = 10.0.0.1/32\n");
+        let incomplete = "[pEeR] # missing public key\nEndpoint = never-echo-this.example:1234\n";
+        for position in 0..3 {
+            for next_section in [false, true] {
+                let mut text = header.clone();
+                let mut expected_line = 0;
+                for peer in 0..3 {
+                    if peer == position {
+                        expected_line = text.lines().count() + 1;
+                        text.push_str(incomplete);
+                        if !next_section { break; }
+                    } else { text.push_str(&complete); }
+                }
+                if next_section && position == 2 { text.push_str("[Interface]\n"); }
+                let error = WireGuardConfig::parse(&text).unwrap_err().to_string();
+                assert!(error.contains(&format!("line {expected_line}: [Peer] missing PublicKey")), "{error}");
+                for payload in [private.as_str(), public.as_str(), "never-echo-this.example:1234"] {
+                    assert!(!error.contains(payload), "config payload echoed");
+                }
+            }
+        }
+        let valid = format!("{header}{complete}{complete}{complete}");
+        let parsed = WireGuardConfig::parse(&valid).unwrap();
+        assert_eq!(parsed.peers.len(), 3);
         assert_eq!(WireGuardConfig::parse(&parsed.to_conf_string()).unwrap(), parsed);
     }
 
@@ -538,4 +571,4 @@ mod tests {
         let text = format!("[Interface]\nPrivateKey = {priv_b64}\nAddress = 10.0.0.2/32\n");
         assert!(WireGuardConfig::parse(&text).is_err());
     }
-}
+        }
