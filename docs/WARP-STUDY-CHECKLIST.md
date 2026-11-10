@@ -12,11 +12,11 @@ This is an independent behavior/structure study with REA 6.8.0 and Ghidra 12.1.4
 - [x] REA service imports: named-pipe/service APIs, route/address notifications, WFP transaction/filter APIs. These support architecture hypotheses, not complete feature reconstruction.
 - [x] REA certificate identities: Cloudflare signer certificate embedded in service. This inspection does not validate Authenticode trust.
 - [x] REA Rust metadata probe: compiler path marker found, no cargo-auditable dependency section. Dependencies remain unknown.
-- [ ] Deep CLI feature tracing and native relationships. Default Ghidra analysis timed out after20minutes, with repeated unresolved-flow decompiler warnings. Reduced pass disables Decompiler Switch Analysis; switch recovery/complete calls remain unknown.
+- [x] Reduced CLI overview/search/literal trace completed:31503procedures,13665defined strings, registration57matches/47references. Default analysis timed out after20minutes; completed pass disables Decompiler Switch Analysis. Switch recovery/complete calls remain unknown.
 - [x] Resolve MSI File/Component tables: Flutter engine plus x64 ELF app.so (Dart AOT payload), separate service/CLI/diagnostics/DEX/updater. File sizes and SHA256 recorded locally. No assets copied.
 - [ ] Trace Flutter settings/state candidates. Supplemental strings show reconnect/package-update/captive-portal/connectivity names, not runtime behavior.
 - [x] Runtime CLI help/version on an isolated Windows runner: Authenticode valid Cloudflare, Inc., version2026.8.2115.0. No MSI install/service/registration/connection. One unsupported exploratory help command caused final harness exit2, not a signature failure; corrected rerun green42765965388. Full UI behavior still unknown.
-- [ ] Reconcile static evidence, runtime observations and documentation into final findings.
+- [x] Checkpoint findings reconcile static structure with signed help-only runtime and docs. Full GUI/network behavior reconstruction remains open.
 
 ## Independent waX priorities
 
@@ -41,7 +41,7 @@ This is an independent behavior/structure study with REA 6.8.0 and Ghidra 12.1.4
 - https://developers.cloudflare.com/cloudflare-one/team-and-resources/devices/cloudflare-one-client/troubleshooting/diagnostic-logs/ (diagnostic categories)
 - https://github.com/NationalSecurityAgency/ghidra/releases/tag/Ghidra_12.1.4_build (native analysis engine)
 
-Cloudflare One enterprise documentation is not interchangeable with consumer availability. No signup or terms acceptance was needed for static extraction/inspection. Existing waX stable releases remain unsigned, with no kill switch or IPv6 leak-protection claim.
+Cloudflare One enterprise documentation is not interchangeable with consumer availability. No signup or terms acceptance was needed for static extraction/inspection. Latest stablev0.1.3 (41cbe58,run42768192198) includes MTU, diagnostics, state clarity and startup observer fixes. Releases remain unsigned, with no kill switch or IPv6 leak-protection claim.
 
 ## Package findings
 
@@ -54,3 +54,7 @@ Publisher-verified official CLI help describes maintained connection intent; spl
 ## Follow-up source audit
 
 GUI startup detected an already-running adapter but its stats thread exited because that tunnel had no owned handle in the GUI. Independent fix uses read-only status polling for the external tunnel, reflects stop without reconnecting a guessed profile, and uses fixed query errors. Targeted Windows verification green8b123c1/run42766598088: GUI detects externally owned tunnel stop without reconnect. This does not add a service or network probe.
+
+## v0.1.3 checkpoint
+
+Released https://github.com/vio137/wax-vpn/releases/tag/v0.1.3 after full manual gate. Fresh installer SHA25626b1ff1055362b5d98825df6ff7ac2f564400adab2231d0b38989e1875ac6668,10,922,699bytes. Connected/About/installed pixels inspected, all0.1.3. Crash snapshot before cleanup showed adapter gone,DNS none; IPv6 test skipped without proven baseline. Real tray menu remains manual-only. Reduced study evidence https://github.com/vio137/wax-vpn/actions/runs/42767639636 supports static MTU/PMTUD and staged connection/error categories, not runtime behavior or implementation copying.
