@@ -1,18 +1,18 @@
-# waX VPN v0.1.9
+# waX VPN v0.1.10
 
-Unsigned Windows x64 settings reliability checkpoint. Windows may show an unknown-publisher warning. The official WireGuardNT driver is independently signed by its vendor. No kill switch: traffic can use the normal connection if the tunnel drops.
+Unsigned Windows x64 redraw-timing checkpoint. Windows may show an unknown-publisher warning. The official WireGuardNT driver is independently signed by its vendor. No kill switch: traffic can use the normal connection if the tunnel drops.
 
 ## Changes
 
-- Settings load and save errors are now shown instead of silently discarded. An unreadable or malformed settings file is kept unchanged, with automatic recovery off for that session. Current session choices can still change, but the warning says they may not survive the next launch.
-- Settings are written to a unique same-directory temporary file, flushed, then renamed over the destination. Failed writes or replacements remove the temporary file without deleting the original. This reduces the direct-truncation window, not a power-loss durability guarantee.
-- Startup no longer rewrites settings just to load them. Existing disabled recovery and split exclusions survive the tested round trips.
+- Removed an early 66 ms periodic redraw request that overrode the intended slower hidden-window and reduced-motion idle requests.
+- One periodic policy now requests 1000 ms while hidden, 250 ms while visibly disconnected with Reduced motion on, and 33 ms otherwise. Input and egui animations may still request earlier redraws. These are polling intervals, not measured frame rates, CPU savings or battery-life claims.
+- Hidden-window tray and cross-instance requests still use bounded polling. No new background service or network call.
 
 ## Verification
 
-Prepared source 61f5dd4 / full manual gate 42807585480 passed Windows workspace tests, tunnel/GUI and fresh install/quit/uninstall. Named Windows settings tests passed for repeated round trips with disabled recovery and exclusions, malformed-original preservation, invalid parent errors, and a sharing-locked destination preserving previous bytes with temporary-file cleanup. Full-only UI verification preserved a deliberately malformed original, checked recovery off, showed load and save warnings, and quit. Actual 880x600 load-warning, save-warning, Connected and installed pixels were inspected. Exact stable source cf51767d264ae6d48f5c514d5b0d86cdb1f6fad3 / gate 42817228387 passed build, full runtime, fresh install/uninstall and publication. Actual stable load-warning, save-warning, Connected and installed pixels were inspected. Fresh released installer: 10,948,914 bytes, SHA256 e2dbf7802c00080545bc6b37e0153d047b255026bf02726c03b61893202b36d6, matching released sums.
+Prepared source 5919dce / full manual gate 42820899117 passed Windows workspace tests, tunnel/GUI and fresh install/uninstall. The named repaint-policy unit test checks all eight hidden/motion/disconnected combinations. Exact retained results confirm close-to-tray with the adapter up, restored original HWND/PID and Connect rail, and graceful quit with adapter removed. Actual Connected and installed pixels were inspected. Exact v0.1.10 build and publication are pending.
 
-Runtime evidence: peer handshake, tunnel-side ping, DNS and IPv4 MTU 1380, split route exclusions, owned adapter-loss recovery after 5 seconds with the original process, pending-retry disable over 48 samples/12 seconds, explicit reconnect while automatic recovery was off, close-to-tray, original main HWND/PID restore and graceful quit passed. The crash snapshot at 3 seconds before cleanup showed adapter gone, DNS none and zero old kill-switch rules. Fresh installer install/launch/uninstall passed.
+Peer handshake, tunnel-side ping, DNS and IPv4 MTU 1380, split route exclusions, owned adapter-loss recovery after 5 seconds with the original process, pending-retry disable over 48 samples/12 seconds, explicit reconnect while automatic recovery was off, and malformed-settings preservation/load/save warnings passed. No console windows were observed in 435 samples at about 100 ms; shorter windows could be missed. Crash snapshot at 3 seconds before cleanup showed adapter gone, DNS none and zero old kill-switch rules. Fresh installer install/launch/uninstall passed.
 
 ## Scope and limits
 
