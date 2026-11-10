@@ -591,6 +591,22 @@ jobs:
                   Note "FAIL split tunneling: routes=$($wr.Count) covers-excluded=$($covered.Count) keeps-1.1.1.1=$($kept.Count) off-tunnel=$($offTunnel.Count)"
                 }
               }
+              if ($up) {
+                # Targeted adapter-loss recovery, not physical-network roaming.
+                .\bin\wax.exe disconnect | Out-Null
+                $recoveryWatch = [System.Diagnostics.Stopwatch]::StartNew()
+                $recovered = $false
+                for ($i=0; $i -lt 20 -and -not $recovered; $i++) {
+                  Start-Sleep -Seconds 1
+                  $recoveryStatus = .\bin\wax.exe status
+                  if ($recoveryStatus -match 'Last handshake') { $recovered = $true }
+                }
+                if ($recovered -and $recoveryWatch.Elapsed.TotalSeconds -ge 2 -and -not $pg.HasExited) {
+                  Note "PASS GUI owned adapter-loss recovery: handshake after bounded delay ($([int]$recoveryWatch.Elapsed.TotalSeconds)s), original process alive"
+                } else {
+                  Note 'FAIL GUI owned adapter-loss recovery did not restore a handshake after a bounded delay'
+                }
+              }
               $conAfter = [WaxCon]::CountConsoles()
               $watcherStopped = [WaxConsoleSampler]::Stop()
               $conMax = [WaxConsoleSampler]::Peak

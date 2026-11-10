@@ -1,6 +1,6 @@
 # Network-change recovery design
 
-Status: design only. No network notification callbacks or reconnect behavior from this document are shipped yet.
+Status: local bounded adapter-loss retry policy prepared; Windows verification pending. Route/address notification callbacks and physical-network recovery remain design only.
 
 ## Evidence and boundaries
 
@@ -34,4 +34,4 @@ Sources checked November 10, 2026:
 
 ## Existing source risks to address first
 
-At source31f09d0, adapter-loss recovery calls the next attempt immediately and resets its attempt counter when an adapter is created. Before adding network-change triggers, replace this with the bounded policy and immutable connection identity above. Otherwise flapping adapters or a selection change could produce the wrong retry behavior.
+At source31f09d0, adapter-loss recovery called the next attempt immediately and reset its attempt counter when an adapter was created. The prepared change uses2/4/8-second delays, retains the starting profile plus split exclusions, tags worker events with a connection generation, cancels pending retries on disconnect/disable/quit, and requires60seconds up to reset the budget. Four pure-policy tests cover timing, flapping, stale generations and external-owner/disabled limits. A targeted Windows adapter-loss scenario is pending. None of this establishes physical-network roaming support.

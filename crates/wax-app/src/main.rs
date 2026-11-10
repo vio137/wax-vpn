@@ -4,6 +4,7 @@
 
 mod gargantua;
 mod connection_health;
+mod recovery;
 #[cfg(windows)]
 mod single;
 #[cfg(not(windows))]
@@ -16,6 +17,7 @@ mod settings;
 
 use std::sync::mpsc::{channel, Receiver};
 use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant, SystemTime};
 
 use eframe::egui::{self, Align, Layout, RichText};
@@ -47,13 +49,14 @@ enum Tab {
 
 enum AppEvent {
     DiagnosticsReady(String),
-    Stage(&'static str),
-    TunnelLost,
+    Stage(u64, &'static str),
+    TunnelLost(u64),
+    LostCleanup(u64, Result<(), String>),
     CleanupResult(Result<(), String>),
-    Connected,
-    ConnectFailed(String),
+    Connected(u64, Tunnel),
+    ConnectFailed(u64, String),
     Disconnected,
-    Stats(TunnelStats),
+    Stats(u64, TunnelStats),
     ExternalStatus(Result<Option<TunnelStats>, ()>),
     WarpDone(Result<String, String>),
 }
@@ -83,8 +86,9 @@ pub struct WaxApp {
     tab: Tab,
     hidden: bool,
     connect_stages: Vec<&'static str>,
-    reconnect_attempts: u8,
-    reconnecting: bool,
+    recovery: recovery::Recovery,
+    connection_epoch: Arc<AtomicU64>,
+    active_profile: Option<Profile>,
     picker_open: bool,
     split_edit: String,
     split_edit_for: Option<usize>,
@@ -171,8 +175,9 @@ impl WaxApp {
             tab: Tab::Connect,
             hidden: false,
             connect_stages: Vec::new(),
-            reconnect_attempts: 0,
-            reconnecting: false,
+            recovery: recovery::Recovery::default(),
+            connection_epoch: Arc::new(AtomicU64::new(0)),
+            active_profile: None,
             picker_open: false,
             split_edit: String::new(),
             split_edit_for: None,
@@ -238,21 +243,24 @@ impl WaxApp {
     }
 
     fn spawn_stats_loop(&self) {
+        let generation = self.recovery.generation();
+        let epoch = self.connection_epoch.clone();
         let tunnel = self.tunnel.clone();
         let tx = self.events_tx.clone();
         std::thread::spawn(move || loop {
             std::thread::sleep(Duration::from_secs(1));
+            if epoch.load(Ordering::Acquire) != generation { break; }
             let guard = tunnel.lock().unwrap();
             match guard.as_ref() {
                 Some(t) => {
                     if !t.is_up() {
                         drop(guard);
-                        let _ = tx.send(AppEvent::TunnelLost);
+                        let _ = tx.send(AppEvent::TunnelLost(generation));
                         break;
                     }
                     let stats = t.stats();
                     drop(guard);
-                    if tx.send(AppEvent::Stats(stats)).is_err() {
+                    if tx.send(AppEvent::Stats(generation, stats)).is_err() {
                         break;
                     }
                 }
@@ -262,8 +270,9 @@ impl WaxApp {
     }
 
     fn connect_manual(&mut self) {
-        self.reconnect_attempts = 0;
-        self.reconnecting = false;
+        let generation = self.recovery.new_intent();
+        self.connection_epoch.store(generation, Ordering::Release);
+        self.active_profile = None;
         self.connect();
     }
 
@@ -301,6 +310,12 @@ impl WaxApp {
                 }
             }
         }
+        self.active_profile = Some(profile.clone());
+        self.connect_prepared(profile);
+    }
+
+    fn connect_prepared(&mut self, profile: Profile) {
+        let generation = self.recovery.generation();
         self.state = ConnState::Connecting;
         self.connect_stages.clear();
         self.status_line = format!("Connecting to {}...", profile.name);
@@ -308,22 +323,36 @@ impl WaxApp {
         let tunnel = self.tunnel.clone();
         let tx = self.events_tx.clone();
         let tx_stage = tx.clone();
-        std::thread::spawn(move || match Tunnel::connect_progress(&profile, &opts, move |stage| {
-            let _ = tx_stage.send(AppEvent::Stage(stage));
-        }) {
-            Ok(t) => {
-                *tunnel.lock().unwrap() = Some(t);
-                let _ = tx.send(AppEvent::Connected);
+        std::thread::spawn(move || {
+            // Dispose of a lost owned adapter before creating its replacement.
+            if let Some(old) = tunnel.lock().unwrap().take() {
+                if old.shutdown().is_err() {
+                    let _ = tx.send(AppEvent::ConnectFailed(generation, "Previous tunnel cleanup failed; disconnect before retrying".into()));
+                    return;
+                }
             }
-            Err(e) => {
-                let _ = tx.send(AppEvent::ConnectFailed(e.to_string()));
+            match Tunnel::connect_progress(&profile, &opts, move |stage| {
+                let _ = tx_stage.send(AppEvent::Stage(generation, stage));
+            }) {
+                Ok(t) => { let _ = tx.send(AppEvent::Connected(generation, t)); }
+                Err(e) => { let _ = tx.send(AppEvent::ConnectFailed(generation, e.to_string())); }
             }
         });
     }
 
+    fn schedule_recovery(&mut self) -> bool {
+        if self.recovery.schedule(self.recovery.generation(), self.start.elapsed(), self.active_profile.is_some(), self.settings.auto_reconnect) {
+            self.state = ConnState::Connecting;
+            self.status_line = format!("Connection lost - waiting to retry ({}/3)", self.recovery.attempts());
+            true
+        } else { false }
+    }
+
     fn disconnect(&mut self) {
         self.state = ConnState::Disconnecting;
-        self.reconnect_attempts = 0;
+        let generation = self.recovery.new_intent();
+        self.connection_epoch.store(generation, Ordering::Release);
+        self.active_profile = None;
         self.status_line = "Disconnecting...".to_string();
         let tunnel = self.tunnel.clone();
         let tx = self.events_tx.clone();
@@ -428,48 +457,53 @@ impl WaxApp {
         }
         while let Ok(event) = self.events_rx.try_recv() {
             match event {
-                AppEvent::TunnelLost => {
-                    if !matches!(self.state, ConnState::Connected { .. }) {
-                        continue;
-                    }
-                    let _ = Tunnel::force_disconnect();
-                    if self.settings.auto_reconnect {
-                        self.reconnecting = true;
-                        self.reconnect_attempts = 1;
-                        self.status_line = "Connection lost - reconnecting (1/3)".into();
-                        self.connect();
-                    } else {
-                        self.state = ConnState::Failed("Connection lost".into());
+                AppEvent::TunnelLost(generation) => {
+                    if generation != self.recovery.generation() || !matches!(self.state, ConnState::Connected { .. }) { continue; }
+                    self.state = ConnState::Connecting;
+                    self.status_line = "Connection lost - cleaning up".into();
+                    let tunnel = self.tunnel.clone();
+                    let tx = self.events_tx.clone();
+                    std::thread::spawn(move || {
+                        let taken = tunnel.lock().unwrap().take();
+                        let result = match taken {
+                            Some(t) => t.shutdown(),
+                            None => Tunnel::force_disconnect(),
+                        }.map_err(|_| "Tunnel cleanup needs attention. Disconnect before retrying".to_string());
+                        let _ = tx.send(AppEvent::LostCleanup(generation, result));
+                    });
+                }
+                AppEvent::LostCleanup(generation, result) => {
+                    if generation != self.recovery.generation() { continue; }
+                    if let Err(message) = result {
+                        self.cleanup_issue = Some(message.clone());
+                        self.state = ConnState::Failed(message);
+                    } else if !self.schedule_recovery() {
+                        self.state = ConnState::Failed("Connection lost. Reconnect manually when ready".into());
                     }
                 }
-                AppEvent::Connected => {
+                AppEvent::Connected(generation, t) => {
+                    if generation != self.recovery.generation() || !matches!(self.state, ConnState::Connecting) {
+                        std::thread::spawn(move || { let _ = t.shutdown(); });
+                        continue;
+                    }
+                    *self.tunnel.lock().unwrap() = Some(t);
                     self.state = ConnState::Connected { since: Instant::now() };
+                    self.recovery.connected(generation, self.start.elapsed());
                     self.status_line = "Tunnel is up".to_string();
-                    self.reconnect_attempts = 0;
-                    self.reconnecting = false;
-                    if let Some(idx) = self.selected {
-                        if let Some(p) = self.profiles.get(idx) {
-                            self.settings.last_profile = Some(p.name.clone());
-                            settings::save(&self.settings);
-                        }
+                    if let Some(profile) = &self.active_profile {
+                        self.settings.last_profile = Some(profile.name.clone());
+                        settings::save(&self.settings);
                     }
                     self.spawn_stats_loop();
                 }
-                AppEvent::ConnectFailed(e) if self.reconnecting && self.reconnect_attempts < 3 => {
-                    self.reconnect_attempts += 1;
-                    self.status_line = format!(
-                        "Connection lost - reconnecting ({}/3)",
-                        self.reconnect_attempts
-                    );
-                    self.connect();
-                    let _ = e;
-                }
-                AppEvent::ConnectFailed(e) => {
-                    self.reconnecting = false;
-                    let msg = e;
-                    self.reconnect_attempts = 0;
-                    self.state = ConnState::Failed(msg.clone());
-                    self.status_line = msg;
+                AppEvent::ConnectFailed(generation, e) => {
+                    if generation != self.recovery.generation() { continue; }
+                    // Only an automatic recovery episode retries. An initial
+                    // user connection failure remains explicit and actionable.
+                    if self.recovery.attempts() == 0 || !self.schedule_recovery() {
+                        self.state = ConnState::Failed(e.clone());
+                        self.status_line = e;
+                    }
                 }
                 AppEvent::CleanupResult(Ok(())) => {
                     self.cleanup_issue = None;
@@ -508,8 +542,11 @@ impl WaxApp {
                     self.diagnostics_report = Some(report);
                     self.diagnostics_busy = false;
                 }
-                AppEvent::Stats(s) => self.stats = s,
-                AppEvent::Stage(stage) => {
+                AppEvent::Stats(generation, s) => {
+                    if generation == self.recovery.generation() { self.stats = s; }
+                }
+                AppEvent::Stage(generation, stage) => {
+                    if generation != self.recovery.generation() { continue; }
                     self.connect_stages.push(stage);
                     self.status_line = format!("{stage}...");
                 }
@@ -527,6 +564,14 @@ impl WaxApp {
                     self.refresh_warp_summary();
                     self.reload_profiles();
                 }
+            }
+        }
+        if self.recovery.is_pending() && !self.settings.auto_reconnect {
+            self.disconnect();
+        }
+        if self.recovery.take_due(self.start.elapsed()).is_some() {
+            if let Some(profile) = self.active_profile.clone() {
+                self.connect_prepared(profile);
             }
         }
         ctx.request_repaint_after(Duration::from_millis(66));
@@ -692,6 +737,7 @@ impl eframe::App for WaxApp {
                 match self.state {
                     ConnState::Disconnected | ConnState::Failed(_) => self.connect_manual(),
                     ConnState::Connected { .. } => self.disconnect(),
+                    ConnState::Connecting if self.recovery.is_pending() => self.disconnect(),
                     _ => {}
                 }
             }
@@ -731,6 +777,7 @@ impl eframe::App for WaxApp {
                 match self.state {
                     ConnState::Disconnected | ConnState::Failed(_) => self.connect_manual(),
                     ConnState::Connected { .. } => self.disconnect(),
+                    ConnState::Connecting if self.recovery.is_pending() => self.disconnect(),
                     _ => {}
                 }
             }
@@ -909,6 +956,9 @@ impl WaxApp {
     /// Explicit quit from the tray menu: disconnect cleanly, then exit.
     #[cfg(windows)]
     fn quit_app(&mut self) {
+        let generation = self.recovery.new_intent();
+        self.connection_epoch.store(generation, Ordering::Release);
+        self.active_profile = None;
         #[cfg(windows)]
         crate::single::diag("quit: signal consumed, shutting down tunnel");
         let taken = self.tunnel.lock().unwrap().take();
@@ -1119,6 +1169,7 @@ impl WaxApp {
         let (action_label, can_act) = match &self.state {
             ConnState::Disconnected | ConnState::Failed(_) => ("Connect", self.selected.is_some()),
             ConnState::Connected { .. } => ("Disconnect", true),
+            ConnState::Connecting if self.recovery.is_pending() => ("Cancel retry", true),
             ConnState::Connecting => ("Connecting", false),
             ConnState::Disconnecting => ("Disconnecting", false),
         };
@@ -1142,6 +1193,7 @@ impl WaxApp {
             match self.state {
                 ConnState::Disconnected | ConnState::Failed(_) => self.connect_manual(),
                 ConnState::Connected { .. } => self.disconnect(),
+                ConnState::Connecting if self.recovery.is_pending() => self.disconnect(),
                 _ => {}
             }
         }
@@ -1557,7 +1609,7 @@ impl WaxApp {
             ui,
             &mut self.settings.auto_reconnect,
             "Auto-reconnect",
-            "Reconnect automatically if the tunnel drops (up to 3 attempts)",
+            "Retry the same profile after 2, 4 and 8 seconds; budget resets after 60 seconds up",
         ) {
             settings::save(&self.settings);
         }
