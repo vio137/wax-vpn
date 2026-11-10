@@ -69,3 +69,7 @@ af9cd6e/run42782446315 passed all push jobs, including named underlay tests and 
 
 2b3d713/run42783692421 passed all push jobs. Successful installed quit timing: native driver1ms, PowerShell adapter-presence query3930ms, legacy-rule PowerShell1953ms, total5884ms. This confirms overhead, not the cause of the earlier timeout. Adapter-presence checking now uses read-only GetIfTable2/FreeMibTable, retaining strict successful-query absence semantics, case-insensitive exact alias match, down-interface visibility and unchanged DNS/legacy cleanup. A Windows test checks a real present interface plus an absent unique alias. Windows verification pending; no speed or timeout-fix claim yet.
 Source: https://learn.microsoft.com/en-us/windows/win32/api/netioapi/nf-netioapi-getiftable2
+
+6415352/run42785001111 passed Windows native present/absent test, DNS restore, tunnel/GUI and fresh install/quit/uninstall. Successful installed quit confirmed absence in1ms (driver stage1ms, absence2ms); narrow legacy-rule cleanup took4183ms, total4185ms. This demonstrates native-query overhead removal, not diagnosis of the intermittent timeout. Push extended crash/IPv6 legs skipped as designed.
+
+Source audit also found that recovery-disable cancelled pending timers but not a running automatic attempt. Cancellation is now checked before consuming queued worker results, using the existing generation invalidation. A new pure test covers waiting/in-flight versus manual/established connections. Windows failure-sequence cancellation remains unproven.

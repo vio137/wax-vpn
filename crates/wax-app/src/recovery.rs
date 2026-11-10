@@ -27,6 +27,12 @@ impl Recovery {
     pub fn attempts(&self) -> usize { self.attempts }
     pub fn is_pending(&self) -> bool { self.due.is_some() }
 
+    /// Disabling recovery cancels both timer wait and a running automatic
+    /// attempt. It does not disconnect an established or manual connection.
+    pub fn should_cancel(&self, enabled: bool) -> bool {
+        !enabled && self.attempts > 0 && self.connected_at.is_none()
+    }
+
     /// Adapter creation does not refill the retry budget.
     pub fn connected(&mut self, generation: u64, now: Duration) {
         if generation == self.generation {
@@ -100,6 +106,18 @@ mod tests {
         assert!(!r.schedule(old,sec(100),true,true));
         r.connected(old,sec(0));
         assert!(r.connected_at.is_none());
+    }
+    #[test]
+    fn disabling_cancels_waiting_and_inflight_but_not_manual_or_established() {
+        let mut r=Recovery::default(); let g=r.new_intent();
+        assert!(!r.should_cancel(false));
+        assert!(r.schedule(g,sec(0),true,true));
+        assert!(r.should_cancel(false));
+        assert!(!r.should_cancel(true));
+        assert_eq!(r.take_due(sec(2)),Some(g));
+        assert!(r.should_cancel(false));
+        r.connected(g,sec(3));
+        assert!(!r.should_cancel(false));
     }
     #[test]
     fn external_tunnel_and_disabled_recovery_never_schedule() {

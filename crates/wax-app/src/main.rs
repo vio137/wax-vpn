@@ -451,6 +451,11 @@ impl WaxApp {
                 ctx.request_repaint();
             }
         }
+        // Invalidate the episode before consuming a queued worker result.
+        // A disabled automatic attempt must not revive via Connected events.
+        if matches!(self.state, ConnState::Connecting) && self.recovery.should_cancel(self.settings.auto_reconnect) {
+            self.disconnect();
+        }
         while let Ok(event) = self.events_rx.try_recv() {
             match event {
                 AppEvent::TunnelLost(generation) => {
@@ -561,9 +566,6 @@ impl WaxApp {
                     self.reload_profiles();
                 }
             }
-        }
-        if self.recovery.is_pending() && !self.settings.auto_reconnect {
-            self.disconnect();
         }
         if self.recovery.take_due(self.start.elapsed()).is_some() {
             if let Some(profile) = self.active_profile.clone() {
