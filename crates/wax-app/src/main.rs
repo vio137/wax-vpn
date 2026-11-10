@@ -1743,11 +1743,12 @@ impl WaxApp {
         });
         ui.add_space(10.0);
         theme::card_frame().show(ui, |ui| {
+            ui.set_width(ui.available_width());
             ui.label(RichText::new("Local diagnostics").size(13.0).color(theme::TEXT).strong());
             ui.add_space(4.0);
-            ui.label(RichText::new("Build and adapter status only. No profiles, keys, endpoints or logs. Nothing is uploaded.").size(11.5).color(theme::SUB));
+            ui.add(egui::Label::new(RichText::new("Build and adapter status only. No profiles, keys, endpoints or logs. Nothing is uploaded.").size(11.5).color(theme::SUB)).wrap());
             ui.add_space(8.0);
-            ui.horizontal(|ui| {
+            ui.horizontal_wrapped(|ui| {
                 if ui.add_enabled(!self.diagnostics_busy, egui::Button::new(if self.diagnostics_busy { "Reading local status..." } else { "Generate local report" })).clicked() {
                     self.diagnostics_busy = true;
                     let tx = self.events_tx.clone();
