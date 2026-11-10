@@ -72,6 +72,7 @@ pub struct WaxApp {
     diagnostics_report: Option<String>,
     diagnostics_busy: bool,
     autostart_notice: Option<String>,
+    settings_notice: Option<&'static str>,
     settings: Settings,
     profiles: Vec<Profile>,
     selected: Option<usize>,
@@ -142,9 +143,15 @@ impl WaxApp {
         cc.egui_ctx.set_fonts(fonts);
 
         let (tx, rx) = channel();
-        let settings = settings::load();
-        // Serde ignores removed preview fields; rewriting drops them on disk.
-        settings::save(&settings);
+        let (settings, settings_notice) = match settings::load_checked() {
+            Ok(settings) => (settings, None),
+            Err(()) => {
+                let mut settings = Settings::default();
+                // Never revive automatic recovery from an unreadable choice.
+                settings.auto_reconnect = false;
+                (settings, Some("Saved settings could not be read and were kept unchanged. Auto-reconnect is off for this session. Check your settings file before relying on saved preferences."))
+            }
+        };
         let profiles = profile::load_profiles().unwrap_or_default();
         let selected = settings
             .last_profile
@@ -157,6 +164,7 @@ impl WaxApp {
             diagnostics_report: None,
             diagnostics_busy: false,
             autostart_notice: None,
+            settings_notice,
             settings,
             profiles,
             selected,
@@ -383,11 +391,17 @@ impl WaxApp {
         }
     }
 
+    fn save_settings(&mut self) {
+        self.settings_notice = if settings::save_checked(&self.settings).is_err() {
+            Some("Settings could not be saved. Current choices may not be restored next time you open waX.")
+        } else { None };
+    }
+
     fn toggle_autostart(&mut self) {
         match autostart::apply(self.settings.autostart) {
             Ok(()) => {
                 self.autostart_notice = None;
-                settings::save(&self.settings);
+                self.save_settings();
             }
             Err(()) => {
                 self.settings.autostart = !self.settings.autostart;
@@ -477,7 +491,7 @@ impl WaxApp {
                     self.status_line = "Tunnel is up".to_string();
                     if let Some(profile) = &self.active_profile {
                         self.settings.last_profile = Some(profile.name.clone());
-                        settings::save(&self.settings);
+                        self.save_settings();
                     }
                     self.spawn_stats_loop();
                 }
@@ -859,6 +873,10 @@ impl eframe::App for WaxApp {
                 ui.add_space(12.0);
                 theme::hairline(ui);
                 ui.add_space(12.0);
+                if let Some(notice) = self.settings_notice {
+                    ui.add(egui::Label::new(RichText::new(notice).size(12.0).color(theme::WARN)).wrap());
+                    ui.add_space(8.0);
+                }
                 let fade = theme::enter(ui, ui.scope_id().with(("tab", self.tab)), self.settings.reduced_motion);
                 ui.scope(|ui| {
                     ui.set_opacity(fade);
@@ -1053,7 +1071,7 @@ impl WaxApp {
                         self.selected = Some(i);
                         self.confirm_delete = None;
                         self.settings.last_profile = Some(name);
-                        settings::save(&self.settings);
+                        self.save_settings();
                         self.picker_open = false;
                         self.status_line = "Ready".into();
                     }
@@ -1299,7 +1317,7 @@ impl WaxApp {
                         if self.settings.last_profile.as_deref() == Some(name.as_str()) {
                             self.settings.last_profile = None;
                         }
-                        settings::save(&self.settings);
+                        self.save_settings();
                         self.reload_profiles();
                         self.split_edit_for = None;
                         self.import_error = None;
@@ -1369,7 +1387,7 @@ impl WaxApp {
                                 .split_exclusions
                                 .insert(name, self.split_edit.trim().to_string());
                         }
-                        settings::save(&self.settings);
+                        self.save_settings();
                     }
                 }
                 match wax_core::split::parse_exclusions(&self.split_edit) {
@@ -1493,7 +1511,7 @@ impl WaxApp {
             "Auto-reconnect",
             "Retry the same profile after 2, 4 and 8 seconds; budget resets after 60 seconds up",
         ) {
-            settings::save(&self.settings);
+            self.save_settings();
         }
         ui.add_space(4.0);
         if theme::toggle_row(
@@ -1502,7 +1520,7 @@ impl WaxApp {
             "Reduced motion",
             "Calm the interface animation",
         ) {
-            settings::save(&self.settings);
+            self.save_settings();
         }
         ui.add_space(8.0);
         theme::card_frame().show(ui, |ui| {
@@ -1829,4 +1847,4 @@ fn main() -> eframe::Result<()> {
         options,
         Box::new(|cc| Ok(Box::new(WaxApp::new(cc, instance)))),
     )
-}
+        }
