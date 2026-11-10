@@ -4744,6 +4744,7 @@ dependencies = [
  "log",
  "thiserror 2.0.21",
  "wax-core",
+ "windows-sys 0.52.0",
  "wireguard-nt",
 ]
 

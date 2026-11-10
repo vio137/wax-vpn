@@ -82,20 +82,24 @@ fn set_dns(adapter: &str, dns: &[std::net::IpAddr]) -> Result<(), TunnelError> {
     Ok(())
 }
 
-fn run_out(cmd: &str, args: &[&str]) -> Result<String, TunnelError> {
-    use std::os::windows::process::CommandExt;
-    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-    let output = Command::new(cmd)
-        .args(args)
-        .creation_flags(CREATE_NO_WINDOW)
-        .output()
-        .map_err(|e| TunnelError::Command(format!("{cmd}: {e}")))?;
-    if output.status.success() {
-        Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
-    } else {
-        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        Err(TunnelError::Command(format!("{cmd} {} failed: {stderr}", args.join(" "))))
+/// Enumerate the native table so only a successful full query can establish
+/// absence. An API error never becomes a clean result. Includes down adapters.
+fn adapter_present(adapter: &str) -> Result<bool, TunnelError> {
+    use windows_sys::Win32::NetworkManagement::IpHelper::{GetIfTable2, FreeMibTable, MIB_IF_ROW2, MIB_IF_TABLE2};
+    struct Table(*mut MIB_IF_TABLE2);
+    impl Drop for Table { fn drop(&mut self) { unsafe { FreeMibTable(self.0.cast()); } } }
+    let mut table = std::ptr::null_mut();
+    if unsafe { GetIfTable2(&mut table) } != 0 || table.is_null() {
+        return Err(TunnelError::Message("Could not read local interface table".into()));
     }
+    let table = Table(table);
+    let rows = unsafe {
+        std::slice::from_raw_parts(std::ptr::addr_of!((*table.0).Table).cast::<MIB_IF_ROW2>(), (*table.0).NumEntries as usize)
+    };
+    Ok(rows.iter().any(|row| {
+        let end = row.Alias.iter().position(|&c| c == 0).unwrap_or(row.Alias.len());
+        String::from_utf16_lossy(&row.Alias[..end]).eq_ignore_ascii_case(adapter)
+    }))
 }
 
 fn reset_dns(adapter: &str) -> Result<(), TunnelError> {
@@ -108,31 +112,11 @@ fn reset_dns_progress(adapter: &str, progress: &impl Fn(&'static str)) -> Result
     // there is no DNS entry left to reset (netsh errors on a nonexistent
     // interface name). Only a confirmed absence skips the reset - a failed
     // or garbled probe is reported, never treated as clean.
-    let probe = run_out(
-        "powershell",
-        &[
-            "-NoProfile",
-            "-NonInteractive",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-Command",
-            &format!("if (Get-NetAdapter -Name '{adapter}' -ErrorAction SilentlyContinue) {{ 'PRESENT' }} else {{ 'ABSENT' }}"),
-        ],
-    );
-    match probe {
-        Ok(s) if s.contains("ABSENT") => { progress("cleanup: adapter confirmed absent"); return Ok(()); },
-        Ok(s) if s.contains("PRESENT") => { progress("cleanup: adapter confirmed present"); }
-        Ok(other) => {
-            return Err(TunnelError::Message(format!(
-                "could not determine adapter presence (unexpected probe output: {other})"
-            )))
-        }
-        Err(e) => {
-            return Err(TunnelError::Message(format!(
-                "could not determine adapter presence: {e}"
-            )))
-        }
+    if !adapter_present(adapter)? {
+        progress("cleanup: adapter confirmed absent");
+        return Ok(());
     }
+    progress("cleanup: adapter confirmed present");
     let mut problems = Vec::new();
     progress("cleanup: IPv4 DNS reset starting");
     if let Err(e) = run("netsh", &["interface", "ipv4", "set", "dnsservers", &format!("name={adapter}"), "dhcp"]) {
@@ -354,5 +338,26 @@ impl Tunnel {
             }
             Err(_) => Ok(None),
         }
+    }
+}
+
+#[cfg(test)]
+mod native_interface_tests {
+    use super::*;
+    #[test]
+    fn native_table_confirms_known_local_interface_and_absence() {
+        use windows_sys::Win32::NetworkManagement::IpHelper::{GetIfTable2, FreeMibTable};
+        let mut table=std::ptr::null_mut();
+        assert_eq!(unsafe { GetIfTable2(&mut table) },0);
+        assert!(!table.is_null());
+        let alias=unsafe {
+            assert!((*table).NumEntries > 0);
+            let row=&(*table).Table[0];
+            let end=row.Alias.iter().position(|&c| c==0).unwrap_or(row.Alias.len());
+            String::from_utf16_lossy(&row.Alias[..end])
+        };
+        unsafe { FreeMibTable(table.cast()); }
+        assert!(adapter_present(&alias).expect("native presence"));
+        assert!(!adapter_present("waX-test-absent-57e8b069").expect("native absence"));
     }
 }
