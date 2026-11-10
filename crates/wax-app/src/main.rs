@@ -203,6 +203,11 @@ impl WaxApp {
         self.selected = keep
             .and_then(|name| self.profiles.iter().position(|p| p.name == name))
             .or(if self.profiles.is_empty() { None } else { Some(0) });
+        // These caches use list indices. A sorted reload can assign an old
+        // index to a different profile, so always repopulate from its name.
+        self.split_edit_for = None;
+        self.confirm_delete = None;
+        self.picker_open = false;
     }
 
     fn spawn_stats_loop(&self) {
