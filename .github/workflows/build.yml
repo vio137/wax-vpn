@@ -430,6 +430,8 @@ jobs:
 
       - name: GUI interaction (UI-driven connect, popups, close-to-tray)
         if: always()
+        env:
+          WAX_FULL_VERIFY: ${{ github.event_name != 'push' && '1' || '0' }}
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Continue'
@@ -638,6 +640,84 @@ jobs:
                   Note 'FAIL GUI owned adapter-loss recovery did not restore a handshake after a bounded delay'
                 }
               }
+              if ($up -and $env:WAX_FULL_VERIFY -eq '1') {
+                # Exercise the real setting during an observed automatic retry.
+                # No delay hooks or fabricated app state. This proves cancellation
+                # after an observed pending retry, not a deterministic in-flight race.
+                function Find-WaxControl([string]$name, $kind) {
+                  $win.FindFirst([System.Windows.Automation.TreeScope]::Descendants,
+                    (New-Object System.Windows.Automation.AndCondition(
+                      (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, $name)),
+                      (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ControlTypeProperty, $kind)))))
+                }
+                function Has-WaxAdapter {
+                  @([System.Net.NetworkInformation.NetworkInterface]::GetAllNetworkInterfaces() | Where-Object { $_.Name -eq 'waX VPN' }).Count -gt 0
+                }
+                try {
+                  .\bin\wax.exe disconnect | Out-Null
+                  $pending = $null
+                  for ($i=0; $i -lt 200 -and -not $pending; $i++) {
+                    $pending = Find-WaxControl 'Cancel retry' ([System.Windows.Automation.ControlType]::Button)
+                    if (-not $pending) { Start-Sleep -Milliseconds 50 }
+                  }
+                  if (-not $pending) { throw 'No real pending retry observed' }
+                  Note 'INFO observed real Cancel retry action before disabling Auto-reconnect'
+                  $features = Find-WaxControl 'Features' ([System.Windows.Automation.ControlType]::Button)
+                  $features.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+                  $auto = $null
+                  for ($i=0; $i -lt 20 -and -not $auto; $i++) {
+                    $auto = Find-WaxControl 'Auto-reconnect' ([System.Windows.Automation.ControlType]::CheckBox)
+                    if (-not $auto) { Start-Sleep -Milliseconds 50 }
+                  }
+                  if (-not $auto) { throw 'Auto-reconnect checkbox missing' }
+                  $toggle = $auto.GetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern)
+                  if ($toggle.Current.ToggleState -ne [System.Windows.Automation.ToggleState]::On) { throw 'Auto-reconnect was not enabled' }
+                  $toggle.Toggle()
+                  Start-Sleep -Milliseconds 250
+                  $saved = Get-Content (Join-Path $cfgDir 'settings.json') -Raw | ConvertFrom-Json
+                  if ($saved.auto_reconnect -ne $false) { throw 'Disabled setting not saved' }
+                  $connectRail = Find-WaxControl 'Connect' ([System.Windows.Automation.ControlType]::Button)
+                  $connectRail.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+                  $ready = $null
+                  for ($i=0; $i -lt 150 -and -not $ready; $i++) {
+                    $ready = Find-WaxControl 'Connect to demo' ([System.Windows.Automation.ControlType]::Button)
+                    if ($ready -and (Has-WaxAdapter)) { $ready = $null }
+                    if (-not $ready) { Start-Sleep -Milliseconds 100 }
+                  }
+                  if (-not $ready) { throw 'Cancellation did not return to disconnected without adapter' }
+                  $revived = $false
+                  for ($i=0; $i -lt 48; $i++) {
+                    if (Has-WaxAdapter) { $revived = $true }
+                    Start-Sleep -Milliseconds 250
+                  }
+                  $pg.Refresh()
+                  if ($revived -or $pg.HasExited) { throw 'Adapter reappeared during cancellation samples or original process exited' }
+                  Note 'PASS recovery-disable after observed pending retry: setting saved, disconnected, adapter absent in 48 samples over 12s, original process alive'
+                  $bounds = $win.Current.BoundingRectangle
+                  $im = New-Object System.Drawing.Bitmap ([int]$bounds.Width),([int]$bounds.Height)
+                  $gr = [System.Drawing.Graphics]::FromImage($im)
+                  $gr.CopyFromScreen([int]$bounds.X,[int]$bounds.Y,0,0,$im.Size)
+                  $im.Save('gui-screenshot-recovery-cancelled.png'); $gr.Dispose(); $im.Dispose()
+                  # Disabled automation must not disable an explicit user Connect.
+                  $ready.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+                  $manualUp = $false
+                  for ($i=0; $i -lt 20 -and -not $manualUp; $i++) {
+                    Start-Sleep -Seconds 1
+                    $manualUp = (.\bin\wax.exe status) -match 'Last handshake'
+                  }
+                  if (-not $manualUp) { throw 'Manual reconnect failed while automatic recovery disabled' }
+                  Note 'PASS explicit manual reconnect while Auto-reconnect disabled: fresh peer handshake'
+                  $features = Find-WaxControl 'Features' ([System.Windows.Automation.ControlType]::Button)
+                  $features.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+                  Start-Sleep -Milliseconds 250
+                  $auto = Find-WaxControl 'Auto-reconnect' ([System.Windows.Automation.ControlType]::CheckBox)
+                  $auto.GetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern).Toggle()
+                  $connectRail = Find-WaxControl 'Connect' ([System.Windows.Automation.ControlType]::Button)
+                  $connectRail.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+                } catch {
+                  Note "FAIL targeted recovery-disable sequence: $($_.Exception.Message)"
+                }
+              }
               $conAfter = [WaxCon]::CountConsoles()
               $watcherStopped = [WaxConsoleSampler]::Stop()
               $conMax = [WaxConsoleSampler]::Peak
@@ -722,6 +802,7 @@ jobs:
             gui-screenshot-diagnostics.png
             gui-screenshot-about.png
             gui-screenshot-connected.png
+            gui-screenshot-recovery-cancelled.png
 
   installer-smoke:
     name: fresh-runner installer launch

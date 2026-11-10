@@ -1,6 +1,6 @@
 # Network-change recovery design
 
-Status: bounded adapter-loss retry policy passed targeted Windows verification on9aea9b3, run42770444348. Route/address notification callbacks and physical-network recovery remain design only. Pure notification coalescing groundwork is present in network_change.rs, compiled only for tests until notification ownership is implemented.
+Status: stable v0.1.7 exact source 848a68a / run 42791204943 passed bounded adapter-loss recovery, runtime and fresh installer checks. Route/address notification ownership and local route/address/interface comparison exist only in test modules. Production physical-network recovery is not wired or verified.
 
 ## Evidence and boundaries
 
@@ -85,3 +85,9 @@ Source: https://learn.microsoft.com/en-us/windows/win32/api/netioapi/nf-netioapi
 Sources:
 - https://learn.microsoft.com/en-us/windows/win32/api/netioapi/nf-netioapi-getipinterfaceentry
 - https://learn.microsoft.com/en-us/windows/win32/api/netioapi/nf-netioapi-initializeipinterfaceentry
+
+## v0.1.7 and next focused check
+
+Source 429a024 / run 42790476717 passed the combined Windows interface/route/address tests, runtime and fresh installer. Exact stable 848a68a / run 42791204943 passed the full gate. Stable adapter-loss recovery took 5 seconds with original GUI process alive; installed cleanup took 4654 ms, native absence query 2 ms. Earlier intermittent quit failure remains undiagnosed.
+
+The next full-only Windows harness check observes a real pending automatic retry, disables Auto-reconnect through its actual UI checkbox, requires saved false and disconnected state with no adapter, samples absence 48 times over 12 seconds, then manually reconnects with automation still disabled. It introduces no product hooks. This does not deterministically establish an in-flight worker-result race or all retry-exhaustion behavior. Windows evidence is pending. Push checks skip this extended sequence.
