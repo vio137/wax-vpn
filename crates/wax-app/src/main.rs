@@ -76,6 +76,8 @@ pub struct WaxApp {
     settings_notice: Option<&'static str>,
     settings: Settings,
     profiles: Vec<Profile>,
+    profiles_notice: Option<String>,
+    profiles_readable: bool,
     selected: Option<usize>,
     state: ConnState,
     stats: TunnelStats,
@@ -153,7 +155,10 @@ impl WaxApp {
                 (settings, Some("Saved settings could not be read and were kept unchanged. Auto-reconnect is off for this session. Check your settings file before relying on saved preferences."))
             }
         };
-        let profiles = profile::load_profiles().unwrap_or_default();
+        let (profiles, profiles_notice, profiles_readable) = match profile::load_profiles_report() {
+            Ok(report) => (report.profiles, profile_notice(report.skipped), true),
+            Err(_) => (Vec::new(), Some("Profiles could not be read. Files were not changed. Reload in Profiles before connecting.".into()), false),
+        };
         let selected = settings
             .last_profile
             .as_ref()
@@ -168,6 +173,8 @@ impl WaxApp {
             settings_notice,
             settings,
             profiles,
+            profiles_notice,
+            profiles_readable,
             selected,
             state: ConnState::Disconnected,
             stats: TunnelStats::default(),
@@ -225,7 +232,19 @@ impl WaxApp {
 
     fn reload_profiles(&mut self) {
         let keep = self.selected.and_then(|i| self.profiles.get(i)).map(|p| p.name.clone());
-        self.profiles = profile::load_profiles().unwrap_or_default();
+        match profile::load_profiles_report() {
+            Ok(report) => {
+                self.profiles = report.profiles;
+                self.profiles_notice = profile_notice(report.skipped);
+                self.profiles_readable = true;
+            }
+            Err(_) => {
+                // Keep the visible snapshot, but do not connect stale data.
+                self.profiles_notice = Some("Profiles could not be reloaded. The previous list is shown and files were not changed. Reload in Profiles before connecting.".into());
+                self.profiles_readable = false;
+                return;
+            }
+        }
         self.selected = keep
             .and_then(|name| self.profiles.iter().position(|p| p.name == name))
             .or(if self.profiles.is_empty() { None } else { Some(0) });
@@ -285,6 +304,10 @@ impl WaxApp {
     }
 
     fn connect(&mut self) {
+        if !self.profiles_readable {
+            self.state = ConnState::Failed("Reload profiles before connecting".into());
+            return;
+        }
         let Some(idx) = self.selected else {
             self.state = ConnState::Failed("Pick or import a profile first".into());
             return;
@@ -670,6 +693,10 @@ impl WaxApp {
     }
 }
 
+fn profile_notice(skipped: usize) -> Option<String> {
+    (skipped > 0).then(|| format!("{skipped} profile file(s) could not be read or parsed and were skipped. Files were not changed."))
+}
+
 fn fmt_bytes(n: u64) -> String {
     const UNITS: [&str; 5] = ["B", "KiB", "MiB", "GiB", "TiB"];
     let mut v = n as f64;
@@ -701,6 +728,11 @@ fn repaint_delay(hidden: bool, reduced_motion: bool, disconnected: bool) -> Dura
 #[cfg(test)]
 mod repaint_tests {
     use super::*;
+    #[test]
+    fn profile_notice_is_count_only_and_absent_for_complete_loads() {
+        assert_eq!(profile_notice(0), None);
+        assert_eq!(profile_notice(2).as_deref(), Some("2 profile file(s) could not be read or parsed and were skipped. Files were not changed."));
+    }
     #[test]
     fn periodic_repaint_policy_keeps_active_ui_responsive_and_hidden_polling_bounded() {
         for reduced in [false, true] {
@@ -892,6 +924,10 @@ impl eframe::App for WaxApp {
                 ui.add_space(12.0);
                 theme::hairline(ui);
                 ui.add_space(12.0);
+                if let Some(notice) = &self.profiles_notice {
+                    ui.add(egui::Label::new(RichText::new(notice).size(12.0).color(theme::WARN)).wrap());
+                    ui.add_space(8.0);
+                }
                 if let Some(notice) = self.settings_notice {
                     ui.add(egui::Label::new(RichText::new(notice).size(12.0).color(theme::WARN)).wrap());
                     ui.add_space(8.0);
@@ -1199,7 +1235,12 @@ impl WaxApp {
         let mut connect_idx: Option<usize> = None;
         let mut delete_idx: Option<usize> = None;
         let can_manage = matches!(self.state, ConnState::Disconnected | ConnState::Failed(_));
-        if !can_manage {
+        if ui.add_enabled(can_manage, egui::Button::new("Reload profiles")).clicked() {
+            self.reload_profiles();
+        }
+        ui.add_space(8.0);
+        let can_manage = can_manage && self.profiles_readable;
+        if !matches!(self.state, ConnState::Disconnected | ConnState::Failed(_)) {
             ui.label(RichText::new("Disconnect before switching or deleting profiles").size(11.0).color(theme::MUTE));
             ui.add_space(8.0);
         }
@@ -1315,7 +1356,7 @@ impl WaxApp {
                 });
                 theme::hairline(ui);
             }
-            if self.profiles.is_empty() {
+            if self.profiles.is_empty() && self.profiles_readable {
                 theme::card_frame().show(ui, |ui| {
                     ui.label(RichText::new("No profiles yet").size(13.0).color(theme::SUB));
                     ui.label(
@@ -1870,4 +1911,4 @@ fn main() -> eframe::Result<()> {
         options,
         Box::new(|cc| Ok(Box::new(WaxApp::new(cc, instance)))),
     )
-                    }
+        }
