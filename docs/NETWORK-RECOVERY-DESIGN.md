@@ -1,6 +1,6 @@
 # Network-change recovery design
 
-Status: local bounded adapter-loss retry policy prepared; Windows verification pending. Route/address notification callbacks and physical-network recovery remain design only.
+Status: bounded adapter-loss retry policy passed targeted Windows verification on9aea9b3, run42770444348. Route/address notification callbacks and physical-network recovery remain design only.
 
 ## Evidence and boundaries
 
@@ -34,4 +34,4 @@ Sources checked November 10, 2026:
 
 ## Existing source risks to address first
 
-At source31f09d0, adapter-loss recovery called the next attempt immediately and reset its attempt counter when an adapter was created. The prepared change uses2/4/8-second delays, retains the starting profile plus split exclusions, tags worker events with a connection generation, cancels pending retries on disconnect/disable/quit, and requires60seconds up to reset the budget. Four pure-policy tests cover timing, flapping, stale generations and external-owner/disabled limits. A targeted Windows adapter-loss scenario is pending. None of this establishes physical-network roaming support.
+At source31f09d0, adapter-loss recovery called the next attempt immediately and reset its attempt counter when an adapter was created. The9aea9b3 change uses2/4/8-second delays, retains the starting profile plus split exclusions, tags worker events with a connection generation, cancels pending retries on disconnect/disable/quit, and requires60seconds up to reset the budget. Four pure-policy tests cover timing, flapping, stale generations and external-owner/disabled limits. Targeted Windows adapter-loss verification passed: a fresh handshake after4seconds with original GUI process alive. The multi-failure retry limit and cancel behavior still have policy-only evidence, not a full Windows failure-sequence demonstration. None of this establishes physical-network roaming support.
