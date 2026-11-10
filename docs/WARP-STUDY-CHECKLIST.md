@@ -80,3 +80,9 @@ Exact source cd614c4, full gate42776110039 passed. Fresh installer10,943,511byte
 ## Astryx native preview
 
 Source433f867/full manual gate42777283654 is in progress. Local native page/state composition inspected,26tests pass; actual Windows evidence pending. The separate React reference is illustrative only and labeled as not a live tunnel. No new product runtime or service.
+
+### v0.1.6 stable checkpoint
+- Source cf976cf; exact full gate 42778052338 passed build, verification, fresh-runner install/uninstall and publish.
+- All three actual Windows states at760/880/960 inspected; counter anchors stable. Features toggle contrast and all page/diagnostics/installed images inspected.
+- Fresh released installer SHA256 e7d3ee08b346044805f128b989523ca434b883588ae0fda894b39850798f8a4e, 10,943,260 bytes.
+- Adapter-loss recovery5seconds with original process. Internet/IPv6/physical-roaming/real-tray limits and unresolved earlier intermittent quit retained in release notes.

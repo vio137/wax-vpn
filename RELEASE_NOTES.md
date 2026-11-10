@@ -1,6 +1,6 @@
-# waX VPN v 0.1.6
+# waX VPN v0.1.6
 
-Unsigned Windows x 64 interface checkpoint. Windows may show an unknown-publisher warning. The official WireGuardNT driver remains independently signed by its vendor. No kill switch: traffic can use the normal connection if the tunnel drops.
+Unsigned Windows x64 interface checkpoint. Windows may show an unknown-publisher warning. The official WireGuardNT driver remains independently signed by its vendor. No kill switch: traffic can use the normal connection if the tunnel drops.
 
 ## Interface rebuilt from the Astryx reference
 
@@ -13,14 +13,17 @@ Astryx 0.7.11 is an MIT-licensed React 19+/StyleX design system. A separate runn
 
 ## Verification
 
-Full manual preview gate42777283654 passed from source433f867. Actual Windows Disconnected, Connecting and Connected pixels were inspected at760x540,880x600and960x700, with matching counter-label anchors across states. Profiles, Features, WARP, About, generated diagnostics and installed-app pixels were inspected too. The exact-version stable gate still has to complete. Visual reference values are illustrative, not tunnel measurements.
+Exact-version stable gate 42778052338 passed from source cf976cf, including the fresh-runner installer. Real Windows Disconnected, Connecting and Connected pixels were inspected at 760x540, 880x600 and 960x700; counter-label anchors match across states. Profiles, Features, WARP, About, generated diagnostics and installed-app pixels were inspected too. The active-toggle contrast fix is visible in the stable capture. Visual reference values are illustrative, not tunnel measurements.
+
+Released installer: 10,943,260 bytes. SHA256: e7d3ee08b346044805f128b989523ca434b883588ae0fda894b39850798f8a4e.
+
 
 ## Scope and known limits
 
-The previous stable gate verified peer handshake, packets to the demo server tunnel-side address, IPv 4 MTU 1380, DNS apply/cleanup, diagnostics generate/clear, external-tunnel observation, GUI connect, split routing, bounded adapter-loss recovery, close-to-tray, original-window/PID restore, graceful quit and fresh install/uninstall. Adapter-loss recovery does not establish physical-network roaming or Wi-Fi switching. Internet reachability is not tested. Full Windows retry-exhaustion/cancellation sequences remain unproven.
+This stable gate verified peer handshake, packets to the demo server tunnel-side address, IPv4 MTU 1380, DNS apply/cleanup, diagnostics generate/clear, external-tunnel observation, GUI connect, split routing, bounded adapter-loss recovery, close-to-tray, original-window/PID restore, graceful quit and fresh install/uninstall. Adapter-loss recovery does not establish physical-network roaming or Wi-Fi switching. Internet reachability is not tested. Full Windows retry-exhaustion/cancellation sequences remain unproven.
 
-An earlier 8863 f 19 fresh-install job timed out after 15 seconds waiting for quit. Its same-source retry and subsequent gates passed. The first intermittent failure remains unresolved; later passes do not diagnose it. No timeout was widened or cleanup skipped.
+An earlier 8863f19 fresh-install job timed out after 15 seconds waiting for quit. Its same-source retry and subsequent gates passed. The first intermittent failure remains unresolved; later passes do not diagnose it. No timeout was widened or cleanup skipped.
 
-Crash cleanup is a snapshot, not continuous leak observation. IPv 6 was SKIP without a proven runner baseline. Real notification-area tray menu remains manual-only in the hosted Windows environment.
+Crash cleanup is a snapshot, not continuous leak observation. IPv6 was SKIP without a proven runner baseline. Real notification-area tray menu remains manual-only in the hosted Windows environment.
 
-No kill switch, IPv 6 leak-protection, speed improvement or WARP registration claim. No WARP signup, registration or connection is performed by release tests. No new product service or third-party network request was introduced. No Cloudflare code, assets, branding, credentials or private protocol implementation is copied.
+No kill switch, IPv6 leak-protection, speed improvement or WARP registration claim. No WARP signup, registration or connection is performed by release tests. No new product service or third-party network request was introduced. No Cloudflare code, assets, branding, credentials or private protocol implementation is copied.
