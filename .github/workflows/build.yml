@@ -474,32 +474,43 @@ jobs:
             } else {
               # Watch console windows continuously while connecting: a
               # before/after count alone would miss a transient flash.
-              $watcher = Start-Job -ScriptBlock {
-                Add-Type -TypeDefinition @"
-                using System;
-                using System.Text;
-                using System.Runtime.InteropServices;
-                public class WaxConW {
-                  [DllImport("user32.dll")] public static extern bool EnumWindows(EnumProc cb, IntPtr l);
-                  public delegate bool EnumProc(IntPtr h, IntPtr l);
-                  [DllImport("user32.dll")] public static extern int GetClassNameW(IntPtr h, StringBuilder s, int n);
-                  [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
-                  public static int CountConsoles() {
-                    int c = 0;
-                    EnumWindows((h,l) => { var sb = new StringBuilder(256); GetClassNameW(h, sb, 256); if (sb.ToString() == "ConsoleWindowClass" && IsWindowVisible(h)) c++; return true; }, IntPtr.Zero);
-                    return c;
-                  }
+              Add-Type -TypeDefinition @"
+              using System;
+              using System.Threading;
+              using System.Text;
+              using System.Runtime.InteropServices;
+              public static class WaxConsoleSampler {
+                [DllImport("user32.dll")] static extern bool EnumWindows(EnumProc cb, IntPtr l);
+                delegate bool EnumProc(IntPtr h, IntPtr l);
+                [DllImport("user32.dll")] static extern int GetClassNameW(IntPtr h, StringBuilder s, int n);
+                [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr h);
+                static volatile bool stop;
+                static Thread thread;
+                public static int Peak;
+                public static int Samples;
+                public static string Error;
+                public static void Start() {
+                  stop = false; Peak = 0; Samples = 0; Error = null;
+                  thread = new Thread(() => {
+                    try {
+                      while (!stop) {
+                        int count = 0;
+                        EnumWindows((h,l) => { var s = new StringBuilder(256); GetClassNameW(h,s,256); if (s.ToString() == "ConsoleWindowClass" && IsWindowVisible(h)) count++; return true; }, IntPtr.Zero);
+                        if (count > Peak) Peak = count;
+                        Samples++;
+                        Thread.Sleep(100);
+                      }
+                    } catch (Exception e) { Error = e.GetType().Name; }
+                  });
+                  thread.IsBackground = true;
+                  thread.Start();
                 }
-          "@
-                $max = 0
-                $sw = [System.Diagnostics.Stopwatch]::StartNew()
-                while ($sw.Elapsed.TotalSeconds -lt 150) {
-                  $c = [WaxConW]::CountConsoles()
-                  if ($c -gt $max) { $max = $c }
-                  Start-Sleep -Milliseconds 100
-                }
-                return $max
+                public static bool Stop() { stop = true; return thread.Join(2000); }
               }
+          "@
+              [WaxConsoleSampler]::Start()
+              # Ensure the sampler ran before triggering connection.
+              for ($i=0; $i -lt 20 -and [WaxConsoleSampler]::Samples -eq 0; $i++) { Start-Sleep -Milliseconds 20 }
               $btn.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
               $up = $false
               for ($i = 0; $i -lt 24 -and -not $up; $i++) {
@@ -531,12 +542,14 @@ jobs:
                 }
               }
               $conAfter = [WaxCon]::CountConsoles()
-              $conSamples = @(Receive-Job $watcher -Wait -AutoRemoveJob)
-              $conMax = $null
-              if ($conSamples.Count -eq 1 -and $conSamples[0] -is [int]) { $conMax = $conSamples[0] }
-              if ($null -eq $conMax) {
-                Note "WARN console watcher result missing/invalid; popup absence not verified (start=$conBefore end=$conAfter)"
-              } elseif (($conMax -le $conBefore) -and ($conAfter -le $conBefore)) { Note "PASS no console windows observed during GUI connect (polled every ~100ms; windows shorter than the interval could be missed; baseline=$conBefore peak=$conMax end=$conAfter)" } else { Note "FAIL console window observed during GUI connect (baseline=$conBefore peak=$conMax end=$conAfter)" }
+              $watcherStopped = [WaxConsoleSampler]::Stop()
+              $conMax = [WaxConsoleSampler]::Peak
+              $samples = [WaxConsoleSampler]::Samples
+              if (-not $watcherStopped -or $samples -lt 2 -or [WaxConsoleSampler]::Error) {
+                Note "WARN console sampler incomplete; popup absence not verified (samples=$samples error=$([WaxConsoleSampler]::Error))"
+              } elseif (($conMax -le $conBefore) -and ($conAfter -le $conBefore)) {
+                Note "PASS no console windows observed during GUI connect ($samples samples at ~100ms; shorter windows could be missed; baseline=$conBefore peak=$conMax end=$conAfter)"
+              } else { Note "FAIL console window observed during GUI connect (baseline=$conBefore peak=$conMax end=$conAfter)" }
               $mainHwnd = [IntPtr]$win.Current.NativeWindowHandle
               try {
                 $win.GetCurrentPattern([System.Windows.Automation.WindowPattern]::Pattern).Close()
