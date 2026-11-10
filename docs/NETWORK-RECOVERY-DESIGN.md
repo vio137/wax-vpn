@@ -73,3 +73,10 @@ Source: https://learn.microsoft.com/en-us/windows/win32/api/netioapi/nf-netioapi
 6415352/run42785001111 passed Windows native present/absent test, DNS restore, tunnel/GUI and fresh install/quit/uninstall. Successful installed quit confirmed absence in1ms (driver stage1ms, absence2ms); narrow legacy-rule cleanup took4183ms, total4185ms. This demonstrates native-query overhead removal, not diagnosis of the intermittent timeout. Push extended crash/IPv6 legs skipped as designed.
 
 Source audit also found that recovery-disable cancelled pending timers but not a running automatic attempt. Cancellation is now checked before consuming queued worker results, using the existing generation invalidation. A new pure test covers waiting/in-flight versus manual/established connections. Windows failure-sequence cancellation remains unproven.
+
+## Full checkpoint and address groundwork
+
+dd34010/run42787586767 full manual checkpoint passed build, runtime and fresh install/quit/uninstall. Crash3-second pre-cleanup snapshot adaptergone/DNSnone/rules0; cleanup passed. IPv6 skipped without baseline; recovery7seconds/originalprocess. Actual Connected/diagnostics/installed pixels inspected. No Windows failure-sequence cancellation proof follows from policy tests. Successful installed cleanup4422ms total, native absence2ms. Earlier intermittent timeout remains undiagnosed.
+
+Test-only underlay snapshot now includes addresses only on its non-waX default-route interfaces, with family/address/scope/prefix/DAD/source flags. It ignores lifetime countdowns, duplicates and unrelated adapter addresses. Gateway/source values stay in memory without Debug/Serialize. Added synthetic comparison test; real Windows read now queries both route and address tables. Windows results pending. Interface metrics and endpoint-specific routing still need design; no production reconnect decision or roaming claim.
+Source: https://learn.microsoft.com/en-us/windows/win32/api/netioapi/nf-netioapi-getunicastipaddresstable
