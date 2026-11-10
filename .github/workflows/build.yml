@@ -531,8 +531,12 @@ jobs:
                 }
               }
               $conAfter = [WaxCon]::CountConsoles()
-              $conMax = Receive-Job $watcher -Wait -AutoRemoveJob
-              if (($conMax -le $conBefore) -and ($conAfter -le $conBefore)) { Note "PASS no console windows observed during GUI connect (polled every ~100ms; windows shorter than the interval could be missed; baseline=$conBefore peak=$conMax end=$conAfter)" } else { Note "FAIL console window observed during GUI connect (baseline=$conBefore peak=$conMax end=$conAfter)" }
+              $conSamples = @(Receive-Job $watcher -Wait -AutoRemoveJob)
+              $conMax = $null
+              if ($conSamples.Count -eq 1 -and $conSamples[0] -is [int]) { $conMax = $conSamples[0] }
+              if ($null -eq $conMax) {
+                Note "WARN console watcher result missing/invalid; popup absence not verified (start=$conBefore end=$conAfter)"
+              } elseif (($conMax -le $conBefore) -and ($conAfter -le $conBefore)) { Note "PASS no console windows observed during GUI connect (polled every ~100ms; windows shorter than the interval could be missed; baseline=$conBefore peak=$conMax end=$conAfter)" } else { Note "FAIL console window observed during GUI connect (baseline=$conBefore peak=$conMax end=$conAfter)" }
               $mainHwnd = [IntPtr]$win.Current.NativeWindowHandle
               try {
                 $win.GetCurrentPattern([System.Windows.Automation.WindowPattern]::Pattern).Close()
