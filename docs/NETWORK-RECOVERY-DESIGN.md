@@ -60,3 +60,9 @@ The test-only underlay module reads GetIpForwardTable2 with explicit FreeMibTabl
 Sources:
 - https://learn.microsoft.com/en-us/windows/win32/api/netioapi/nf-netioapi-getipforwardtable2
 - https://learn.microsoft.com/en-us/windows/win32/api/netioapi/nf-netioapi-freemibtable
+
+## Quit recurrence checkpoint
+
+2542baf/run42781776949 installed launch passed, then quit failed at15seconds. Fixed diagnostics prove signal delivery/consumption and entry to leftover cleanup, with a PowerShell child still running. This occurrence is not an IPC failure. The exact PowerShell substage remains unknown. Its runtime job reached graceful quit but was cancelled by the instrumented push before final closeout; it is not a full pass.
+
+af9cd6e/run42782446315 passed all push jobs, including named underlay tests and fresh install/quit/uninstall. A later pass does not diagnose the recurrence. Fixed cleanup substages are retained; elapsed milliseconds and successful-path capture are added so subsequent evidence can distinguish adapter presence/DNS from narrow legacy-rule cleanup. No timeout was widened, no cleanup skipped and no protection claim added.

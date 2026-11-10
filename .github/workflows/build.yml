@@ -772,9 +772,13 @@ jobs:
           } finally {
             & $exe --quit
             for ($i=0; $i -lt 15 -and -not $p.HasExited; $i++) { Start-Sleep -Seconds 1; $p.Refresh() }
+            $debugPath = Join-Path $env:APPDATA 'wax-vpn\wax-debug.log'
+            if (Test-Path $debugPath) {
+              # Only fixed single-instance/cleanup diagnostics, never profile data.
+              Get-Content $debugPath | ForEach-Object { Write-Host "QUITDIAG $_" }
+              Copy-Item $debugPath installer-quit-diagnostics.txt
+            }
             if (-not $p.HasExited) {
-              $debugPath = Join-Path $env:APPDATA 'wax-vpn\wax-debug.log'
-              if (Test-Path $debugPath) { Get-Content $debugPath | ForEach-Object { Write-Host "QUITDIAG $_" } }
               Get-CimInstance Win32_Process | Where-Object { $_.ParentProcessId -eq $p.Id } | Select-Object ProcessId,ParentProcessId,Name | Format-Table
               $p.Kill(); throw 'Installed GUI did not quit within 15 seconds'
             }
@@ -790,6 +794,7 @@ jobs:
           path: |
             installer-results.txt
             installed-gui.png
+            installer-quit-diagnostics.txt
 
   publish:
     needs: [build, verify, installer-smoke]

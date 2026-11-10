@@ -939,7 +939,10 @@ impl WaxApp {
             t.shutdown()
         } else {
             crate::single::diag("quit: leftover cleanup starting");
-            Tunnel::force_disconnect_progress(crate::single::diag)
+            let cleanup_start = Instant::now();
+            Tunnel::force_disconnect_progress(|stage| {
+                crate::single::diag(&format!("{stage} elapsed_ms={}", cleanup_start.elapsed().as_millis()));
+            })
         };
         crate::single::diag(if result.is_ok() { "quit: cleanup succeeded" } else { "quit: cleanup returned error" });
         #[cfg(windows)]
