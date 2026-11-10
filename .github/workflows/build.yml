@@ -415,7 +415,7 @@ jobs:
                 Start-Sleep -Milliseconds 500
                 $copy = $uiaWin.FindFirst([System.Windows.Automation.TreeScope]::Descendants, (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, 'Copy report')))
                 if ($copy) { throw 'Local diagnostics clear did not remove report' }
-                'local-diagnostics-generate-clear=PASS' | Out-File -FilePath verify-results.txt -Append
+                'local-diagnostics-generate-clear=PASS' | Out-File -FilePath verify-results.txt -Append -Encoding utf8
               }
             }
           } else {
@@ -888,7 +888,7 @@ jobs:
             .\bin\wax-vpn.exe --quit
             if ($LASTEXITCODE -ne 0) { throw 'settings fixture quit request failed' }
             if (-not $process.WaitForExit(15000)) { throw 'settings warning fixture quit timed out' }
-            'PASS settings malformed original preserved; recovery off; load/save warnings visible; quit' | Out-File verify-results.txt -Append
+            'PASS settings malformed original preserved; recovery off; load/save warnings visible; quit' | Out-File verify-results.txt -Append -Encoding utf8
           } finally {
             if ($process -and -not $process.HasExited) { $process.Kill(); $process.WaitForExit() }
             if ($had) { [IO.File]::WriteAllBytes($path,$before) } else { Remove-Item $path -ErrorAction SilentlyContinue }
