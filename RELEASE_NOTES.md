@@ -11,7 +11,7 @@ Unsigned Windows x64 maintenance checkpoint. Windows may show an unknown-publish
 
 ## Verification
 
-Full manual dd34010 checkpoint42787586767 passed Windows runtime, extended crash cleanup and fresh install/quit/uninstall. Later source429a024 push42790476717 passed Windows build/tests, tunnel/GUI and fresh installer. The exactv0.1.7stable gate is pending. Native adapter absence checks measured1-2ms instead of an earlier3.93second subprocess, but remaining legacy-rule cleanup varies. This is not a general performance or timeout-fix guarantee.
+Full manual dd34010 checkpoint42787586767 passed Windows runtime, extended crash cleanup and fresh install/quit/uninstall. Later source429a024 push42790476717 passed Windows build/tests, tunnel/GUI and fresh installer. Exact-version stable source848a68a/run42791204943 passed all jobs, including extended crash cleanup and fresh install/quit/uninstall. Actual stable Connected, installed and generated-diagnostics pixels inspected. Fresh released installer10,944,296bytes, SHA2569ff8c7598442a69a34cfdfd9ca052075017e3434c608a80ade7e9a502e3c991d. Stable installed cleanup4654ms, native absence2ms; adapter-loss recovery5seconds/originalprocess. Native adapter absence checks measured1-2ms instead of an earlier3.93second subprocess, but remaining legacy-rule cleanup varies. This is not a general performance or timeout-fix guarantee.
 
 ## Scope and limits
 

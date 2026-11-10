@@ -41,7 +41,7 @@ This is an independent behavior/structure study with REA 6.8.0 and Ghidra 12.1.4
 - https://developers.cloudflare.com/cloudflare-one/team-and-resources/devices/cloudflare-one-client/troubleshooting/diagnostic-logs/ (diagnostic categories)
 - https://github.com/NationalSecurityAgency/ghidra/releases/tag/Ghidra_12.1.4_build (native analysis engine)
 
-Cloudflare One enterprise documentation is not interchangeable with consumer availability. No signup or terms acceptance was needed for static extraction/inspection. Latest stable v0.1.6 (cf976cf, run42778052338) includes MTU, diagnostics, state clarity and startup observer fixes. Releases remain unsigned, with no kill switch or IPv6 leak-protection claim.
+Cloudflare One enterprise documentation is not interchangeable with consumer availability. No signup or terms acceptance was needed for static extraction/inspection. Latest stable v0.1.7 (848a68a, run42791204943) includes MTU, diagnostics, state clarity and startup observer fixes. Releases remain unsigned, with no kill switch or IPv6 leak-protection claim.
 
 ## Package findings
 
@@ -86,3 +86,7 @@ Source433f867/full manual gate42777283654 passed. Actual Windows pages and all s
 - All three actual Windows states at760/880/960 inspected; counter anchors stable. Features toggle contrast and all page/diagnostics/installed images inspected.
 - Fresh released installer SHA256 e7d3ee08b346044805f128b989523ca434b883588ae0fda894b39850798f8a4e, 10,943,260 bytes.
 - Adapter-loss recovery5seconds with original process. Internet/IPv6/physical-roaming/real-tray limits and unresolved earlier intermittent quit retained in release notes.
+
+## v0.1.7 maintenance checkpoint
+
+Exact source848a68a/full stable gate42791204943 passed build/runtime/installer/publish. Fresh installer10,944,296bytesSHA2569ff8c7598442a69a34cfdfd9ca052075017e3434c608a80ade7e9a502e3c991d. Stable Connected/installed/diagnostics pixels inspected. Native adapter-presence query replaces one subprocess without skipping DNS or narrow legacy-rule cleanup. Recovery-disable cancels in-flight automatic attempts via generation invalidation (policy-tested, Windows failure sequence unproven). Route/address/interface groundwork remains test-only, not physical roaming. Crash3sadaptergoneDNSnone/rules0beforecleanup;cleanupPASS;IPv6SKIP;realtraymanual. Earlier intermittent15squit failure remains undiagnosed; stable installed cleanup4654ms/nativeabsence2ms.
