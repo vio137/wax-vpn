@@ -586,10 +586,13 @@ jobs:
               $btn.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
               Start-Sleep -Milliseconds 100
               Capture-StateSizes 'connecting'
+              Note 'INFO GUI stage: Connecting captures complete; waiting before CLI status read'
               $up = $false
               for ($i = 0; $i -lt 24 -and -not $up; $i++) {
                 Start-Sleep -Seconds 5
+                Note 'INFO GUI stage: CLI status read starting'
                 $st = .\bin\wax.exe status
+                Note 'INFO GUI stage: CLI status read returned'
                 if ($st -match 'Last handshake') { $up = $true }
               }
               if ($up) { Note 'PASS GUI-driven connect: handshake after clicking Connect in the app' } else { Note 'FAIL GUI-driven connect: no handshake within 120s of clicking Connect' }
@@ -786,6 +789,79 @@ jobs:
           }
           if (Get-Content verify-results.txt -ErrorAction SilentlyContinue | Where-Object { $_ -match '^FAIL' }) { exit 1 }
 
+      - name: Settings failure warning (full-only local check)
+        if: always() && github.event_name != 'push'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Add-Type -AssemblyName UIAutomationClient
+          Add-Type -AssemblyName UIAutomationTypes
+          Add-Type -AssemblyName System.Drawing
+          Add-Type -TypeDefinition @"
+          using System;
+          using System.Runtime.InteropServices;
+          public static class SettingsCapture {
+            [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);
+            [DllImport("user32.dll")] public static extern bool MoveWindow(IntPtr h,int x,int y,int w,int height,bool repaint);
+            public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
+          }
+          "@
+          Get-Process wax-vpn -ErrorAction SilentlyContinue | Stop-Process -Force
+          .\bin\wax.exe disconnect | Out-Null
+          $path = Join-Path $env:APPDATA 'wax-vpn\settings.json'
+          $had = Test-Path $path
+          $before = if ($had) { [IO.File]::ReadAllBytes($path) } else { $null }
+          $bad = [Text.Encoding]::UTF8.GetBytes('{broken-settings-fixture')
+          $process = $null
+          function Find-SettingsControl([string]$name, $type) {
+            $condition = New-Object System.Windows.Automation.AndCondition((New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty,$name)),(New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ControlTypeProperty,$type)))
+            $window.FindFirst([System.Windows.Automation.TreeScope]::Descendants,$condition)
+          }
+          function Save-SettingsCapture([string]$name) {
+            $rect = New-Object SettingsCapture+RECT
+            [SettingsCapture]::GetWindowRect($handle,[ref]$rect) | Out-Null
+            $image = New-Object Drawing.Bitmap ($rect.Right-$rect.Left),($rect.Bottom-$rect.Top)
+            $graphics = [Drawing.Graphics]::FromImage($image)
+            try { $graphics.CopyFromScreen($rect.Left,$rect.Top,0,0,$image.Size); $image.Save($name) }
+            finally { $graphics.Dispose(); $image.Dispose() }
+          }
+          try {
+            [IO.Directory]::CreateDirectory((Split-Path $path)) | Out-Null
+            [IO.File]::WriteAllBytes($path,$bad)
+            $process = Start-Process "$PWD\bin\wax-vpn.exe" -PassThru
+            $window = $null
+            for ($i=0; $i -lt 20 -and -not $window; $i++) {
+              Start-Sleep -Milliseconds 500
+              $process.Refresh()
+              if ($process.MainWindowHandle -ne 0) { $window = [System.Windows.Automation.AutomationElement]::FromHandle($process.MainWindowHandle) }
+            }
+            if (-not $window) { throw 'settings fixture main window missing' }
+            $handle = [IntPtr]$window.Current.NativeWindowHandle
+            [SettingsCapture]::MoveWindow($handle,0,0,880,600,$true) | Out-Null
+            Start-Sleep -Seconds 2
+            $loadWarning = 'Saved settings could not be read and were kept unchanged. Auto-reconnect is off for this session. Check your settings file before relying on saved preferences.'
+            if (-not (Find-SettingsControl $loadWarning ([System.Windows.Automation.ControlType]::Text))) { throw 'settings load warning missing' }
+            Save-SettingsCapture 'gui-settings-load-warning.png'
+            $features = Find-SettingsControl 'Features' ([System.Windows.Automation.ControlType]::Button)
+            $features.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+            Start-Sleep -Milliseconds 750
+            $auto = Find-SettingsControl 'Auto-reconnect' ([System.Windows.Automation.ControlType]::CheckBox)
+            if (-not $auto -or $auto.GetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern).Current.ToggleState -ne [System.Windows.Automation.ToggleState]::Off) { throw 'unreadable settings revived automatic recovery' }
+            $motion = Find-SettingsControl 'Reduced motion' ([System.Windows.Automation.ControlType]::CheckBox)
+            $motion.GetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern).Toggle()
+            Start-Sleep -Milliseconds 750
+            $saveWarning = 'Settings could not be saved. Current choices may not be restored next time you open waX.'
+            if (-not (Find-SettingsControl $saveWarning ([System.Windows.Automation.ControlType]::Text))) { throw 'settings save warning missing' }
+            if ([Convert]::ToBase64String([IO.File]::ReadAllBytes($path)) -ne [Convert]::ToBase64String($bad)) { throw 'malformed settings original changed' }
+            Save-SettingsCapture 'gui-settings-save-warning.png'
+            .\bin\wax-vpn.exe --quit
+            if (-not $process.WaitForExit(15000)) { throw 'settings warning fixture quit timed out' }
+            'PASS settings malformed original preserved; recovery off; load/save warnings visible; quit' | Out-File verify-results.txt -Append
+          } finally {
+            if ($process -and -not $process.HasExited) { $process.Kill(); $process.WaitForExit() }
+            if ($had) { [IO.File]::WriteAllBytes($path,$before) } else { Remove-Item $path -ErrorAction SilentlyContinue }
+          }
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -803,6 +879,8 @@ jobs:
             gui-screenshot-about.png
             gui-screenshot-connected.png
             gui-screenshot-recovery-cancelled.png
+            gui-settings-load-warning.png
+            gui-settings-save-warning.png
 
   installer-smoke:
     name: fresh-runner installer launch
