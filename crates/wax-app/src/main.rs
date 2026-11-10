@@ -504,6 +504,18 @@ impl WaxApp {
     }
 
     fn warp_register(&mut self) {
+        // Keep consent and duplicate-operation checks at the effect boundary,
+        // not only in the button's enabled state.
+        if !self.warp_tos || self.warp_busy {
+            return;
+        }
+        if profile::profile_path("Cloudflare WARP").exists() {
+            self.warp_notice = Some((
+                "A profile named 'Cloudflare WARP' already exists. Back it up and remove it before registering; it will not be overwritten".into(),
+                true,
+            ));
+            return;
+        }
         self.warp_busy = true;
         self.status_line = "Registering WARP device...".to_string();
         self.warp_notice = Some(("Registering WARP device...".into(), false));
@@ -539,6 +551,9 @@ impl WaxApp {
     }
 
     fn warp_unregister(&mut self) {
+        if self.warp_busy || !matches!(self.state, ConnState::Disconnected | ConnState::Failed(_)) {
+            return;
+        }
         self.warp_busy = true;
         self.warp_notice = Some(("Removing WARP registration...".into(), false));
         let tx = self.events_tx.clone();
