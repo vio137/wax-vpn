@@ -35,3 +35,7 @@ Sources checked November 10, 2026:
 ## Existing source risks to address first
 
 At source31f09d0, adapter-loss recovery called the next attempt immediately and reset its attempt counter when an adapter was created. The9aea9b3 change uses2/4/8-second delays, retains the starting profile plus split exclusions, tags worker events with a connection generation, cancels pending retries on disconnect/disable/quit, and requires60seconds up to reset the budget. Four pure-policy tests cover timing, flapping, stale generations and external-owner/disabled limits. Targeted Windows adapter-loss verification passed: a fresh handshake after4seconds with original GUI process alive. The multi-failure retry limit and cancel behavior still have policy-only evidence, not a full Windows failure-sequence demonstration. None of this establishes physical-network roaming support.
+
+## Separate installer checkpoint
+
+Width-only diagnostics source8863f19/run42771027828 passed the tunnel/GUI/recovery job, but its first fresh-install job did not quit within15seconds after GUI launch. Uninstall was not reached. The same-source job is being rerun; do not treat this source as fully gate-green. This is separate from physical-network recovery.
