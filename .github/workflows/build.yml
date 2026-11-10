@@ -341,7 +341,7 @@ jobs:
           using System;
           using System.Runtime.InteropServices;
           public class WaxWin32 {
-            [DllImport("user32.dll", SetLastError=true)] public static extern IntPtr FindWindowW(string lpClassName, string lpWindowName);
+            [DllImport("user32.dll", CharSet=CharSet.Unicode, ExactSpelling=true, SetLastError=true)] public static extern IntPtr FindWindowW(string lpClassName, string lpWindowName);
             [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
             [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
             [DllImport("user32.dll")] public static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr extra);
@@ -443,14 +443,14 @@ jobs:
           using System.Text;
           using System.Runtime.InteropServices;
           public class WaxCon {
-            [DllImport("user32.dll", SetLastError=true)] public static extern IntPtr FindWindowW(string lpClassName, string lpWindowName);
+            [DllImport("user32.dll", CharSet=CharSet.Unicode, ExactSpelling=true, SetLastError=true)] public static extern IntPtr FindWindowW(string lpClassName, string lpWindowName);
             [DllImport("user32.dll")] public static extern bool EnumWindows(EnumProc cb, IntPtr l);
             public delegate bool EnumProc(IntPtr h, IntPtr l);
-            [DllImport("user32.dll")] public static extern int GetClassNameW(IntPtr h, StringBuilder s, int n);
+            [DllImport("user32.dll", CharSet=CharSet.Unicode, ExactSpelling=true)] public static extern int GetClassNameW(IntPtr h, StringBuilder s, int n);
             [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
             [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
             [DllImport("user32.dll")] public static extern void mouse_event(uint f, uint dx, uint dy, uint d, IntPtr e);
-            [DllImport("user32.dll")] public static extern int GetWindowTextW(IntPtr h, StringBuilder s, int n);
+            [DllImport("user32.dll", CharSet=CharSet.Unicode, ExactSpelling=true)] public static extern int GetWindowTextW(IntPtr h, StringBuilder s, int n);
             [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
             public static bool AnyWindowVisibleOfPid(uint target) {
               bool found = false;
@@ -487,7 +487,9 @@ jobs:
           Get-Process wax-vpn -ErrorAction SilentlyContinue | Stop-Process -Force
           Start-Sleep -Seconds 2
           Remove-Item (Join-Path $env:APPDATA 'wax-vpn\wax-debug.log') -ErrorAction SilentlyContinue
+          Note 'INFO GUI stage: native console baseline starting'
           $conBefore = [WaxCon]::CountConsoles()
+          Note 'INFO GUI stage: native console baseline returned'
           # Scoped split-tunnel check: exclude 8.8.8.8/32 for the demo profile
           # (runner-local settings only; no live routes touched beyond the demo tunnel).
           $cfgDir = Join-Path $env:APPDATA 'wax-vpn'
@@ -497,12 +499,15 @@ jobs:
           Add-Type -AssemblyName UIAutomationClient
           Add-Type -AssemblyName UIAutomationTypes
           $ac = 'System.Windows.Automation'
+          Note 'INFO GUI stage: UIA root starting'
           $root = [System.Windows.Automation.AutomationElement]::RootElement
+          Note 'INFO GUI stage: UIA root returned'
           $win = $null
           for ($i = 0; $i -lt 30 -and -not $win; $i++) {
             Start-Sleep -Seconds 2
             $win = $root.FindFirst([System.Windows.Automation.TreeScope]::Children, (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, 'waX VPN')))
           }
+          Note 'INFO GUI stage: main window lookup finished'
           if (-not $win) {
             Note 'FAIL GUI window not found for interaction test'
           } else {
@@ -516,6 +521,7 @@ jobs:
               $nm = New-Object System.Windows.Automation.OrCondition($nm1, $nm2)
               $btn = $win.FindFirst([System.Windows.Automation.TreeScope]::Descendants, (New-Object System.Windows.Automation.AndCondition($ct, $nm)))
             }
+            Note 'INFO GUI stage: action button lookup finished'
             if (-not $btn) {
               Note 'FAIL Connect button not found through UI Automation'
             } else {
@@ -529,7 +535,7 @@ jobs:
               public static class WaxConsoleSampler {
                 [DllImport("user32.dll")] static extern bool EnumWindows(EnumProc cb, IntPtr l);
                 delegate bool EnumProc(IntPtr h, IntPtr l);
-                [DllImport("user32.dll")] static extern int GetClassNameW(IntPtr h, StringBuilder s, int n);
+                [DllImport("user32.dll", CharSet=CharSet.Unicode, ExactSpelling=true)] static extern int GetClassNameW(IntPtr h, StringBuilder s, int n);
                 [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr h);
                 static volatile bool stop;
                 static Thread thread;
@@ -555,7 +561,9 @@ jobs:
                 public static bool Stop() { stop = true; return thread.Join(2000); }
               }
           "@
+              Note 'INFO GUI stage: console sampler starting'
               [WaxConsoleSampler]::Start()
+              Note 'INFO GUI stage: console sampler started'
               # Ensure the sampler ran before triggering connection.
               for ($i=0; $i -lt 20 -and [WaxConsoleSampler]::Samples -eq 0; $i++) { Start-Sleep -Milliseconds 20 }
               Add-Type -TypeDefinition @"
@@ -584,8 +592,12 @@ jobs:
                 }
                 [WaxLayoutCapture]::MoveWindow([IntPtr]$win.Current.NativeWindowHandle,0,0,880,600,$true) | Out-Null
               }
+              Note 'INFO GUI stage: disconnected captures starting'
               Capture-StateSizes 'disconnected'
+              Note 'INFO GUI stage: disconnected captures returned'
+              Note 'INFO GUI stage: Connect invoke starting'
               $btn.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+              Note 'INFO GUI stage: Connect invoke returned'
               Start-Sleep -Milliseconds 100
               Capture-StateSizes 'connecting'
               Note 'INFO GUI stage: Connecting captures complete; waiting before CLI status read'
