@@ -13,8 +13,9 @@ This is an independent behavior/structure study with REA 6.8.0 and Ghidra 12.1.4
 - [x] REA certificate identities: Cloudflare signer certificate embedded in service. This inspection does not validate Authenticode trust.
 - [x] REA Rust metadata probe: compiler path marker found, no cargo-auditable dependency section. Dependencies remain unknown.
 - [ ] Deep CLI feature tracing and native relationships, in an isolated research workflow.
-- [ ] Map Flutter packaged components and settings/resources without copying them.
-- [ ] Runtime UI/CLI behavior on a Windows test machine, without signup or registration.
+- [x] Resolve MSI File/Component tables: Flutter engine plus x64 ELF app.so (Dart AOT payload), separate service/CLI/diagnostics/DEX/updater. File sizes and SHA256 recorded locally. No assets copied.
+- [ ] Trace Flutter settings/state candidates. Supplemental strings show reconnect/package-update/captive-portal/connectivity names, not runtime behavior.
+- [ ] Runtime CLI help/version on an isolated Windows runner, validating publisher before execution. No MSI install/service/registration/connection. Full UI behavior still unknown.
 - [ ] Reconcile static evidence, runtime observations and documentation into final findings.
 
 ## Independent waX priorities
@@ -22,7 +23,7 @@ This is an independent behavior/structure study with REA 6.8.0 and Ghidra 12.1.4
 | Priority | Item | Basis | State / boundary |
 | --- | --- | --- | --- |
 | P0 | Honor profile MTU | waX source audit found it parsed but unused | IPv4 1380 applied and checked on Windows; IPv6 branch not runtime-proven |
-| P1 | Redacted local diagnostics/status export | Separate warp_diag binary plus official diagnostic-log documentation | Next implementation; do not collect unrelated processes, DNS history, hostnames or account secrets |
+| P1 | Redacted local diagnostics/status export | Separate warp_diag binary plus official diagnostic-log documentation | CLI implementation in validation; allowlist only, no profiles/logs/accounts/network calls |
 | P1 | Clear tunnel state and actionable error categories | Separate service/CLI structure; detailed state documented in diagnostics | Investigate exact state model before changes |
 | P2 | Network-change reconnect handling | Service imports NotifyRouteChange2 / NotifyUnicastIpAddressChange | Static capability observed; runtime semantics unknown |
 | P2 | Optional background service | Distinct service and named-pipe imports | Design first; least-privilege IPC and install/uninstall work needed |
@@ -41,3 +42,7 @@ This is an independent behavior/structure study with REA 6.8.0 and Ghidra 12.1.4
 - https://github.com/NationalSecurityAgency/ghidra/releases/tag/Ghidra_12.1.4_build (native analysis engine)
 
 Cloudflare One enterprise documentation is not interchangeable with consumer availability. No signup or terms acceptance was needed for static extraction/inspection. Existing waX stable releases remain unsigned, with no kill switch or IPv6 leak-protection claim.
+
+## Package findings
+
+Read-only MSI ServiceInstall rows declare the main CloudflareWARP service automatic and the updater demand-start, both LocalSystem. This describes installer configuration, not a tested service installation. Do not copy that privilege model into waX without a separate least-privilege design. The Flutter launcher is only412KB while app.so is10.6MB and the engine18.5MB; launcher inspection alone cannot establish UI behavior. The REA Dart AOT inspector accepts APK containers, not this Windows payload, so direct Dart reconstruction remains unsupported in this study.

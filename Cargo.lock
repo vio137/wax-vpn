@@ -4705,6 +4705,7 @@ name = "wax-cli"
 version = "0.1.2"
 dependencies = [
  "clap",
+ "serde_json",
  "thiserror 2.0.21",
  "wax-core",
  "wax-tunnel",

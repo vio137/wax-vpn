@@ -1,5 +1,7 @@
 //! wax.exe - the waX VPN command line interface.
 
+mod diagnostics;
+
 use clap::{Parser, Subcommand};
 
 use wax_core::{keys, profile};
@@ -14,6 +16,8 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
+    /// Print allowlisted local diagnostics JSON, without profiles or secrets
+    Diagnostics,
     /// Generate a new WireGuard keypair
     Keygen,
     /// List saved profiles
@@ -159,6 +163,9 @@ fn run() -> Result<(), String> {
             }
             tunnel.shutdown().map_err(|e| e.to_string())?;
             println!("Disconnected.");
+        }
+        Commands::Diagnostics => {
+            println!("{}", diagnostics::report(wax_tunnel::is_elevated(), Tunnel::existing_status()));
         }
         Commands::Disconnect => {
             Tunnel::force_disconnect().map_err(|e| e.to_string())?;

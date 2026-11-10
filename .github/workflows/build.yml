@@ -258,6 +258,10 @@ jobs:
           $tunnelIp = Get-NetIPInterface -InterfaceAlias 'waX VPN' -AddressFamily IPv4 -ErrorAction SilentlyContinue
           if ($tunnelIp.NlMtu -eq 1380) { Note 'PASS configured tunnel IPv4 MTU applied (1380 bytes)' } else { Note "FAIL tunnel MTU mismatch: $($tunnelIp.NlMtu)" }
 
+          .\bin\wax.exe diagnostics | Out-File diagnostics.json -Encoding utf8
+          $diagnostics = Get-Content diagnostics.json -Raw | ConvertFrom-Json
+          if ($diagnostics.tunnel_status -eq 'adapter_up' -and $diagnostics.internet_reachability -eq 'not_tested' -and $diagnostics.schema_version -eq 1) { Note 'PASS allowlisted diagnostics reports adapter state without internet claim' } else { Note 'FAIL diagnostics schema/state mismatch' }
+
           # 5. Disconnect and verify restoration
           .\bin\wax.exe disconnect
           if ($LASTEXITCODE -ne 0) { Note 'FAIL disconnect command'; if (-not $proc.HasExited) { $proc.Kill() }; exit 1 }
@@ -619,6 +623,7 @@ jobs:
           name: verification-evidence
           path: |
             verify-results.txt
+            diagnostics.json
             gui-screenshot.png
             gui-screenshot-profiles.png
             gui-screenshot-features.png

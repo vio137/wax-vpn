@@ -109,3 +109,7 @@ The interface typeface is Inter Display by Rasmus Andersson
 ### Configuration compatibility
 
 waX VPN imports standard WireGuard keys, addresses, IP DNS servers, peer endpoints and AllowedIPs. DNS search domains and hostnames are rejected explicitly; only literal IPv4/IPv6 DNS server addresses are supported. It does not execute wg-quick scripts or implement wg-quick routing-table settings. Profiles containing PreUp, PostUp, PreDown, PostDown, Table, SaveConfig or FwMark are rejected explicitly rather than silently changing their behavior. Remove a directive only if you understand what it did; an imported profile without it can behave differently.
+
+### Local support report
+
+`wax diagnostics` prints a small JSON report: app version, OS/architecture, administrator state, adapter status, aggregate byte counters and handshake age, or a fixed status-query error code. It does not test Internet reachability and does not read profiles, logs, account files, keys or tokens. It makes no network requests and does not send the report anywhere. Review it before sharing. Save it yourself with shell redirection if needed.

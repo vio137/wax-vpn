@@ -1,0 +1,45 @@
+name: WARP CLI help study
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  help-only:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - name: Extract official MSI without installing or starting services
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory evidence,target | Out-Null
+          Invoke-WebRequest https://1111-releases.cloudflareclient.com/win/latest -OutFile warp.msi
+          Get-FileHash warp.msi -Algorithm SHA256 | Format-List | Out-File evidence/msi-sha256.txt
+          & 7z x -y warp.msi -otarget | Out-File evidence/extraction.txt
+          if ($LASTEXITCODE -ne 0) { throw 'MSI extraction failed' }
+          $cli = Get-Item target/warp_cli.exe
+          $signature = Get-AuthenticodeSignature $cli.FullName
+          $signature | Select-Object Status,StatusMessage,@{N='Subject';E={$_.SignerCertificate.Subject}},@{N='Thumbprint';E={$_.SignerCertificate.Thumbprint}} | ConvertTo-Json | Out-File evidence/cli-signature.json
+          if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch 'Cloudflare, Inc\.') { throw 'CLI publisher validation failed; do not execute' }
+          Get-FileHash $cli.FullName -Algorithm SHA256 | Format-List | Out-File evidence/cli-sha256.txt
+      - name: Read help and version only - never install, connect or register
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $cli = (Resolve-Path target/warp_cli.exe).Path
+          foreach ($arg in @('--help','--version')) {
+            & $cli $arg 2>&1 | Out-File "evidence/cli-$($arg.TrimStart('-')).txt"
+            if ($LASTEXITCODE -ne 0) { throw "CLI $arg failed" }
+          }
+          foreach ($command in @('settings','registration','connect','disconnect','tunnel','dns','debug','status','mode','vnet','network')) {
+            & $cli $command --help 2>&1 | Out-File "evidence/help-$command.txt"
+            "exit_code=$LASTEXITCODE" | Add-Content "evidence/help-$command.txt"
+          }
+          if (Get-Service CloudflareWARP -ErrorAction SilentlyContinue) { throw 'Unexpected installed WARP service' }
+          'No MSI install, service launch, registration, connection or terms acceptance performed. Only signed CLI help/version execution.' | Out-File evidence/scope.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: warp-cli-help-evidence
+          path: evidence
+          retention-days: 7
