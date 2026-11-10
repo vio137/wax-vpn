@@ -1,29 +1,22 @@
-# waX VPN v0.1.6
+# waX VPN v0.1.7
 
-Unsigned Windows x64 interface checkpoint. Windows may show an unknown-publisher warning. The official WireGuardNT driver remains independently signed by its vendor. No kill switch: traffic can use the normal connection if the tunnel drops.
+Unsigned Windows x64 maintenance checkpoint. Windows may show an unknown-publisher warning. The official WireGuardNT driver is independently signed by its vendor. No kill switch: traffic can use the normal connection if the tunnel drops.
 
-## Interface rebuilt from the Astryx reference
+## Changes
 
-- Replace the particle background and icon rail with neutral surfaces, text navigation and a capped content region.
-- Rebuild Connect around clear peer-evidence status, selected profile, one centered action, equal-width counters and stable status slots.
-- Apply the same type and surface tokens to Profiles, Features, WARP and About. Keep the existing operations, local diagnostics and consent boundaries.
-- Use short surface/color transitions, with immediate transitions when Reduced motion is enabled. Keep active toggle thumbs visible against their track.
-
-Astryx 0.7.11 is an MIT-licensed React 19+/StyleX design system. A separate runnable design reference uses its actual components. The shipped app adapts the design in native Rust/egui; it does not embed React, JavaScript or a WebView. Its MIT notice is retained in the source and installer. See docs/ASTRYX-REDESIGN.md.
+- Replace the PowerShell adapter-presence probe with a read-only native Windows interface-table query. Only a successful query establishes absence; errors remain errors. DNS resets and narrow old-preview-rule cleanup are unchanged.
+- Cancel a running automatic recovery attempt when Auto-reconnect is disabled, using the existing connection generation before queued results are consumed. Established and manual connections stay unchanged.
+- Add fixed local cleanup substages with elapsed timings to installer evidence. No profile, endpoint or address values are added.
+- Add test-only local network-change groundwork: notification lifetime/cancellation, burst filtering and private route/address/interface fingerprints. This is not wired to production reconnect and is not roaming support.
 
 ## Verification
 
-Exact-version stable gate 42778052338 passed from source cf976cf, including the fresh-runner installer. Real Windows Disconnected, Connecting and Connected pixels were inspected at 760x540, 880x600 and 960x700; counter-label anchors match across states. Profiles, Features, WARP, About, generated diagnostics and installed-app pixels were inspected too. The active-toggle contrast fix is visible in the stable capture. Visual reference values are illustrative, not tunnel measurements.
+Full manual dd34010 checkpoint42787586767 passed Windows runtime, extended crash cleanup and fresh install/quit/uninstall. Later source429a024 push42790476717 passed Windows build/tests, tunnel/GUI and fresh installer. The exactv0.1.7stable gate is pending. Native adapter absence checks measured1-2ms instead of an earlier3.93second subprocess, but remaining legacy-rule cleanup varies. This is not a general performance or timeout-fix guarantee.
 
-Released installer: 10,943,260 bytes. SHA256: e7d3ee08b346044805f128b989523ca434b883588ae0fda894b39850798f8a4e.
+## Scope and limits
 
+An earlier2542baf fresh installer timed out after15seconds waiting for quit. Fixed logs show the signal was consumed and leftover cleanup began with a PowerShell child still active. Later passes do not diagnose the first failure. The timeout was not widened and cleanup was not skipped. Fixed substage evidence stays in place.
 
-## Scope and known limits
+Peer handshake and packets to the demo server tunnel-side address do not prove Internet reachability. Adapter-loss recovery does not establish physical-network roaming. Retry-exhaustion and recovery-disable cancellation have policy tests, not a full Windows failure-sequence demonstration. Crash evidence is a3second snapshot, not continuous leak observation. IPv6 was skipped without a proven runner baseline. Real notification-area tray menu remains manual-only.
 
-This stable gate verified peer handshake, packets to the demo server tunnel-side address, IPv4 MTU 1380, DNS apply/cleanup, diagnostics generate/clear, external-tunnel observation, GUI connect, split routing, bounded adapter-loss recovery, close-to-tray, original-window/PID restore, graceful quit and fresh install/uninstall. Adapter-loss recovery does not establish physical-network roaming or Wi-Fi switching. Internet reachability is not tested. Full Windows retry-exhaustion/cancellation sequences remain unproven.
-
-An earlier 8863f19 fresh-install job timed out after 15 seconds waiting for quit. Its same-source retry and subsequent gates passed. The first intermittent failure remains unresolved; later passes do not diagnose it. No timeout was widened or cleanup skipped.
-
-Crash cleanup is a snapshot, not continuous leak observation. IPv6 was SKIP without a proven runner baseline. Real notification-area tray menu remains manual-only in the hosted Windows environment.
-
-No kill switch, IPv6 leak-protection, speed improvement or WARP registration claim. No WARP signup, registration or connection is performed by release tests. No new product service or third-party network request was introduced. No Cloudflare code, assets, branding, credentials or private protocol implementation is copied.
+No new product network service, Internet probe, signup, WARP registration, kill switch or IPv6 leak-protection claim. The Astryx-informed interface remains native Rust/egui, with its MIT notice retained in the installer. No React, JavaScript or WebView runtime is embedded. No Cloudflare implementation, assets, credentials or keys are copied.
