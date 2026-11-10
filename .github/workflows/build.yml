@@ -924,6 +924,39 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw 'settings fixture quit request failed' }
             if (-not $process.WaitForExit(15000)) { throw 'settings warning fixture quit timed out' }
             'PASS settings malformed original preserved; recovery off; load/save warnings visible; quit' | Out-File verify-results.txt -Append -Encoding utf8
+            # Independent synthetic startup fixture; original bytes restored in finally.
+            $bomJson = '{"autostart":false,"auto_reconnect":false,"reduced_motion":true,"last_profile":null,"split_exclusions":{}}'
+            $bomEncoding = New-Object Text.UTF8Encoding($true)
+            [byte[]]$bomBytes = @($bomEncoding.GetPreamble()) + @($bomEncoding.GetBytes($bomJson))
+            [IO.File]::WriteAllBytes($path,$bomBytes)
+            $process = Start-Process "$PWD\bin\wax-vpn.exe" -PassThru
+            $window = $null
+            for ($i=0; $i -lt 20 -and -not $window; $i++) {
+              Start-Sleep -Milliseconds 500
+              $process.Refresh()
+              if ($process.MainWindowHandle -ne 0) { $window = [System.Windows.Automation.AutomationElement]::FromHandle($process.MainWindowHandle) }
+            }
+            if (-not $window) { throw 'BOM settings fixture main window missing' }
+            $handle = [IntPtr]$window.Current.NativeWindowHandle
+            [SettingsCapture]::MoveWindow($handle,0,0,880,600,$true) | Out-Null
+            Start-Sleep -Seconds 2
+            if (Find-SettingsControl $loadWarning ([System.Windows.Automation.ControlType]::Text)) { throw 'valid BOM settings raised load warning' }
+            $features = Find-SettingsControl 'Features' ([System.Windows.Automation.ControlType]::Button)
+            if (-not $features) { throw 'BOM settings Features control missing' }
+            $features.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+            Start-Sleep -Milliseconds 750
+            $auto = Find-SettingsControl 'Auto-reconnect' ([System.Windows.Automation.ControlType]::CheckBox)
+            $motion = Find-SettingsControl 'Reduced motion' ([System.Windows.Automation.ControlType]::CheckBox)
+            if (-not $auto -or $auto.GetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern).Current.ToggleState -ne [System.Windows.Automation.ToggleState]::Off) { throw 'BOM settings automatic recovery preference not retained' }
+            if (-not $motion -or $motion.GetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern).Current.ToggleState -ne [System.Windows.Automation.ToggleState]::On) { throw 'BOM settings reduced motion preference not retained' }
+            if (Find-SettingsControl $loadWarning ([System.Windows.Automation.ControlType]::Text)) { throw 'BOM settings load warning appeared on Features' }
+            if (Get-NetAdapter -Name 'waX VPN' -ErrorAction SilentlyContinue) { throw 'BOM settings fixture unexpectedly created tunnel adapter' }
+            Save-SettingsCapture 'gui-settings-bom.png'
+            .\bin\wax-vpn.exe --quit
+            if ($LASTEXITCODE -ne 0) { throw 'BOM settings fixture quit request failed' }
+            if (-not $process.WaitForExit(15000)) { throw 'BOM settings fixture quit timed out' }
+            if (Get-NetAdapter -Name 'waX VPN' -ErrorAction SilentlyContinue) { throw 'BOM settings fixture left tunnel adapter' }
+            'PASS BOM settings GUI startup: recovery off; reduced motion on; no load warning; no adapter; graceful quit' | Out-File verify-results.txt -Append -Encoding utf8
           } finally {
             if ($process -and -not $process.HasExited) { $process.Kill(); $process.WaitForExit() }
             if ($profileMoved) {
@@ -954,6 +987,7 @@ jobs:
             gui-host-failure.txt
             gui-settings-load-warning.png
             gui-settings-save-warning.png
+            gui-settings-bom.png
             gui-profile-partial-warning.png
             gui-profile-reload-warning.png
 
