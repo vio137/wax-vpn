@@ -1,0 +1,46 @@
+name: WARP REA study
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  static-study:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.4'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Acquire official artifacts and analysis engines
+        run: |
+          mkdir evidence target
+          curl -fL --max-time 120 https://1111-releases.cloudflareclient.com/win/latest -D evidence/download-headers.txt -o warp.msi
+          sha256sum warp.msi > evidence/msi-sha256.txt
+          7z x -y warp.msi -otarget > evidence/extraction.txt
+          curl -fL --max-time 120 https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_12.1.4_build/ghidra_12.1.4_PUBLIC_20260921.zip -o ghidra.zip
+          unzip -q ghidra.zip
+          echo "GHIDRA_INSTALL_DIR=$PWD/ghidra_12.1.4_PUBLIC" >> "$GITHUB_ENV"
+          echo "REA_GHIDRA_CHECKPOINT_DIR=$PWD/checkpoints" >> "$GITHUB_ENV"
+          npm install --prefix analysis --ignore-scripts rea-agents@6.8.0
+      - name: REA static native analysis only (never execute WARP)
+        env:
+          REA_GHIDRA_STARTUP_TIMEOUT_MS: '1200000'
+          GHIDRA_HEADLESS_MAXMEM: 3G
+        run: |
+          REA="$PWD/analysis/node_modules/.bin/rea"
+          "$REA" inspect-desktop-application "$PWD/target" --format json > evidence/desktop.json
+          "$REA" inspect-pe-imports "$PWD/target/warp_cli.exe" --format json > evidence/cli-imports.json
+          "$REA" inspect-pe-imports "$PWD/target/warp_svc.exe" --format json > evidence/service-imports.json
+          "$REA" inspect-pe-certificates "$PWD/target/warp_svc.exe" --format json > evidence/service-certificate-identities.json
+          "$REA" analyze "$PWD/target/warp_cli.exe" --provider ghidra --format json > evidence/cli-native-overview.json
+          "$REA" search "$PWD/target/warp_cli.exe" 'diagnos|reconnect|disconnect|split|dns|mode|status|MTU|protocol|captive|update' --mode regex --provider ghidra --format json > evidence/cli-feature-strings.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: warp-rea-evidence
+          path: evidence
+          retention-days: 7
