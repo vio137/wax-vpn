@@ -399,6 +399,20 @@ impl WaxApp {
         });
     }
 
+    fn tray_available(&self) -> bool {
+        #[cfg(windows)]
+        { self.tray.is_some() }
+        #[cfg(not(windows))]
+        { false }
+    }
+
+    fn close_to_background(&mut self, ctx: &egui::Context) {
+        let available = self.tray_available();
+        ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+        ctx.send_viewport_cmd(background_command(available));
+        self.hidden = available;
+    }
+
     fn restart_as_admin(&mut self) {
         #[cfg(windows)]
         {
@@ -693,6 +707,15 @@ impl WaxApp {
     }
 }
 
+fn background_command(tray_available: bool) -> egui::ViewportCommand {
+    if tray_available { egui::ViewportCommand::Visible(false) }
+    else { egui::ViewportCommand::Minimized(true) }
+}
+
+fn tray_notice(tray_available: bool) -> Option<&'static str> {
+    (!tray_available).then_some("Tray icon unavailable. Closing minimizes this window instead of hiding it. Restore it from the taskbar; use Ctrl+Q to quit.")
+}
+
 fn profile_notice(skipped: usize) -> Option<String> {
     (skipped > 0).then(|| format!("{skipped} profile file(s) could not be read or parsed and were skipped. Files were not changed."))
 }
@@ -729,6 +752,13 @@ fn repaint_delay(hidden: bool, reduced_motion: bool, disconnected: bool) -> Dura
 mod repaint_tests {
     use super::*;
     #[test]
+    fn background_policy_never_hides_a_window_without_a_tray() {
+        assert!(matches!(background_command(true), egui::ViewportCommand::Visible(false)));
+        assert!(matches!(background_command(false), egui::ViewportCommand::Minimized(true)));
+        assert!(tray_notice(true).is_none());
+        assert!(tray_notice(false).unwrap().contains("Ctrl+Q"));
+    }
+    #[test]
     fn profile_notice_is_count_only_and_absent_for_complete_loads() {
         assert_eq!(profile_notice(0), None);
         assert_eq!(profile_notice(2).as_deref(), Some("2 profile file(s) could not be read or parsed and were skipped. Files were not changed."));
@@ -751,11 +781,9 @@ impl eframe::App for WaxApp {
         ctx.style_mut_of(egui::Theme::Dark, |style| style.animation_time = if self.settings.reduced_motion { 0.0 } else { 0.175 });
         self.handle_events(&ctx);
 
-        // Close button hides to the tray instead of exiting; Quit lives in the tray menu.
+        // Never hide an unreachable window when the tray failed to initialize.
         if ctx.input(|i| i.viewport().close_requested()) {
-            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
-            ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
-            self.hidden = true;
+            self.close_to_background(&ctx);
         }
 
         #[cfg(windows)]
@@ -872,10 +900,11 @@ impl eframe::App for WaxApp {
                 ui.horizontal(|ui| {
                     ui.label(RichText::new("waX VPN").size(12.5).color(theme::SUB).font(theme::semi(12.5)));
                     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                        // close hides to the tray; Quit lives in the tray menu
-                        if chrome_button(ui, "\u{00d7}", "Hide to tray - quit from the tray icon menu") {
-                            self.hidden = true;
-                            ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
+                        let close_hint = if self.tray_available() {
+                            "Hide to tray - quit from the tray icon menu"
+                        } else { "Minimize - tray unavailable" };
+                        if chrome_button(ui, "\u{00d7}", close_hint) {
+                            self.close_to_background(&ctx);
                         }
                         if chrome_button(ui, "\u{2013}", "Minimize") {
                             ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
@@ -924,6 +953,10 @@ impl eframe::App for WaxApp {
                 ui.add_space(12.0);
                 theme::hairline(ui);
                 ui.add_space(12.0);
+                if let Some(notice) = tray_notice(self.tray_available()) {
+                    ui.add(egui::Label::new(RichText::new(notice).size(12.0).color(theme::WARN)).wrap());
+                    ui.add_space(8.0);
+                }
                 if let Some(notice) = &self.profiles_notice {
                     ui.add(egui::Label::new(RichText::new(notice).size(12.0).color(theme::WARN)).wrap());
                     ui.add_space(8.0);
@@ -1911,4 +1944,4 @@ fn main() -> eframe::Result<()> {
         options,
         Box::new(|cc| Ok(Box::new(WaxApp::new(cc, instance)))),
     )
-        }
+                    }
