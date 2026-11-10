@@ -66,11 +66,12 @@ Not yet verified (honest list):
 - WARP registration against the live Cloudflare API (requires a person to
   accept the ToS first - by design).
 - Leak testing (IPv6, DNS) against an external observer.
-- Installer launch on a clean machine.
+- Consumer Windows/SmartScreen behavior (unsigned installer).
+- General IPv6 leak protection (runner has no working baseline).
 
-Implemented and unit-tested, not yet exercised on Windows:
-- Split tunneling: per-profile CIDR exclusions subtracted from AllowedIPs at
-  connect time (Profiles tab -> Split tunneling).
+Scoped Windows split-routing check passed: 8.8.8.8 excluded, 1.1.1.1 retained in tunnel routes. This is not proof for every configuration.
+
+v0.1.0 also passed a separate fresh Windows runner silent NSIS install, installed GUI main-window launch, graceful quit and uninstall. User data is retained. It remains unsigned; Windows publisher/SmartScreen warnings are expected.
 
 Planned: per-profile MTU/DNS overrides, speed test, installer polish (icon,
 branding), localization.

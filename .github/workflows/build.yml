@@ -49,7 +49,7 @@ jobs:
         id: staleness
         shell: pwsh
         run: |
-          $rel = gh release list --limit 20 --json tagName,isPrerelease | ConvertFrom-Json | Where-Object { $_.tagName -like 'v*-preview.*' } | Select-Object -First 1
+          $rel = gh release list --limit 20 --json tagName,isPrerelease | ConvertFrom-Json | Where-Object { -not $_.isDraft } | Select-Object -First 1
           $releasedSha = if ($rel) { gh api "repos/${{ github.repository }}/commits/$($rel.tagName)" --jq .sha } else { "" }
           if ($rel -and $releasedSha -eq "${{ github.sha }}") {
             "skip=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
@@ -154,10 +154,10 @@ jobs:
         if: steps.staleness.outputs.skip != 'true'
         shell: pwsh
         run: |
-          $manual = "${{ github.event_name }}" -eq "workflow_dispatch"
+          $manual = "${{ github.event_name }}" -eq "workflow_dispatch" -and "${{ inputs.stable_version }}" -ne ""
           $changed = git diff --name-only HEAD~1 HEAD
           $codeChanged = ($changed | Where-Object { $_ -notmatch '^(\.github/|README|RELEASE_NOTES)' }).Count -gt 0
-          if ($manual -or $codeChanged) { "publish=true" | Out-File $env:GITHUB_OUTPUT -Append } else { "publish=false" | Out-File $env:GITHUB_OUTPUT -Append }
+          if ($manual) { "publish=true" | Out-File $env:GITHUB_OUTPUT -Append } else { "publish=false" | Out-File $env:GITHUB_OUTPUT -Append }
           Write-Host "manual=$manual codeChanged=$codeChanged changed: $($changed -join ', ')"
 
 
