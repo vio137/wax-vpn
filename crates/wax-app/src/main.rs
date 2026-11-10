@@ -9,6 +9,8 @@ mod recovery;
 mod network_change;
 #[cfg(all(windows, test))]
 mod network_notify;
+#[cfg(all(windows, test))]
+mod underlay;
 #[cfg(windows)]
 mod single;
 #[cfg(not(windows))]

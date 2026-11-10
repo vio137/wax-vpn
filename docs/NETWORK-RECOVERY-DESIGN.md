@@ -43,3 +43,20 @@ Width-only diagnostics source8863f19/run42771027828 passed the tunnel/GUI/recove
 ## Notification policy groundwork
 
 The isolated Changes policy filters initial, own-interface, unknown-interface and stale-generation notifications, prohibits external-owner/disabled work, coalesces to2seconds quiet with10seconds maximum burst, and clears pending work on reset. Five focused deterministic tests cover those cases. Its output requests only a local underlay read, never reconnect. It is test-only and has no production hooks or runtime feature claim. Windows callback ownership, registration/cancellation, useful underlay-change comparison and actual physical-network evidence remain pending.
+
+## Windows notification owner groundwork
+
+Source cd2ac75 adds a test-only Windows owner. It allocates callback context before registration, requests and ignores initial confirmation, copies only interface LUID, ignores own/zero identities, and sets an atomic flag. Neither callback takes locks, allocates, queries state, resolves an endpoint, logs or reconnects. Both notification handles have explicit cancellation outside callbacks. A failed second registration drops the partial owner. Both cancellations are attempted; a cancellation failure retains the tiny context until process exit to avoid freeing memory Windows might still reference. That exceptional leak is a safety fallback, not successful cancellation.
+
+Two Windows-only tests cover synthetic callback filtering/coalescing and three cycles of actual local registration/explicit idempotent cancellation. Push gate42780425712 passed, including both named Windows tests (12app tests total), build, GUI/tunnel and fresh install/uninstall. Publish was correctly skipped for the push. This does not validate a physical-network change or a production reconnect path. The module remains cfg(windows,test) until the underlay comparison and actual ownership integration are ready.
+
+Callback/cancellation contracts rechecked against:
+- https://learn.microsoft.com/en-us/windows/win32/api/netioapi/nf-netioapi-cancelmibchangenotify2
+
+## Read-only default-route fingerprint groundwork
+
+The test-only underlay module reads GetIpForwardTable2 with explicit FreeMibTable ownership and typed alignment-aware access. It filters own-interface, loopback, unknown and non-default routes; compares stable family/LUID/metric/gateway/scope fields after sorting and deduplication, ignoring route age. No Debug/Serialize output for gateway data. Tests cover own/specific-route filtering, ordering/duplicates/age, meaningful field changes and a real read-only Windows query. Windows execution is pending. This fingerprint is incomplete: interface metrics, addresses and endpoint-specific routes need their own comparison before any recovery decision. A default-route difference alone does not establish a broken tunnel.
+
+Sources:
+- https://learn.microsoft.com/en-us/windows/win32/api/netioapi/nf-netioapi-getipforwardtable2
+- https://learn.microsoft.com/en-us/windows/win32/api/netioapi/nf-netioapi-freemibtable
