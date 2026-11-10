@@ -67,7 +67,7 @@ pub fn toggle(ui: &mut egui::Ui, on: &mut bool, label: &str) -> bool {
     ui.painter().rect_filled(rect, egui::CornerRadius::same(11), Color32::from(track));
     let cx = rect.left() + 11.0 + (rect.width() - 22.0) * t;
     ui.painter()
-        .circle_filled(Pos2::new(cx, rect.center().y), 8.0, Color32::from_rgb(244, 246, 250));
+        .circle_filled(Pos2::new(cx, rect.center().y), 8.0, Color32::from_rgb(244, 246, 250).lerp_to_gamma(BG, t));
     if resp.hovered() {
         ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
     }

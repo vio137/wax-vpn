@@ -41,7 +41,7 @@ This is an independent behavior/structure study with REA 6.8.0 and Ghidra 12.1.4
 - https://developers.cloudflare.com/cloudflare-one/team-and-resources/devices/cloudflare-one-client/troubleshooting/diagnostic-logs/ (diagnostic categories)
 - https://github.com/NationalSecurityAgency/ghidra/releases/tag/Ghidra_12.1.4_build (native analysis engine)
 
-Cloudflare One enterprise documentation is not interchangeable with consumer availability. No signup or terms acceptance was needed for static extraction/inspection. Latest stable v0.1.4 (e84e2c3, run42773347398) includes MTU, diagnostics, state clarity and startup observer fixes. Releases remain unsigned, with no kill switch or IPv6 leak-protection claim.
+Cloudflare One enterprise documentation is not interchangeable with consumer availability. No signup or terms acceptance was needed for static extraction/inspection. Latest stable v0.1.5 (cd614c4, run42776110039) includes MTU, diagnostics, state clarity and startup observer fixes. Releases remain unsigned, with no kill switch or IPv6 leak-protection claim.
 
 ## Package findings
 
@@ -71,3 +71,12 @@ Follow-up 2ab0d2a passed Windows gate42775144956. Session/Received/Sent label bo
 ## Astryx redesign request
 
 User requested https://github.com/meta/astryx on10November13:02IST. Verified repository and MIT license; installed CLI/core/neutral-theme0.7.11 in a separate design workspace. Astryx components require React19+/StyleX, so they are not directly native Rust/egui controls. Use actual Astryx tooling/components as the redesign reference and independently implement native equivalents without silently introducing a web runtime. This full redesign is separate from the v0.1.5 alignment checkpoint. No new service, signup, spending or terms acceptance.
+
+
+## v0.1.5 released
+
+Exact source cd614c4, full gate42776110039 passed. Fresh installer10,943,511bytes, SHA25600ac3ccb467cabcc606d36c0cfaa48eb77f1a4c6ec5361159b5d3fc32a14f6ed. Actual stable pixels inspected at all three states and760x540/880x600/960x700; the final smallest Connecting frame is real. UIA anchors match across states. No roaming/IPv6/Internet claim follows. Parent received stable handoff13:11IST.
+
+## Astryx native preview
+
+Source433f867/full manual gate42777283654 is in progress. Local native page/state composition inspected,26tests pass; actual Windows evidence pending. The separate React reference is illustrative only and labeled as not a live tunnel. No new product runtime or service.

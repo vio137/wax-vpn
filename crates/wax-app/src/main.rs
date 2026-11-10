@@ -690,6 +690,7 @@ fn fmt_duration(d: Duration) -> String {
 impl eframe::App for WaxApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
+        ctx.style_mut_of(egui::Theme::Dark, |style| style.animation_time = if self.settings.reduced_motion { 0.0 } else { 0.175 });
         self.handle_events(&ctx);
 
         // Close button hides to the tray instead of exiting; Quit lives in the tray menu.

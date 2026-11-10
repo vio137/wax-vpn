@@ -40,7 +40,7 @@ against the attached `SHA256SUMS` file.
 | `wax-warp` | Cloudflare WARP API client (wgcf equivalent), account persistence, profile generation |
 | `wax-tunnel` | Adapter lifecycle on WireGuardNT and DNS (netsh) |
 | `wax-cli` (`wax.exe`) | Full CLI: profiles, import, connect/disconnect/status, WARP commands |
-| `wax-app` (`waX VPN.exe`) | egui GUI: animated connect orb, profile picker, stats, settings, WARP panel, drag-and-drop import |
+| `wax-app` (`waX VPN.exe`) | native egui GUI: Astryx-informed text navigation, profile picker, stats, settings, WARP panel, drag-and-drop import |
 
 ## Verified vs. planned
 
@@ -95,13 +95,14 @@ Donenfeld; waX VPN is not affiliated with the WireGuard project.
 
 ## Design process
 
-Interface refinements follow the unslop design-review rubric by Damir Sokolovsky
-(https://github.com/heydamir/unslop), used under CC BY 4.0. The connect
-control is a Gargantua-inspired procedural black hole - a lensed starfield,
-an accretion disk with doppler brightening, a photon ring - painted in plain
-egui with no textures or shaders, ported from the same scene on the project
-website. Animation speed and brightness are fixed per connection state and
-never derived from measured traffic.
+The current interface is a native Rust/egui adaptation of the MIT-licensed
+Astryx design system (https://github.com/meta/astryx). A separate runnable React
+reference uses Astryx0.7.11components; the Windows app does not embed React or a
+WebView. The design uses neutral semantic surfaces, a text sidebar, one primary
+action and stable state/counter slots. It replaces the previous procedural
+black-hole/starfield composition. See docs/ASTRYX-REDESIGN.md and the retained MIT
+notice. The earlier unslop review rubric by Damir Sokolovsky remains credited at
+https://github.com/heydamir/unslop (CC BY4.0).
 
 The interface typeface is Inter Display by Rasmus Andersson
 (https://rsms.me/inter/), used under the SIL Open Font License 1.1.

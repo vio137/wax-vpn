@@ -17,3 +17,5 @@ Design mapping:
 Validation before release: local pixels at760x540/880x600/960x700; actual Windows state and page pixels; focused tunnel/cleanup/installer gate. Visual reference values are illustrative and explicitly labeled, never runtime evidence.
 
 MIT notice is retained in docs/vendor-licenses/astryx-MIT.txt. No Cloudflare assets or implementation are used.
+
+Preview evidence: source433f867, full manual gate42777283654 green. All three states and sizes inspected as real Windows pixels; matching counter anchors. All page/diagnostics/installed captures inspected. Final contrast/reduced-motion token fixes are included for exactv0.1.6gate, not claimed runtime-proven from the earlier source.
