@@ -1028,6 +1028,12 @@ jobs:
           if ($uninstallInfo.UninstallString -ne $expectedUninstall -or $uninstallInfo.QuietUninstallString -ne "$expectedUninstall /S") { throw 'Uninstall registry commands must quote paths with spaces' }
           $exe = Join-Path $dir 'waX VPN.exe'
           if (-not (Test-Path $exe)) { throw 'Installed GUI missing' }
+          # Fresh installs may not have saved settings yet. The fixed-stage
+          # diagnostic writer needs its parent directory, but no settings file.
+          $diagnosticDir = Join-Path $env:APPDATA 'wax-vpn'
+          New-Item -ItemType Directory -Force -Path $diagnosticDir | Out-Null
+          $debugPath = Join-Path $diagnosticDir 'wax-debug.log'
+          Remove-Item $debugPath -ErrorAction SilentlyContinue
           $p = Start-Process $exe -PassThru
           try {
             Add-Type -AssemblyName UIAutomationClient
@@ -1052,7 +1058,6 @@ jobs:
           } finally {
             & $exe --quit
             for ($i=0; $i -lt 15 -and -not $p.HasExited; $i++) { Start-Sleep -Seconds 1; $p.Refresh() }
-            $debugPath = Join-Path $env:APPDATA 'wax-vpn\wax-debug.log'
             if (Test-Path $debugPath) {
               # Only fixed single-instance/cleanup diagnostics, never profile data.
               Get-Content $debugPath | ForEach-Object { Write-Host "QUITDIAG $_" }
@@ -1066,6 +1071,7 @@ jobs:
             Start-Sleep -Seconds 3
             if (Test-Path $exe) { throw 'Uninstall left GUI binary behind' }
             'PASS uninstall removed installed GUI; user data intentionally retained' | Out-File installer-results.txt -Append
+            if (-not (Test-Path 'installer-quit-diagnostics.txt')) { throw 'Installed quit diagnostic log missing' }
           }
       - uses: actions/upload-artifact@v4
         if: always()
