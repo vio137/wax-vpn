@@ -23,7 +23,7 @@ This is an independent behavior/structure study with REA 6.8.0 and Ghidra 12.1.4
 | Priority | Item | Basis | State / boundary |
 | --- | --- | --- | --- |
 | P0 | Honor profile MTU | waX source audit found it parsed but unused | IPv4 1380 applied and checked on Windows; IPv6 branch not runtime-proven |
-| P1 | Redacted local diagnostics/status export | Separate warp_diag binary plus official diagnostic-log documentation | CLI implementation in validation; allowlist only, no profiles/logs/accounts/network calls |
+| P1 | Redacted local diagnostics/status export | Separate warp_diag binary plus official diagnostic-log documentation | Windows gate green42179e9; allowlist only, no profiles/logs/accounts/network calls |
 | P1 | Clear tunnel state and actionable error categories | Separate service/CLI structure; detailed state documented in diagnostics | Prepared: distinguish adapter-ready/no handshake, recent peer handshake, older handshake; never assert Internet reachability. Recent-handshake pixels inspected and gates green168c994. No/older-handshake runtime pixels still pending |
 | P2 | Network-change reconnect handling | Service imports NotifyRouteChange2 / NotifyUnicastIpAddressChange | Static capability observed; runtime semantics unknown |
 | P2 | Optional background service | Distinct service and named-pipe imports | Design first; least-privilege IPC and install/uninstall work needed |

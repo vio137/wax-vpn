@@ -1,24 +1,21 @@
-## waX VPN v0.1.2 for Windows x64
+# waX VPN v0.1.3
 
-Unsigned release, as approved by the maintainer while SignPath Foundation review is pending. No code-signing certificate is present. Windows SmartScreen and publisher warnings are expected. Administrator rights are required to connect.
+Unsigned Windows x64 stable checkpoint. A certificate is not yet available; Windows may show an unknown-publisher warning. Official WireGuardNT driver payload remains independently signed by its vendor. No kill switch: traffic can use the normal connection if the tunnel drops.
 
-Pure-Rust egui interface, official WireGuardNT driver, importable WireGuard profiles, per-profile CIDR exclusions, single-instance window reopening, and optional ToS-gated WARP setup.
+## Changes
 
-### Changes since v0.1.1
+- Apply profile MTU on the dedicated tunnel adapter. Windows IPv4MTU1380 readback verified; IPv6 application code is not runtime-proven.
+- Add `wax diagnostics`, an allowlisted local JSON report. No profiles, keys, tokens, account IDs, endpoints, hostnames, paths or logs. No network request or automatic upload.
+- Distinguish adapter readiness, recent handshake and older handshake in the GUI. Peer handshake is not an Internet-reachability test.
+- Monitor an existing CLI-owned tunnel when the GUI starts. Detect external stop without reconnecting a guessed profile.
+- Report consistent stable/preview/dev labels in GUI, CLI version and diagnostics.
 
-- Import now rejects unsupported wg-quick directives (PreUp, PostUp, PreDown, PostDown, Table, SaveConfig, FwMark) rather than silently dropping behavior. Scripts are never executed.
-- DNS hostnames/search domains now fail import explicitly rather than being silently discarded or partially applied. Only literal IPv4/IPv6 DNS server addresses are supported.
-- Error messages identify the field/directive without echoing its private value. Do not blindly delete unsupported settings; the profile can behave differently without them.
-- CI console-window observation uses an in-process sampler and reports sample counts. Missing samples are marked unverified, never passed. Windows shorter than the sample interval can still be missed.
+## Verification scope
 
-### Protection limit
+Build/tests, peer handshake and packets to the official WireGuard demo server's tunnel-side address; IPv4MTU and DNS apply/cleanup; diagnostics schema; external-tunnel observer; GUI-driven connect; CIDR exclusion route check; close-to-tray; original-process/window restore; graceful quit; fresh-runner install, installed launch, quit and uninstall. Stable manual gate also runs focused crash cleanup and IPv6 baseline checks, reporting any unavailable baseline as SKIP, not protection.
 
-There is no kill switch in v0.1.2. It has been removed from the interface, settings, CLI and tunnel backend. Old preview settings are ignored and rewritten without those fields. Only cleanup of stale preview firewall rules remains. If the tunnel drops, traffic may use the normal connection. This is NOT fail-closed protection. IPv6 leak protection is not claimed. Do not use this build where either is required.
+Real notification-area tray menu remains manual-only in the hosted Windows test environment. Live WARP account registration has not been verified and is not performed by release testing. This release does not claim IPv6 leak protection, a kill switch or measured speed improvement.
 
-### Release verification gates
+## Official-client study
 
-Publication requires workspace tests/build, Windows demo tunnel and GUI smoke checks, and isolated fresh-runner silent NSIS install, installed-window launch, graceful quit and uninstall. Read the associated workflow's evidence for the exact outcome. Existing scoped checks cover a demo handshake, tunnel-side packets, DNS apply/restore, 8.8.8.8 excluded from tunnel routes while 1.1.1.1 stays routed, original main window reopening, and --quit adapter removal. These do not prove every network/Windows environment.
-
-### Still unverified
-
-Real-desktop tray menu interaction, consumer SmartScreen behavior, live WARP registration, and general IPv6 leak behavior. WARP registration remains opt-in and requires explicit ToS acceptance. No third-party public-IP lookup is performed. The official vendor driver DLL is not modified. User profiles/settings are retained on uninstall.
+See `docs/WARP-STUDY-CHECKLIST.md`. REA launcher/native metadata, resolved MSI structure and publisher-verified CLI help informed independent improvements. Default deep CLI analysis timed out; reduced analysis remains in progress. No Cloudflare code, assets, branding, credentials or private protocol implementation is copied. Advertised CLI commands are not equivalent to tested waX features.

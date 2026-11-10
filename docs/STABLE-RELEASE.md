@@ -1,6 +1,6 @@
 # Stable release preparation
 
-Current releases are unsigned previews. Do not call a build signed or stable merely because the job is green.
+Stable releases are currently unsigned by explicit maintainer approval while a certificate is pending. Do not call a build signed or release it merely because a job is green.
 
 ## Release gate
 
@@ -16,9 +16,9 @@ Before activation, configure and verify recursive signing of the NSIS embedded a
 
 Source: https://docs.signpath.io/trusted-build-systems/github
 
-## Stable version path (not activated)
+## Stable version path
 
-Use a reviewed SemVer tag such as v0.1.0, not a CI run counter. Derive displayed version, installer filename, uninstall registry version and release tag from that tag. Publish without prerelease flag only after required checks and signing decisions. Existing preview tags remain immutable. Automatic previews continue; stable publication requires an explicit manual dispatch. The manual stable_version input enforces exact workspace SemVer and requires either SignPath enabled or the explicit unsigned_stable manual input. The maintainer approved unsigned v0.1.0 while SignPath is pending. An empty input keeps previews. This is a prepared path, not an instruction to enable it.
+Use a reviewed SemVer tag such as v0.1.0, not a CI run counter. Derive displayed version, installer filename, uninstall registry version and release tag from that tag. Publish without prerelease flag only after required checks and signing decisions. Existing preview tags remain immutable. Automatic builds validate and retain artifacts without publication; stable publication requires an explicit manual dispatch. The manual stable_version input enforces exact workspace SemVer and requires either SignPath enabled or the explicit unsigned_stable manual input. The maintainer approved release without certificate while SignPath is pending. An empty input keeps previews. The manual path has produced stablev0.1.0 throughv0.1.2; v0.1.3 is in preparation.
 
 ## Remaining gaps
 
