@@ -4,6 +4,7 @@
 
 use wax_diagnostics::health as connection_health;
 mod recovery;
+mod autostart;
 // Preparatory policy only. Production notification ownership is not wired yet.
 #[cfg(test)]
 mod network_change;
@@ -70,6 +71,7 @@ enum AppEvent {
 pub struct WaxApp {
     diagnostics_report: Option<String>,
     diagnostics_busy: bool,
+    autostart_notice: Option<String>,
     settings: Settings,
     profiles: Vec<Profile>,
     selected: Option<usize>,
@@ -154,6 +156,7 @@ impl WaxApp {
         let mut app = Self {
             diagnostics_report: None,
             diagnostics_busy: false,
+            autostart_notice: None,
             settings,
             profiles,
             selected,
@@ -381,20 +384,14 @@ impl WaxApp {
     }
 
     fn toggle_autostart(&mut self) {
-        #[cfg(windows)]
-        {
-            use winreg::enums::{HKEY_CURRENT_USER, KEY_SET_VALUE};
-            use winreg::RegKey;
-            let hkcu = RegKey::predef(HKEY_CURRENT_USER);
-            if let Ok((run, _)) = hkcu.create_subkey("Software\\Microsoft\\Windows\\CurrentVersion\\Run") {
-                if self.settings.autostart {
-                    if let Ok(exe) = std::env::current_exe() {
-                        let _ = run.set_value("waX VPN", &format!("\"{}\"", exe.display()));
-                    }
-                } else {
-                    let _: Result<(), std::io::Error> = run.delete_value("waX VPN");
-                }
-                let _ = run;
+        match autostart::apply(self.settings.autostart) {
+            Ok(()) => {
+                self.autostart_notice = None;
+                settings::save(&self.settings);
+            }
+            Err(()) => {
+                self.settings.autostart = !self.settings.autostart;
+                self.autostart_notice = Some("Could not verify the startup change. Check Windows Startup settings before relying on it.".into());
             }
         }
     }
@@ -1497,7 +1494,10 @@ impl WaxApp {
             "Launch waX VPN when you sign in",
         ) {
             self.toggle_autostart();
-            settings::save(&self.settings);
+        }
+        if let Some(notice) = &self.autostart_notice {
+            ui.add(egui::Label::new(RichText::new(notice).size(12.0).color(theme::WARN)).wrap());
+            ui.add_space(4.0);
         }
         ui.add_space(4.0);
         if theme::toggle_row(
