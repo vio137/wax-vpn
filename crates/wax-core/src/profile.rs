@@ -25,11 +25,23 @@ pub fn profiles_dir() -> PathBuf {
 }
 
 fn sanitize_filename(name: &str) -> String {
-    name.chars()
+    let mut safe = name.chars()
         .map(|c| if c.is_alphanumeric() || c == ' ' || c == '-' || c == '_' || c == '.' { c } else { '_' })
         .collect::<String>()
         .trim()
-        .to_string()
+        .trim_end_matches(['.', ' '])
+        .to_string();
+    if safe.is_empty() { safe = "profile".into(); }
+    // Windows reserves device names even with an extension (CON.conf,
+    // NUL.office.conf). Prefix rather than failing at the filesystem API.
+    let stem = safe.split('.').next().unwrap_or("").trim_end().to_ascii_uppercase();
+    let numbered_device = stem.strip_prefix("COM").or_else(|| stem.strip_prefix("LPT"))
+        .map(|n| matches!(n, "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "¹" | "²" | "³"))
+        .unwrap_or(false);
+    if matches!(stem.as_str(), "CON" | "PRN" | "AUX" | "NUL") || numbered_device {
+        safe.insert(0, '_');
+    }
+    safe
 }
 
 pub fn profile_path(name: &str) -> PathBuf {
@@ -93,4 +105,21 @@ pub fn import_conf(name: &str, text: &str) -> Result<Profile, CoreError> {
     let profile = Profile { name: name.to_string(), config };
     save_profile(&profile)?;
     Ok(profile)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn profile_filenames_are_windows_safe() {
+        for input in ["CON", "nul.office", "COM1", "LPT9", "com¹", "AUX."] {
+            assert!(sanitize_filename(input).starts_with('_'), "{input}");
+        }
+        assert_eq!(sanitize_filename(" ... "), "profile");
+        assert_eq!(sanitize_filename(" office. "), "office");
+        assert_eq!(sanitize_filename("office . ."), "office");
+        assert_eq!(sanitize_filename("Office VPN"), "Office VPN");
+        assert_eq!(sanitize_filename("COM10"), "COM10");
+        assert_eq!(sanitize_filename("a/b"), "a_b");
+    }
 }
