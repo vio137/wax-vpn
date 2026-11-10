@@ -79,6 +79,8 @@ impl WireGuardConfig {
             Ok(())
         };
 
+        // Windows editors may write a UTF-8 BOM before the first section.
+        let text = text.trim_start_matches('\u{feff}');
         for (lineno, raw) in text.lines().enumerate() {
             let line = raw.trim();
             if line.is_empty() || line.starts_with('#') || line.starts_with(';') {
@@ -212,6 +214,16 @@ mod tests {
         let rendered = cfg.to_conf_string();
         let cfg2 = WireGuardConfig::parse(&rendered).unwrap();
         assert_eq!(cfg, cfg2);
+    }
+
+    #[test]
+    fn accepts_utf8_bom_and_windows_line_endings() {
+        let plain = sample();
+        let windows = format!("\u{feff}{}", plain.replace('\n', "\r\n"));
+        assert_eq!(
+            WireGuardConfig::parse(&plain).unwrap(),
+            WireGuardConfig::parse(&windows).unwrap(),
+        );
     }
 
     #[test]
