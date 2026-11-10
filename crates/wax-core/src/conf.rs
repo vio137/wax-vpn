@@ -141,7 +141,7 @@ impl WireGuardConfig {
             }
             match section {
                 Section::Interface => match key {
-                    "PrivateKey" => private_key = Some(keys::key_from_base64(value)?),
+                    "PrivateKey" => private_key = Some(keys::key_from_base64(value).map_err(|_| err("bad PrivateKey; expected a base64-encoded 32-byte key"))?),
                     "Address" => {
                         for a in split_list(value).ok_or_else(|| err("empty Address list entry"))? {
                             addresses.push(parse_ip_prefix(a).ok_or_else(|| err(&format!("bad address {a}")))?);
@@ -163,8 +163,8 @@ impl WireGuardConfig {
                     other => return Err(err(&format!("unknown Interface key {other}"))),
                 },
                 Section::Peer => match key {
-                    "PublicKey" => cur_public = Some(keys::key_from_base64(value)?),
-                    "PresharedKey" => cur_psk = Some(keys::key_from_base64(value)?),
+                    "PublicKey" => cur_public = Some(keys::key_from_base64(value).map_err(|_| err("bad PublicKey; expected a base64-encoded 32-byte key"))?),
+                    "PresharedKey" => cur_psk = Some(keys::key_from_base64(value).map_err(|_| err("bad PresharedKey; expected a base64-encoded 32-byte key"))?),
                     "AllowedIPs" => {
                         // Older waX normalized files wrote an empty line for no routes.
                         if value.is_empty() { continue; }
@@ -299,6 +299,32 @@ mod tests {
         assert_eq!(repeated.interface.addresses.len(), 3);
         assert_eq!(repeated.interface.dns.len(), 3);
         assert_eq!(repeated.peers[0].allowed_ips.len(), 3);
+    }
+
+    #[test]
+    fn key_errors_identify_field_and_line_without_echoing_payload() {
+        let plain = sample().replace("[Peer]", &format!("[Peer]\nPresharedKey = {}", keys::key_to_base64(&[3; 32])));
+        let malformed = "do-not-echo-private-value!!!";
+        let short = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, [1u8; 31]);
+        let long = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, [2u8; 33]);
+        for field in ["PrivateKey", "PublicKey", "PresharedKey"] {
+            for value in [malformed, short.as_str(), long.as_str(), ""] {
+                let mut field_line = 0;
+                let invalid = plain.lines().enumerate().map(|(i, line)| {
+                    if line.starts_with(&format!("{field} =")) {
+                        field_line = i + 1;
+                        format!("{} = {value}", field.to_ascii_lowercase())
+                    } else { line.to_string() }
+                }).collect::<Vec<_>>().join("\n");
+                let error = WireGuardConfig::parse(&invalid).unwrap_err().to_string();
+                assert!(error.contains(&format!("line {field_line}: bad {field}; expected a base64-encoded 32-byte key")), "{error}");
+                if !value.is_empty() { assert!(!error.contains(value), "key payload echoed"); }
+                assert!(!error.contains("Invalid byte"));
+                assert!(!error.contains("decoded key is"));
+            }
+        }
+        let parsed = WireGuardConfig::parse(&plain).unwrap();
+        assert_eq!(WireGuardConfig::parse(&parsed.to_conf_string()).unwrap(), parsed);
     }
 
     #[test]
@@ -512,4 +538,4 @@ mod tests {
         let text = format!("[Interface]\nPrivateKey = {priv_b64}\nAddress = 10.0.0.2/32\n");
         assert!(WireGuardConfig::parse(&text).is_err());
     }
-    }
+}
