@@ -18,7 +18,7 @@ Source: https://docs.signpath.io/trusted-build-systems/github
 
 ## Stable version path (not activated)
 
-Use a reviewed SemVer tag such as v0.1.0, not a CI run counter. Derive displayed version, installer filename, uninstall registry version and release tag from that tag. Publish without prerelease flag only after required checks and signing decisions. Existing preview tags remain immutable. Automatic previews continue; stable publication is not yet enabled.
+Use a reviewed SemVer tag such as v0.1.0, not a CI run counter. Derive displayed version, installer filename, uninstall registry version and release tag from that tag. Publish without prerelease flag only after required checks and signing decisions. Existing preview tags remain immutable. Automatic previews continue; stable publication requires an explicit manual dispatch. The manual stable_version input enforces exact workspace SemVer and requires either SignPath enabled or the explicit unsigned_stable manual input. The maintainer approved unsigned v0.1.0 while SignPath is pending. An empty input keeps previews. This is a prepared path, not an instruction to enable it.
 
 ## Remaining gaps
 

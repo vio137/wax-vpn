@@ -2,8 +2,8 @@
 //!
 //! On Windows this drives the official WireGuardNT kernel driver
 //! (wireguard.dll, loaded side-by-side) through the `wireguard-nt` crate.
-//! DNS is configured with netsh and the optional kill switch uses Windows
-//! Firewall rules (PowerShell) scoped to the tunnel interface alias.
+//! DNS is configured with netsh. Kill-switch requests are unavailable in
+//! v0.1.0 and rejected before network changes.
 
 use std::time::SystemTime;
 
@@ -29,7 +29,7 @@ pub struct TunnelStats {
 
 #[derive(Clone, Debug)]
 pub struct ConnectOptions {
-    /// Block all traffic outside the tunnel (firewall based).
+    /// Reserved option: v0.1.0 rejects true before network changes.
     pub kill_switch: bool,
     /// While the kill switch is on, still allow local-subnet traffic.
     pub allow_lan: bool,

@@ -1,15 +1,17 @@
-## waX VPN Windows preview
-Windows x64 installer with the pure-Rust egui interface, per-profile IP-range exclusions, single-instance window reopening, and opt-in Cloudflare WARP registration.
+## waX VPN v0.1.0 for Windows x64
 
-### Checked on the Windows CI runner
-- GUI Connect established a demo WireGuard handshake
-- Packets traversed the demo tunnel; DNS applied and restored on disconnect
-- Scoped split-routing check: 8.8.8.8 excluded, 1.1.1.1 retained in tunnel routes
-- Closing the window kept the demo adapter up
-- A second launch restored the original main window with its Connect rail on-screen, then exited itself
-- --quit after reopening exited the app and removed the adapter
+Unsigned release, as approved by the maintainer while SignPath Foundation review is pending. No code-signing certificate is present. Windows SmartScreen and publisher warnings are expected. Administrator rights are required to connect.
 
-These checks passed for preview.46. Later builds carry their own CI results and screenshots; this baseline is not a guarantee for every Windows environment.
+Pure-Rust egui interface, official WireGuardNT driver, importable WireGuard profiles, per-profile CIDR exclusions, single-instance window reopening, and optional ToS-gated WARP setup.
 
-### Limits
-Unsigned preview: Windows SmartScreen may warn. Connecting requires administrator rights. Tray-menu interaction still needs a real Windows desktop check. Kill-switch blocking and live WARP registration are not traffic-verified. WARP registration requires explicit acceptance in the app. No third-party public-IP lookup is performed.
+### Protection limit
+
+Kill switch is unavailable and disabled in this release. The old Windows Firewall Block Any design conflicts with its allow rules. Saved ON settings are reset to OFF; the GUI explains the limit and CLI --kill-switch requests are rejected before network changes. If the tunnel drops, traffic may use the normal connection. This is NOT fail-closed protection. IPv6 leak protection is not claimed. Do not use this build where either is required.
+
+### Release verification gates
+
+Publication requires workspace tests/build, Windows demo tunnel and GUI smoke checks, and isolated fresh-runner silent NSIS install, installed-window launch, graceful quit and uninstall. Read the associated workflow's evidence for the exact outcome. Existing scoped checks cover a demo handshake, tunnel-side packets, DNS apply/restore, 8.8.8.8 excluded from tunnel routes while 1.1.1.1 stays routed, original main window reopening, and --quit adapter removal. These do not prove every network/Windows environment.
+
+### Still unverified
+
+Real-desktop tray menu interaction, consumer SmartScreen behavior, live WARP registration, and general IPv6 leak behavior. WARP registration remains opt-in and requires explicit ToS acceptance. No third-party public-IP lookup is performed. The official vendor driver DLL is not modified. User profiles/settings are retained on uninstall.

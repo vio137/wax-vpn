@@ -142,29 +142,6 @@ fn reset_dns(adapter: &str) -> Result<(), TunnelError> {
     }
 }
 
-fn enable_kill_switch(endpoint_ip: &str, endpoint_port: u16, allow_lan: bool) -> Result<(), TunnelError> {
-    // Never delete the whole rule set to rebuild it: that would open an
-    // unprotected window. The Block rule is only ever created, never
-    // removed here; the Endpoint rule is updated in place when present.
-    let ep = format!("{KILLSWITCH_RULE_PREFIX} - Endpoint");
-    let tunnel = format!("{KILLSWITCH_RULE_PREFIX} - Tunnel");
-    let lan = format!("{KILLSWITCH_RULE_PREFIX} - LAN");
-    let block = format!("{KILLSWITCH_RULE_PREFIX} - Block");
-    let lan_part = if allow_lan {
-        format!(
-            "if (-not (Get-NetFirewallRule -DisplayName '{lan}' -ErrorAction SilentlyContinue)) {{ New-NetFirewallRule -DisplayName '{lan}' -Direction Outbound -Action Allow -RemoteAddress LocalSubnet | Out-Null }}; "
-        )
-    } else {
-        format!(
-            "Remove-NetFirewallRule -DisplayName '{lan}' -ErrorAction SilentlyContinue; "
-        )
-    };
-    let script = format!(
-        "if (Get-NetFirewallRule -DisplayName '{ep}' -ErrorAction SilentlyContinue) {{ Set-NetFirewallRule -DisplayName '{ep}' -Protocol UDP -RemoteAddress {endpoint_ip} -RemotePort {endpoint_port} -Action Allow }}          else {{ New-NetFirewallRule -DisplayName '{ep}' -Direction Outbound -Action Allow -Protocol UDP -RemoteAddress {endpoint_ip} -RemotePort {endpoint_port} | Out-Null }};          if (-not (Get-NetFirewallRule -DisplayName '{tunnel}' -ErrorAction SilentlyContinue)) {{ New-NetFirewallRule -DisplayName '{tunnel}' -Direction Outbound -Action Allow -InterfaceAlias '{ADAPTER_NAME}' | Out-Null }};          {lan_part}         if (-not (Get-NetFirewallRule -DisplayName '{block}' -ErrorAction SilentlyContinue)) {{ New-NetFirewallRule -DisplayName '{block}' -Direction Outbound -Action Block -RemoteAddress Any | Out-Null }}"
-    );
-    powershell(&script)
-}
-
 pub fn disable_kill_switch() -> Result<(), TunnelError> {
     powershell(&format!(
         "Remove-NetFirewallRule -DisplayName '{KILLSWITCH_RULE_PREFIX}*' -ErrorAction SilentlyContinue"
@@ -209,6 +186,9 @@ impl Tunnel {
         opts: &ConnectOptions,
         mut progress: impl FnMut(&'static str),
     ) -> Result<Tunnel, TunnelError> {
+        if opts.kill_switch {
+            return Err(TunnelError::Message("Kill switch is unavailable in v0.1.0: the previous block-all firewall implementation is disabled. No tunnel or firewall changes were made.".into()));
+        }
         progress("Loading WireGuard driver");
         let wireguard = load_driver()?;
         progress("Preparing the waX adapter");
@@ -259,23 +239,6 @@ impl Tunnel {
         if !cfg.interface.dns.is_empty() {
             progress("Applying tunnel DNS");
             set_dns(ADAPTER_NAME, &cfg.interface.dns)?;
-        }
-
-        if opts.kill_switch {
-            progress("Enabling the kill switch");
-            if let Some(first) = cfg.peers.first() {
-                if let Some(ep) = &first.endpoint {
-                    let (host, port) = parse_endpoint(ep)?;
-                    let ip = (host.as_str(), port)
-                        .to_socket_addrs()
-                        .map_err(|e| TunnelError::Resolve(ep.clone(), e.to_string()))?
-                        .next()
-                        .ok_or_else(|| TunnelError::Resolve(ep.clone(), "no address".into()))?
-                        .ip()
-                        .to_string();
-                    enable_kill_switch(&ip, port, opts.allow_lan)?;
-                }
-            }
         }
 
         progress("Starting the tunnel");

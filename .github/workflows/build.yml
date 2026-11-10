@@ -4,6 +4,17 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      stable_version:
+        description: 'Prepared stable SemVer, disabled until release + signing gates approved. Leave empty for preview.'
+        required: false
+        default: ''
+        type: string
+      unsigned_stable:
+        description: 'Explicitly allow stable without certificate, per maintainer decision'
+        required: false
+        default: false
+        type: boolean
   schedule:
     # Hourly checkpoint builds; skipped automatically when nothing changed.
     - cron: "23 * * * *"
@@ -49,6 +60,24 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Resolve one version for binary, installer and release
+        if: steps.staleness.outputs.skip != 'true'
+        shell: pwsh
+        env:
+          STABLE_VERSION: ${{ inputs.stable_version }}
+          SIGNPATH_ENABLED: ${{ vars.WAX_SIGNPATH_ENABLED }}
+          UNSIGNED_STABLE: ${{ inputs.unsigned_stable }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $base = (Select-String -Path Cargo.toml -Pattern '^version = "([^"]+)"').Matches[0].Groups[1].Value
+          if ($env:STABLE_VERSION) {
+            if ($env:STABLE_VERSION -notmatch '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$') { throw 'Invalid stable SemVer' }
+            if ($env:STABLE_VERSION -ne $base) { throw 'Stable version must equal workspace package version' }
+            if ($env:SIGNPATH_ENABLED -ne 'true' -and $env:UNSIGNED_STABLE -ne 'true') { throw 'Stable requires signing or explicit unsigned_stable selection' }
+            $version = $env:STABLE_VERSION
+          } else { $version = "$base-preview.${{ github.run_number }}" }
+          "WAX_RELEASE_VERSION=$version" | Out-File $env:GITHUB_ENV -Append
+
       - name: Download official WireGuardNT (wireguard.dll)
         if: steps.staleness.outputs.skip != 'true'
         shell: pwsh
@@ -91,14 +120,14 @@ jobs:
         if: steps.staleness.outputs.skip != 'true'
         shell: pwsh
         run: |
-          $version = "0.1.0"
-          $tag = "v$version-preview.${{ github.run_number }}"
+          $version = $env:WAX_RELEASE_VERSION
+          $tag = "v$version"
           $nsis = (Get-Command makensis -ErrorAction SilentlyContinue).Source
           if (-not $nsis) { $nsis = @("C:\Program Files (x86)\NSIS\makensis.exe","C:\Program Files\NSIS\makensis.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1 }
           if (-not $nsis) { throw "makensis not found" }
-          & $nsis /DWAX_VERSION="$version-preview.${{ github.run_number }}" installer\wax.nsi
+          & $nsis /DWAX_VERSION="$version" installer\wax.nsi
           if ($LASTEXITCODE -ne 0) { throw "makensis failed with $LASTEXITCODE" }
-          Move-Item "installer\waX-VPN-Setup-$version-preview.${{ github.run_number }}-x64.exe" "waX-VPN-Setup-$tag-x64.exe" -Force
+          Move-Item "installer\waX-VPN-Setup-$version-x64.exe" "waX-VPN-Setup-$tag-x64.exe" -Force
           Get-FileHash -Algorithm SHA256 "waX-VPN-Setup-$tag-x64.exe" | ForEach-Object { "$($_.Hash.ToLower())  waX-VPN-Setup-$tag-x64.exe" } | Out-File -Encoding ascii "SHA256SUMS-$tag.txt"
 
       - name: Upload raw binaries
@@ -153,7 +182,7 @@ jobs:
 
       - name: Real tunnel test against the official WireGuard demo server
         env:
-          WAX_FULL_VERIFY: '1' # Temporary: close requested kill-switch/IPv6 verification gaps
+          WAX_FULL_VERIFY: ${{ github.event_name != 'push' && '1' || '0' }}
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Continue'
@@ -255,76 +284,18 @@ jobs:
             if (-not $rulesCrash) { Note 'PASS no firewall rules after crash cleanup' } else { Note 'FAIL firewall rules left after crash' }
           }
 
-          # Controlled direct-route probes: no public-IP service or account access.
-          # Reuse the configured DNS provider's endpoints, with baseline first.
-          function TcpProbe([string]$address) {
-            $ip = [Net.IPAddress]::Parse($address)
-            $c = [Net.Sockets.TcpClient]::new($ip.AddressFamily)
-            try {
-              $t = $c.ConnectAsync($ip, 443)
-              return ($t.Wait(2500) -and $c.Connected)
-            } catch { return $false } finally { $c.Dispose() }
-          }
-          $physical = Get-NetRoute -DestinationPrefix '0.0.0.0/0' -AddressFamily IPv4 | Where-Object { $_.InterfaceAlias -ne 'waX VPN' } | Sort-Object RouteMetric | Select-Object -First 1
-          $probeRoute = $null
-          if ($physical) {
-            $probeRoute = New-NetRoute -DestinationPrefix '1.1.1.1/32' -InterfaceIndex $physical.InterfaceIndex -NextHop $physical.NextHop -RouteMetric 1 -PolicyStore ActiveStore -ErrorAction SilentlyContinue
-          }
-          $v4Baseline = TcpProbe '1.1.1.1'
-          $v6Baseline = TcpProbe '2606:4700:4700::1111'
-          Note "INFO off-tunnel TCP443 baselines: IPv4=$v4Baseline IPv6=$v6Baseline"
+          # Unsupported protection must fail before changing network state.
+          $reject = & .\bin\wax.exe connect demo --kill-switch 2>&1
+          if ($LASTEXITCODE -ne 0 -and "$reject" -match 'Kill switch is unavailable') {
+            Note 'PASS unavailable kill-switch flag rejected explicitly before tunnel/firewall changes'
+          } else { Note 'FAIL unavailable kill-switch flag was not rejected' }
+          $v6 = [Net.Sockets.TcpClient]::new([Net.Sockets.AddressFamily]::InterNetworkV6)
           try {
-            $probeOwner = Start-Process -FilePath "$PWD\bin\wax.exe" -ArgumentList 'connect','demo','--kill-switch' -PassThru -WindowStyle Hidden
-            Start-Sleep -Seconds 12
-            if ($probeOwner.HasExited) { Note 'FAIL effective kill-switch probe: owner exited' } else {
-              $through = ping -n 1 -w 3000 192.168.4.1
-              if ($LASTEXITCODE -eq 0) { Note 'PASS kill switch permits tunnel-side ping while enabled' } else { Note 'FAIL kill switch blocks tunnel-side ping (allow rules may be overridden)' }
-              if ($v4Baseline -and $probeRoute) {
-                if (TcpProbe '1.1.1.1') { Note 'FAIL IPv4 kill-switch bypass: direct host-route TCP443 remained reachable' } else { Note 'PASS IPv4 direct host-route TCP443 blocked while kill switch enabled' }
-              } else { Note 'SKIP IPv4 effective blocking: no proven direct-route baseline' }
-              if ($v6Baseline) {
-                if (TcpProbe '2606:4700:4700::1111') { Note 'FAIL IPv6 bypass: baseline endpoint remains reachable outside IPv4-only tunnel with kill switch' } else { Note 'PASS IPv6 baseline TCP443 blocked with kill switch' }
-              } else { Note 'SKIP IPv6 leak test: hosted runner has no proven IPv6 TCP443 baseline' }
-              $probeOwner.Kill()
-              Start-Sleep -Seconds 2
-              if ($v4Baseline -and $probeRoute) {
-                if (TcpProbe '1.1.1.1') { Note 'FAIL IPv4 direct-route reachable after tunnel owner crash' } else { Note 'PASS IPv4 direct-route TCP443 remains blocked after owner crash' }
-              }
-            }
-          } finally {
-            .\bin\wax.exe disconnect | Out-Null
-            if ($probeOwner -and -not $probeOwner.HasExited) { $probeOwner.Kill() }
-            if ($probeRoute) { $probeRoute | Remove-NetRoute -Confirm:$false -ErrorAction SilentlyContinue }
-          }
-
-          # 6b. Crash leg with kill switch ON: rules are system objects and
-          #     should PERSIST after the owner dies. This proves rule
-          #     persistence only - not that traffic was still blocked.
-          $proc3 = Start-Process -FilePath "$PWD\bin\wax.exe" -ArgumentList 'connect','demo','--kill-switch' -PassThru -WindowStyle Hidden -RedirectStandardOutput connect3-out.txt -RedirectStandardError connect3-err.txt
-          Start-Sleep -Seconds 12
-          if ($proc3.HasExited) { Note 'WARN crash+kill-switch leg connect exited early' } else {
-            $proc3.Kill()
-            Start-Sleep -Seconds 3
-            $rulesDied = Get-NetFirewallRule -DisplayName 'waX VPN KillSwitch*' -ErrorAction SilentlyContinue
-            $nDied = if ($rulesDied) { $rulesDied.Count } else { 0 }
-            if ($nDied -gt 0) { Note "PASS kill-switch rules persist after owner crash ($nDied rules still in place; traffic blocking itself untested)" } else { Note 'FAIL kill switch rules vanished when owner crashed' }
-            .\bin\wax.exe disconnect | Out-Null
-            Start-Sleep -Seconds 2
-            $rulesAfter = Get-NetFirewallRule -DisplayName 'waX VPN KillSwitch*' -ErrorAction SilentlyContinue
-            if (-not $rulesAfter) { Note 'PASS crash+kill-switch cleanup removed all rules' } else { Note 'FAIL crash+kill-switch cleanup left rules' }
-          }
-
-          # 7. Kill switch leg: rules exist while connected, removed on disconnect
-          $proc3 = Start-Process -FilePath "$PWD\bin\wax.exe" -ArgumentList 'connect','demo','--kill-switch' -PassThru -WindowStyle Hidden
-          Start-Sleep -Seconds 12
-          $rulesOn = Get-NetFirewallRule -DisplayName 'waX VPN KillSwitch*' -ErrorAction SilentlyContinue
-          if ($rulesOn) { Note "PASS kill switch rules applied while connected ($(($rulesOn | Measure-Object).Count) rules)" } else { Note 'FAIL kill switch rules missing while connected' }
-          .\bin\wax.exe disconnect | Out-Null
-          Start-Sleep -Seconds 3
-          if (-not $proc3.HasExited) { $proc3.Kill() }
-          $rulesOff = Get-NetFirewallRule -DisplayName 'waX VPN KillSwitch*' -ErrorAction SilentlyContinue
-          if (-not $rulesOff) { Note 'PASS kill switch rules removed on disconnect' } else { Note 'FAIL kill switch rules left behind' }
-
+            $t = $v6.ConnectAsync([Net.IPAddress]::Parse('2606:4700:4700::1111'),443)
+            $reachable = $t.Wait(2500) -and $v6.Connected
+            if ($reachable) { Note 'INFO IPv6 baseline reachable; kill switch unavailable so IPv6 leak protection is NOT offered' }
+            else { Note 'SKIP IPv6 leak protection test: no proven IPv6 baseline and kill switch unavailable' }
+          } catch { Note 'SKIP IPv6 leak protection test: no proven IPv6 baseline and kill switch unavailable' } finally { $v6.Dispose() }
           } else {
             Note 'INFO extended crash/kill-switch legs skipped on push builds (hourly schedule and manual dispatch run them)'
           }
@@ -674,8 +645,8 @@ jobs:
             'PASS fresh runner: NSIS install and installed GUI main window with rail' | Out-File installer-results.txt
           } finally {
             & $exe --quit
-            Start-Sleep -Seconds 3
-            if (-not $p.HasExited) { $p.Kill(); throw 'Installed GUI did not quit gracefully' }
+            for ($i=0; $i -lt 15 -and -not $p.HasExited; $i++) { Start-Sleep -Seconds 1; $p.Refresh() }
+            if (-not $p.HasExited) { $p.Kill(); throw 'Installed GUI did not quit within 15 seconds' }
             $uninstall = Start-Process (Join-Path $dir 'uninstall.exe') -ArgumentList '/S' -Wait -PassThru
             Start-Sleep -Seconds 3
             if (Test-Path $exe) { throw 'Uninstall left GUI binary behind' }
@@ -734,5 +705,10 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          $tag = "v0.1.0-preview.${{ github.run_number }}"
-          gh release create $tag (Get-ChildItem release-assets | ForEach-Object FullName) --target "${{ github.sha }}" --title "waX VPN $tag" --prerelease --notes-file RELEASE_NOTES.md
+          $ErrorActionPreference = 'Stop'
+          $installer = Get-ChildItem release-assets -Filter 'waX-VPN-Setup-*-x64.exe'
+          $tag = $installer.Name -replace '^waX-VPN-Setup-','' -replace '-x64.exe$',''
+          $args = @('release','create',$tag) + @(Get-ChildItem release-assets | ForEach-Object FullName) + @('--target','${{ github.sha }}','--title',"waX VPN $tag",'--notes-file','RELEASE_NOTES.md')
+          if ($tag -match '-preview\.') { $args += '--prerelease' }
+          & gh @args
+          if ($LASTEXITCODE -ne 0) { throw 'Release publication failed' }

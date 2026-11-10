@@ -130,7 +130,13 @@ impl WaxApp {
         cc.egui_ctx.set_fonts(fonts);
 
         let (tx, rx) = channel();
-        let settings = settings::load();
+        let mut settings = settings::load();
+        // v0.1.0: reject the old block-all firewall implementation. Do not
+        // silently retain an ON flag that promises unavailable protection.
+        if settings.kill_switch {
+            settings.kill_switch = false;
+            settings::save(&settings);
+        }
         let profiles = profile::load_profiles().unwrap_or_default();
         let selected = settings
             .last_profile
@@ -952,8 +958,7 @@ impl WaxApp {
             }
             ui.label(
                 RichText::new(format!(
-                    "Kill switch {}  ·  v{VERSION}",
-                    if self.settings.kill_switch { "on" } else { "off" }
+                    "Kill switch unavailable  ·  v{VERSION}"
                 ))
                 .size(10.5)
                 .color(theme::MUTE),
@@ -1505,24 +1510,9 @@ impl WaxApp {
 
     fn tab_features(&mut self, ui: &mut egui::Ui) {
         theme::section_heading(ui, "Features", "Protection and behaviour");
-        if theme::toggle_row(
-            ui,
-            &mut self.settings.kill_switch,
-            "Kill switch",
-            "Block all traffic outside the tunnel while connected",
-        ) {
-            settings::save(&self.settings);
-        }
-        ui.add_space(4.0);
-        if theme::toggle_row(
-            ui,
-            &mut self.settings.allow_lan,
-            "Allow local network",
-            "Keep printers and local devices reachable when the kill switch is on",
-        ) {
-            settings::save(&self.settings);
-        }
-        ui.add_space(4.0);
+        ui.label(RichText::new("Kill switch unavailable in v0.1.0").color(theme::BAD).size(14.0));
+        ui.label(RichText::new("The previous firewall implementation is disabled. Traffic can use your normal connection if the tunnel drops. Do not rely on waX VPN for fail-closed protection.").size(12.0).color(theme::SUB));
+        ui.add_space(14.0);
         if theme::toggle_row(
             ui,
             &mut self.settings.autostart,
