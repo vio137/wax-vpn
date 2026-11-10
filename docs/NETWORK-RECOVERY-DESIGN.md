@@ -80,3 +80,8 @@ dd34010/run42787586767 full manual checkpoint passed build, runtime and fresh in
 
 Test-only underlay snapshot now includes addresses only on its non-waX default-route interfaces, with family/address/scope/prefix/DAD/source flags. It ignores lifetime countdowns, duplicates and unrelated adapter addresses. Gateway/source values stay in memory without Debug/Serialize. Added synthetic comparison test; real Windows read now queries both route and address tables. Windows results pending. Interface metrics and endpoint-specific routing still need design; no production reconnect decision or roaming claim.
 Source: https://learn.microsoft.com/en-us/windows/win32/api/netioapi/nf-netioapi-getunicastipaddresstable
+
+4f677de/run42789065242 passed build, named address snapshot tests (17app tests total), tunnel/GUI and fresh install/uninstall. Default-interface metric/connected/default-route-disable readback is now added to the test-only snapshot using InitializeIpInterfaceEntry/GetIpInterfaceEntry. Transient neighbor timers are excluded. A failed read leaves the whole snapshot unverified rather than silently comparing incomplete state. New synthetic interface-field test plus real combined read await Windows. Endpoint-specific routing is still not modeled, and no production reconnect is wired.
+Sources:
+- https://learn.microsoft.com/en-us/windows/win32/api/netioapi/nf-netioapi-getipinterfaceentry
+- https://learn.microsoft.com/en-us/windows/win32/api/netioapi/nf-netioapi-initializeipinterfaceentry

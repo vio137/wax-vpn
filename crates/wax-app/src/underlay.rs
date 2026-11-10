@@ -1,6 +1,6 @@
 //! Read-only route fingerprint groundwork. Test-only until a complete local
 //! underlay policy is ready. Private in-memory values, never diagnostic output.
-use windows_sys::Win32::{NetworkManagement::IpHelper::{FreeMibTable, GetIpForwardTable2, GetUnicastIpAddressTable, MIB_IPFORWARD_ROW2, MIB_IPFORWARD_TABLE2, MIB_UNICASTIPADDRESS_ROW, MIB_UNICASTIPADDRESS_TABLE}, Networking::WinSock::{AF_INET, AF_INET6, AF_UNSPEC}};
+use windows_sys::Win32::{NetworkManagement::IpHelper::{FreeMibTable, GetIpForwardTable2, GetUnicastIpAddressTable, GetIpInterfaceEntry, InitializeIpInterfaceEntry, MIB_IPINTERFACE_ROW, MIB_IPFORWARD_ROW2, MIB_IPFORWARD_TABLE2, MIB_UNICASTIPADDRESS_ROW, MIB_UNICASTIPADDRESS_TABLE}, Networking::WinSock::{AF_INET, AF_INET6, AF_UNSPEC}};
 
 // Deliberately no Debug or Serialize: this holds local gateway addresses.
 #[derive(Eq, PartialEq, Ord, PartialOrd)]
@@ -23,8 +23,20 @@ struct Address {
     dad: i32,
     skip_source: bool,
 }
+#[derive(Eq, PartialEq, Ord, PartialOrd)]
+struct Interface {
+    family: u16,
+    luid: u64,
+    metric: u32,
+    connected: bool,
+    default_disabled: bool,
+}
+fn interface(row: &MIB_IPINTERFACE_ROW) -> Interface {
+    Interface { family:row.Family, luid:unsafe { row.InterfaceLuid.Value }, metric:row.Metric,
+        connected:row.Connected!=0, default_disabled:row.DisableDefaultRoutes!=0 }
+}
 #[derive(Eq, PartialEq)]
-pub struct Snapshot(Vec<DefaultRoute>, Vec<Address>);
+pub struct Snapshot(Vec<DefaultRoute>, Vec<Address>, Vec<Interface>);
 struct Table(*mut MIB_IPFORWARD_TABLE2);
 impl Drop for Table { fn drop(&mut self) { unsafe { FreeMibTable(self.0.cast()); } } }
 
@@ -42,7 +54,7 @@ fn fingerprint(rows: &[MIB_IPFORWARD_ROW2], own_luid: u64) -> Snapshot {
         };
         routes.push(DefaultRoute { family, luid, metric:row.Metric, gateway, scope });
     }
-    routes.sort_unstable(); routes.dedup(); Snapshot(routes,Vec::new())
+    routes.sort_unstable(); routes.dedup(); Snapshot(routes,Vec::new(),Vec::new())
 }
 
 fn addresses(rows: &[MIB_UNICASTIPADDRESS_ROW], defaults: &[DefaultRoute]) -> Vec<Address> {
@@ -82,10 +94,18 @@ impl Snapshot {
         let address_table=Addresses(raw);
         let rows=unsafe { std::slice::from_raw_parts(std::ptr::addr_of!((*address_table.0).Table).cast::<MIB_UNICASTIPADDRESS_ROW>(),(*address_table.0).NumEntries as usize) };
         snapshot.1=addresses(rows,&snapshot.0);
+        let keys= snapshot.0.iter().map(|r| (r.family,r.luid)).collect::<std::collections::BTreeSet<_>>();
+        for (family,luid) in keys {
+            let mut row:MIB_IPINTERFACE_ROW=unsafe { std::mem::zeroed() };
+            unsafe { InitializeIpInterfaceEntry(&mut row); }
+            row.Family=family; row.InterfaceLuid.Value=luid;
+            if unsafe { GetIpInterfaceEntry(&mut row) } != 0 { return Err("underlay_interface"); }
+            snapshot.2.push(interface(&row));
+        }
         Ok(snapshot)
     }
     // This only describes default-route changes, NOT tunnel loss or Internet
-    // reachability. Interface metrics/endpoint-specific routes remain future work.
+    // reachability. Endpoint-specific routes remain future work.
     pub fn differs(&self, other: &Self) -> bool { self != other }
 }
 
@@ -129,6 +149,19 @@ mod tests {
                 1 => changed.OnLinkPrefixLength=25, 2 => changed.DadState=3,
                 _ => changed.SkipAsSource=1 }
             assert!(baseline!=addresses(&[changed],&defaults.0));
+        }
+    }
+    #[test]
+    fn interface_comparison_tracks_routing_inputs_not_transient_timers() {
+        let mut a:MIB_IPINTERFACE_ROW=unsafe { std::mem::zeroed() };
+        a.Family=AF_INET; a.InterfaceLuid.Value=22; a.Metric=10; a.Connected=1;
+        let base=interface(&a);
+        let mut timers=a; timers.ReachableTime=123; timers.RetransmitTime=555;
+        assert!(base==interface(&timers));
+        for field in 0..3 {
+            let mut changed=a;
+            match field { 0 => changed.Metric=11, 1 => changed.Connected=0, _ => changed.DisableDefaultRoutes=1 }
+            assert!(base!=interface(&changed));
         }
     }
     #[test]
