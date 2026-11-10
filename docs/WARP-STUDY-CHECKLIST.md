@@ -41,7 +41,7 @@ This is an independent behavior/structure study with REA 6.8.0 and Ghidra 12.1.4
 - https://developers.cloudflare.com/cloudflare-one/team-and-resources/devices/cloudflare-one-client/troubleshooting/diagnostic-logs/ (diagnostic categories)
 - https://github.com/NationalSecurityAgency/ghidra/releases/tag/Ghidra_12.1.4_build (native analysis engine)
 
-Cloudflare One enterprise documentation is not interchangeable with consumer availability. No signup or terms acceptance was needed for static extraction/inspection. Latest stable v0.1.5 (cd614c4, run42776110039) includes MTU, diagnostics, state clarity and startup observer fixes. Releases remain unsigned, with no kill switch or IPv6 leak-protection claim.
+Cloudflare One enterprise documentation is not interchangeable with consumer availability. No signup or terms acceptance was needed for static extraction/inspection. Latest stable v0.1.6 (cf976cf, run42778052338) includes MTU, diagnostics, state clarity and startup observer fixes. Releases remain unsigned, with no kill switch or IPv6 leak-protection claim.
 
 ## Package findings
 
@@ -79,7 +79,7 @@ Exact source cd614c4, full gate42776110039 passed. Fresh installer10,943,511byte
 
 ## Astryx native preview
 
-Source433f867/full manual gate42777283654 is in progress. Local native page/state composition inspected,26tests pass; actual Windows evidence pending. The separate React reference is illustrative only and labeled as not a live tunnel. No new product runtime or service.
+Source433f867/full manual gate42777283654 passed. Actual Windows pages and all state/size captures were inspected before the exactv0.1.6stable gate. The separate React reference is illustrative only and labeled as not a live tunnel. No new product runtime or service.
 
 ### v0.1.6 stable checkpoint
 - Source cf976cf; exact full gate 42778052338 passed build, verification, fresh-runner install/uninstall and publish.

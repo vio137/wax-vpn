@@ -4,6 +4,9 @@
 
 use wax_diagnostics::health as connection_health;
 mod recovery;
+// Preparatory policy only. Production notification ownership is not wired yet.
+#[cfg(test)]
+mod network_change;
 #[cfg(windows)]
 mod single;
 #[cfg(not(windows))]

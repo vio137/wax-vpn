@@ -1,6 +1,6 @@
 # Network-change recovery design
 
-Status: bounded adapter-loss retry policy passed targeted Windows verification on9aea9b3, run42770444348. Route/address notification callbacks and physical-network recovery remain design only.
+Status: bounded adapter-loss retry policy passed targeted Windows verification on9aea9b3, run42770444348. Route/address notification callbacks and physical-network recovery remain design only. Pure notification coalescing groundwork is present in network_change.rs, compiled only for tests until notification ownership is implemented.
 
 ## Evidence and boundaries
 
@@ -39,3 +39,7 @@ At source31f09d0, adapter-loss recovery called the next attempt immediately and 
 ## Separate installer checkpoint
 
 Width-only diagnostics source8863f19/run42771027828 passed the tunnel/GUI/recovery job, but its first fresh-install job did not quit within15seconds after GUI launch. Uninstall was not reached. The same-source job passed install, quit and uninstall on attempt2 (exact artifact13741628083). The first intermittent quit failure remains unresolved; a retry pass does not diagnose it. Fixed-stage logs are prepared to help capture recurrence. This is separate from physical-network recovery.
+
+## Notification policy groundwork
+
+The isolated Changes policy filters initial, own-interface, unknown-interface and stale-generation notifications, prohibits external-owner/disabled work, coalesces to2seconds quiet with10seconds maximum burst, and clears pending work on reset. Five focused deterministic tests cover those cases. Its output requests only a local underlay read, never reconnect. It is test-only and has no production hooks or runtime feature claim. Windows callback ownership, registration/cancellation, useful underlay-change comparison and actual physical-network evidence remain pending.
