@@ -151,7 +151,8 @@ mod tests {
         let _cleanup = Cleanup(dir.clone());
         let config = WireGuardConfig {
             interface: crate::InterfaceConfig { private_key:[1;32], addresses:vec![], dns:vec![], mtu:Some(1380), listen_port:None },
-            peers:vec![],
+            peers:vec![crate::PeerConfig { public_key:[2;32], preshared_key:None,
+                allowed_ips:vec!["0.0.0.0/0".parse().unwrap()], endpoint:None, persistent_keepalive:None }],
         }.to_conf_string();
         let first = import_into(&dir, "office/name.", &config).unwrap();
         assert_eq!(first.name, "office_name");
