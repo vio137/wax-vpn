@@ -82,7 +82,9 @@ impl WireGuardConfig {
         // Windows editors may write a UTF-8 BOM before the first section.
         let text = text.trim_start_matches('\u{feff}');
         for (lineno, raw) in text.lines().enumerate() {
-            let line = raw.trim();
+            // Inline hash comments apply to headers and values alike.
+            // Normalized serialization intentionally does not retain comments.
+            let line = raw.split_once('#').map_or(raw, |(code, _)| code).trim();
             if line.is_empty() || line.starts_with('#') || line.starts_with(';') {
                 continue;
             }
@@ -317,6 +319,33 @@ mod tests {
     }
 
     #[test]
+    fn inline_hash_comments_parse_without_relaxing_validation() {
+        let plain = sample();
+        let annotated = plain.lines().map(|line| {
+            if line.is_empty() { "# between sections".to_string() }
+            else { format!("{line} # comment with = and [Peer]") }
+        }).collect::<Vec<_>>().join("\r\n");
+        let annotated = format!("\u{feff}# heading\r\n; whole-line semicolon\r\n{annotated}\r\n");
+        let parsed = WireGuardConfig::parse(&annotated).unwrap();
+        assert_eq!(parsed, WireGuardConfig::parse(&plain).unwrap());
+        let rendered = parsed.to_conf_string();
+        assert!(!rendered.contains('#'));
+        assert_eq!(WireGuardConfig::parse(&rendered).unwrap(), parsed);
+        for (old, new, expected) in [
+            ("MTU = 1280", "MTU = 1280 # first\nMTU = 1400 # second", "duplicate MTU in [Interface]"),
+            ("PersistentKeepalive = 25", "PersistentKeepalive = invalid # 25", "bad PersistentKeepalive"),
+            ("PersistentKeepalive = 25", "PersistentKeepalive = # empty", "bad PersistentKeepalive"),
+            ("PersistentKeepalive = 25", "PersistentKeepalive = 25 ; not an inline comment", "bad PersistentKeepalive"),
+            ("MTU = 1280", "PostUp = do-not-echo-private-value # note", "unsupported wg-quick directive PostUp"),
+            ("MTU = 1280", "UnknownSetting = do-not-echo-private-value # note", "unknown Interface key UnknownSetting"),
+        ] {
+            let error = WireGuardConfig::parse(&plain.replace(old, new)).unwrap_err().to_string();
+            assert!(error.contains(expected), "{error}");
+            assert!(!error.contains("do-not-echo-private-value"));
+        }
+    }
+
+    #[test]
     fn accepts_utf8_bom_and_windows_line_endings() {
         let plain = sample();
         let windows = format!("\u{feff}{}", plain.replace('\n', "\r\n"));
@@ -362,4 +391,4 @@ mod tests {
         let text = format!("[Interface]\nPrivateKey = {priv_b64}\nAddress = 10.0.0.2/32\n");
         assert!(WireGuardConfig::parse(&text).is_err());
     }
-}
+                }
