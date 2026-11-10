@@ -331,8 +331,9 @@ jobs:
 
       - name: GUI screenshot (app window only)
         if: always()
-        shell: pwsh
+        shell: powershell
         run: |
+          Write-Host "UIA harness: PowerShell $($PSVersionTable.PSVersion) CLR $($PSVersionTable.CLRVersion)"
           $p = Start-Process -FilePath "$PWD\bin\wax-vpn.exe" -PassThru
           Add-Type -AssemblyName System.Windows.Forms
           Add-Type -AssemblyName System.Drawing
@@ -432,8 +433,9 @@ jobs:
         if: always()
         env:
           WAX_FULL_VERIFY: ${{ github.event_name != 'push' && '1' || '0' }}
-        shell: pwsh
+        shell: powershell
         run: |
+          Write-Host "UIA harness: PowerShell $($PSVersionTable.PSVersion) CLR $($PSVersionTable.CLRVersion)"
           $ErrorActionPreference = 'Continue'
           function Note($m) { Write-Host $m; $m | Out-File -FilePath verify-results.txt -Append -Encoding utf8 }
           Add-Type -TypeDefinition @"
@@ -465,7 +467,7 @@ jobs:
                 var t = new StringBuilder(128); GetWindowTextW(h, t, 128);
                 var c = new StringBuilder(128); GetClassNameW(h, c, 128);
                 uint pid; GetWindowThreadProcessId(h, out pid);
-                if (t.Length > 0 || IsWindowVisible(h)) lines.Add($"hwnd={h} pid={pid} vis={IsWindowVisible(h)} title='{t}' class='{c}'");
+                if (t.Length > 0 || IsWindowVisible(h)) lines.Add(string.Format("hwnd={0} pid={1} vis={2} title='{3}' class='{4}'", h, pid, IsWindowVisible(h), t, c));
                 return true;
               }, IntPtr.Zero);
               return string.Join("\n", lines);
@@ -810,8 +812,9 @@ jobs:
 
       - name: Settings failure warning (full-only local check)
         if: always() && github.event_name != 'push'
-        shell: pwsh
+        shell: powershell
         run: |
+          Write-Host "UIA harness: PowerShell $($PSVersionTable.PSVersion) CLR $($PSVersionTable.CLRVersion)"
           $ErrorActionPreference = 'Stop'
           Add-Type -AssemblyName UIAutomationClient
           Add-Type -AssemblyName UIAutomationTypes
@@ -825,8 +828,17 @@ jobs:
             public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
           }
           "@
-          Get-Process wax-vpn -ErrorAction SilentlyContinue | Stop-Process -Force
-          .\bin\wax.exe disconnect | Out-Null
+          $previous = @(Get-Process wax-vpn -ErrorAction SilentlyContinue)
+          if ($previous.Count -gt 0) {
+            .\bin\wax-vpn.exe --quit
+            if ($LASTEXITCODE -ne 0) { throw 'previous GUI quit request failed' }
+            foreach ($old in $previous) { if (-not $old.WaitForExit(15000)) { throw 'previous GUI cleanup timed out' } }
+          }
+          if (Get-NetAdapter -Name 'waX VPN' -ErrorAction SilentlyContinue) {
+            .\bin\wax.exe disconnect | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw 'settings fixture tunnel cleanup failed' }
+          }
+          $global:LASTEXITCODE = 0
           $path = Join-Path $env:APPDATA 'wax-vpn\settings.json'
           $had = Test-Path $path
           $before = if ($had) { [IO.File]::ReadAllBytes($path) } else { $null }
@@ -874,6 +886,7 @@ jobs:
             if ([Convert]::ToBase64String([IO.File]::ReadAllBytes($path)) -ne [Convert]::ToBase64String($bad)) { throw 'malformed settings original changed' }
             Save-SettingsCapture 'gui-settings-save-warning.png'
             .\bin\wax-vpn.exe --quit
+            if ($LASTEXITCODE -ne 0) { throw 'settings fixture quit request failed' }
             if (-not $process.WaitForExit(15000)) { throw 'settings warning fixture quit timed out' }
             'PASS settings malformed original preserved; recovery off; load/save warnings visible; quit' | Out-File verify-results.txt -Append
           } finally {
