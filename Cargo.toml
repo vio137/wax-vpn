@@ -6,6 +6,7 @@ members = [
     "crates/wax-tunnel",
     "crates/wax-cli",
     "crates/wax-app",
+    "crates/wax-diagnostics",
 ]
 
 [workspace.package]

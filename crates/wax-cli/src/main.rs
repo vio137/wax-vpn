@@ -1,6 +1,5 @@
 //! wax.exe - the waX VPN command line interface.
 
-mod diagnostics;
 
 use clap::{Parser, Subcommand};
 
@@ -165,7 +164,7 @@ fn run() -> Result<(), String> {
             println!("Disconnected.");
         }
         Commands::Diagnostics => {
-            println!("{}", diagnostics::report(wax_tunnel::is_elevated(), Tunnel::existing_status()));
+            println!("{}", wax_diagnostics::report(env!("WAX_BUILD_VERSION"), wax_tunnel::is_elevated(), Tunnel::existing_status()));
         }
         Commands::Disconnect => {
             Tunnel::force_disconnect().map_err(|e| e.to_string())?;

@@ -46,6 +46,7 @@ enum Tab {
 
 
 enum AppEvent {
+    DiagnosticsReady(String),
     Stage(&'static str),
     TunnelLost,
     CleanupResult(Result<(), String>),
@@ -58,6 +59,8 @@ enum AppEvent {
 }
 
 pub struct WaxApp {
+    diagnostics_report: Option<String>,
+    diagnostics_busy: bool,
     settings: Settings,
     profiles: Vec<Profile>,
     selected: Option<usize>,
@@ -144,6 +147,8 @@ impl WaxApp {
 
         let warp_registered = matches!(wax_warp::load_account(), Ok(Some(_)));
         let mut app = Self {
+            diagnostics_report: None,
+            diagnostics_busy: false,
             settings,
             profiles,
             selected,
@@ -498,6 +503,10 @@ impl WaxApp {
                             }
                         }
                     }
+                }
+                AppEvent::DiagnosticsReady(report) => {
+                    self.diagnostics_report = Some(report);
+                    self.diagnostics_busy = false;
                 }
                 AppEvent::Stats(s) => self.stats = s,
                 AppEvent::Stage(stage) => {
@@ -1679,6 +1688,35 @@ impl WaxApp {
                     .size(10.5)
                     .color(theme::MUTE),
             );
+        });
+        ui.add_space(10.0);
+        theme::card_frame().show(ui, |ui| {
+            ui.label(RichText::new("Local diagnostics").size(13.0).color(theme::TEXT).strong());
+            ui.add_space(4.0);
+            ui.label(RichText::new("Build and adapter status only. No profiles, keys, endpoints or logs. Nothing is uploaded.").size(11.5).color(theme::SUB));
+            ui.add_space(8.0);
+            ui.horizontal(|ui| {
+                if ui.add_enabled(!self.diagnostics_busy, egui::Button::new(if self.diagnostics_busy { "Reading local status..." } else { "Generate local report" })).clicked() {
+                    self.diagnostics_busy = true;
+                    let tx = self.events_tx.clone();
+                    std::thread::spawn(move || {
+                        let report = wax_diagnostics::report(VERSION, wax_tunnel::is_elevated(), Tunnel::existing_status());
+                        let _ = tx.send(AppEvent::DiagnosticsReady(report));
+                    });
+                }
+                if let Some(report) = &self.diagnostics_report {
+                    if ui.button("Copy report").clicked() { ui.ctx().copy_text(report.clone()); }
+                    if ui.button("Clear").clicked() { self.diagnostics_report = None; }
+                }
+            });
+            if let Some(report) = &self.diagnostics_report {
+                ui.add_space(8.0);
+                ui.label(RichText::new("Snapshot, not a live monitor. Review before sharing. Internet reachability is not tested.").size(10.5).color(theme::MUTE));
+                egui::ScrollArea::vertical().id_salt("diagnostics-report").max_height(200.0).show(ui, |ui| {
+                    let mut text = report.as_str();
+                    ui.add(egui::TextEdit::multiline(&mut text).font(egui::TextStyle::Monospace).desired_width(f32::INFINITY));
+                });
+            }
         });
         ui.add_space(10.0);
         theme::card_frame().show(ui, |ui| {

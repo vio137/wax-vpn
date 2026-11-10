@@ -1,0 +1,10 @@
+[package]
+name = "wax-diagnostics"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Allowlisted local support report shared by waX CLI and GUI"
+
+[dependencies]
+wax-tunnel = { path = "../wax-tunnel" }
+serde_json = "1"

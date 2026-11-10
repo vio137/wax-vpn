@@ -112,4 +112,6 @@ waX VPN imports standard WireGuard keys, addresses, IP DNS servers, peer endpoin
 
 ### Local support report
 
+About > Generate local report uses the same allowlist as `wax diagnostics`. It creates a snapshot only when clicked. Copy report writes only that report to your clipboard, and Clear removes it from the view. Nothing is uploaded.
+
 `wax diagnostics` prints a small JSON report: app version, OS/architecture, administrator state, adapter status, aggregate byte counters and handshake age, or a fixed status-query error code. It does not test Internet reachability and does not read profiles, logs, account files, keys or tokens. It makes no network requests and does not send the report anywhere. Review it before sharing. Save it yourself with shell redirection if needed.

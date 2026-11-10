@@ -10,6 +10,7 @@ name = "wax-vpn"
 path = "src/main.rs"
 
 [dependencies]
+wax-diagnostics = { path = "../wax-diagnostics" }
 wax-core = { path = "../wax-core" }
 wax-warp = { path = "../wax-warp" }
 wax-tunnel = { path = "../wax-tunnel" }

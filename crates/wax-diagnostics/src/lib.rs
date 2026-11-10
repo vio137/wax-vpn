@@ -1,11 +1,11 @@
 //! Small allowlisted support report. Never read profiles, settings, logs or accounts.
 use wax_tunnel::{TunnelError, TunnelStats};
 
-pub fn report(elevated: bool, state: Result<Option<TunnelStats>, TunnelError>) -> String {
-    report_for_platform(elevated, state, cfg!(windows))
+pub fn report(version: &str, elevated: bool, state: Result<Option<TunnelStats>, TunnelError>) -> String {
+    report_for_platform(version, elevated, state, cfg!(windows))
 }
 
-fn report_for_platform(elevated: bool, state: Result<Option<TunnelStats>, TunnelError>, needs_admin: bool) -> String {
+fn report_for_platform(version: &str, elevated: bool, state: Result<Option<TunnelStats>, TunnelError>, needs_admin: bool) -> String {
     let (status, code, stats) = if needs_admin && !elevated {
         ("unknown", Some("administrator_not_confirmed"), None)
     } else {
@@ -21,7 +21,7 @@ fn report_for_platform(elevated: bool, state: Result<Option<TunnelStats>, Tunnel
     let age = stats.and_then(|s| s.last_handshake).and_then(|t| std::time::SystemTime::now().duration_since(t).ok()).map(|d| d.as_secs());
     serde_json::to_string_pretty(&serde_json::json!({
         "schema_version": 1,
-        "app_version": env!("WAX_BUILD_VERSION"),
+        "app_version": version,
         "os": std::env::consts::OS,
         "architecture": std::env::consts::ARCH,
         "administrator_check_passed": elevated,
@@ -42,7 +42,7 @@ mod tests {
     fn error_details_never_enter_report() {
         let private = "C:/Users/private-name/private-key-token.conf 203.0.113.8";
         for error in [TunnelError::Driver(private.into()), TunnelError::Command(private.into()), TunnelError::Message(private.into())] {
-            let text = report(false, Err(error));
+            let text = report("0.1.3-test", false, Err(error));
             assert!(!text.contains(private));
             assert!(!text.contains("203.0.113.8"));
             assert!(!text.contains("private-name"));
@@ -53,18 +53,22 @@ mod tests {
     }
     #[test]
     fn missing_privilege_is_not_disconnected() {
-        let text = report_for_platform(false, Ok(None), true);
+        let text = report_for_platform("0.1.3-test", false, Ok(None), true);
         let value: serde_json::Value = serde_json::from_str(&text).unwrap();
         assert_eq!(value["tunnel_status"], "unknown");
         assert_eq!(value["status_error_code"], "administrator_not_confirmed");
     }
     #[test]
     fn connected_adapter_is_not_internet_claim() {
-        let text = report(true, Ok(Some(TunnelStats { rx_bytes: 123, tx_bytes: 456, last_handshake: None })));
+        let text = report("0.1.3-test", true, Ok(Some(TunnelStats { rx_bytes: 123, tx_bytes: 456, last_handshake: None })));
         let value: serde_json::Value = serde_json::from_str(&text).unwrap();
         assert_eq!(value["tunnel_status"], "adapter_up");
         assert_eq!(value["internet_reachability"], "not_tested");
         assert_eq!(value["rx_bytes"], 123);
+        assert_eq!(value["app_version"], "0.1.3-test");
+        let mut keys: Vec<&str> = value.as_object().unwrap().keys().map(String::as_str).collect();
+        keys.sort_unstable();
+        assert_eq!(keys, ["administrator_check_passed", "app_version", "architecture", "internet_reachability", "last_handshake_age_seconds", "os", "privacy", "rx_bytes", "schema_version", "status_error_code", "tunnel_status", "tx_bytes"]);
         assert!(value["last_handshake_age_seconds"].is_null());
     }
 }

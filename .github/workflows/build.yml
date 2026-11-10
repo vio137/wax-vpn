@@ -395,6 +395,26 @@ jobs:
               $g2.CopyFromScreen($r.Left, $r.Top, 0, 0, (New-Object System.Drawing.Size $w, $h))
               $bmp2.Save("gui-screenshot-$($tab.ToLower()).png")
               $g2.Dispose(); $bmp2.Dispose()
+              if ($tab -eq 'About') {
+                $generate = $uiaWin.FindFirst([System.Windows.Automation.TreeScope]::Descendants, (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, 'Generate local report')))
+                if (-not $generate) { throw 'Local diagnostics button missing' }
+                $generate.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+                Start-Sleep -Seconds 3
+                $copy = $uiaWin.FindFirst([System.Windows.Automation.TreeScope]::Descendants, (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, 'Copy report')))
+                if (-not $copy) { throw 'Local diagnostics report did not finish' }
+                $diagImage = New-Object System.Drawing.Bitmap $w, $h
+                $diagGraphics = [System.Drawing.Graphics]::FromImage($diagImage)
+                $diagGraphics.CopyFromScreen($r.Left, $r.Top, 0, 0, (New-Object System.Drawing.Size $w, $h))
+                $diagImage.Save('gui-screenshot-diagnostics.png')
+                $diagGraphics.Dispose(); $diagImage.Dispose()
+                $clear = $uiaWin.FindFirst([System.Windows.Automation.TreeScope]::Descendants, (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, 'Clear')))
+                if (-not $clear) { throw 'Local diagnostics clear button missing' }
+                $clear.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+                Start-Sleep -Milliseconds 500
+                $copy = $uiaWin.FindFirst([System.Windows.Automation.TreeScope]::Descendants, (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, 'Copy report')))
+                if ($copy) { throw 'Local diagnostics clear did not remove report' }
+                'local-diagnostics-generate-clear=PASS' | Out-File -FilePath verify-results.txt -Append
+              }
             }
           } else {
             Write-Host 'window not found, full-screen fallback'
@@ -650,6 +670,7 @@ jobs:
             gui-screenshot-profiles.png
             gui-screenshot-features.png
             gui-screenshot-warp.png
+            gui-screenshot-diagnostics.png
             gui-screenshot-about.png
             gui-screenshot-connected.png
 
