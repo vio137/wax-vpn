@@ -1,6 +1,7 @@
 ; waX VPN installer (NSIS)
 !include "MUI2.nsh"
 !include "FileFunc.nsh"
+!include "x64.nsh"
 
 !ifndef WAX_VERSION
 !define WAX_VERSION "0.1.0"
@@ -32,7 +33,25 @@ RequestExecutionLevel admin
 
 !insertmacro MUI_LANGUAGE "English"
 
+Function .onInit
+    ${IfNot} ${RunningX64}
+        MessageBox MB_ICONSTOP "waX VPN requires 64-bit Windows."
+        Abort
+    ${EndIf}
+    SetRegView 64
+FunctionEnd
+
+Function un.onInit
+    SetRegView 64
+FunctionEnd
+
 Section "waX VPN" SecMain
+    ; Older previews used the default 32-bit registry view. Remove only
+    ; this product's stale registration before writing the x64 entry.
+    SetRegView 32
+    DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\waX VPN"
+    DeleteRegKey HKLM "Software\waX VPN"
+    SetRegView 64
     SetOutPath "$INSTDIR"
     SetShellVarContext all
 
