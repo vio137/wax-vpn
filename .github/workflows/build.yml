@@ -739,7 +739,12 @@ jobs:
           } finally {
             & $exe --quit
             for ($i=0; $i -lt 15 -and -not $p.HasExited; $i++) { Start-Sleep -Seconds 1; $p.Refresh() }
-            if (-not $p.HasExited) { $p.Kill(); throw 'Installed GUI did not quit within 15 seconds' }
+            if (-not $p.HasExited) {
+              $debugPath = Join-Path $env:APPDATA 'wax-vpn\wax-debug.log'
+              if (Test-Path $debugPath) { Get-Content $debugPath | ForEach-Object { Write-Host "QUITDIAG $_" } }
+              Get-CimInstance Win32_Process | Where-Object { $_.ParentProcessId -eq $p.Id } | Select-Object ProcessId,ParentProcessId,Name | Format-Table
+              $p.Kill(); throw 'Installed GUI did not quit within 15 seconds'
+            }
             $uninstall = Start-Process (Join-Path $dir 'uninstall.exe') -ArgumentList '/S' -Wait -PassThru
             Start-Sleep -Seconds 3
             if (Test-Path $exe) { throw 'Uninstall left GUI binary behind' }

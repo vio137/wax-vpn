@@ -962,13 +962,16 @@ impl WaxApp {
         #[cfg(windows)]
         crate::single::diag("quit: signal consumed, shutting down tunnel");
         let taken = self.tunnel.lock().unwrap().take();
-        if let Some(t) = taken {
-            let _ = t.shutdown();
+        let result = if let Some(t) = taken {
+            crate::single::diag("quit: owned tunnel cleanup starting");
+            t.shutdown()
         } else {
-            let _ = Tunnel::force_disconnect();
-        }
+            crate::single::diag("quit: leftover cleanup starting");
+            Tunnel::force_disconnect()
+        };
+        crate::single::diag(if result.is_ok() { "quit: cleanup succeeded" } else { "quit: cleanup returned error" });
         #[cfg(windows)]
-        crate::single::diag("quit: tunnel down, exiting");
+        crate::single::diag("quit: cleanup finished, exiting");
         std::process::exit(0);
     }
 
