@@ -5,6 +5,7 @@
 use wax_diagnostics::health as connection_health;
 mod recovery;
 mod autostart;
+mod elevation;
 // Preparatory policy only. Production notification ownership is not wired yet.
 #[cfg(test)]
 mod network_change;
@@ -378,15 +379,13 @@ impl WaxApp {
     fn restart_as_admin(&mut self) {
         #[cfg(windows)]
         {
-            if let Ok(exe) = std::env::current_exe() {
-                let script = format!("Start-Process -FilePath '{}' -Verb RunAs", exe.display());
-                use std::os::windows::process::CommandExt;
-                const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-                let _ = std::process::Command::new("powershell")
-                    .args(["-NoProfile", "-Command", &script])
-                    .creation_flags(CREATE_NO_WINDOW)
-                    .spawn();
-                std::process::exit(0);
+            match elevation::restart() {
+                Ok(()) => std::process::exit(0),
+                Err(()) => {
+                    let message = "Administrator restart was cancelled or could not start. This window is still open.";
+                    self.state = ConnState::Failed(message.into());
+                    self.status_line = message.into();
+                }
             }
         }
     }
@@ -1834,11 +1833,16 @@ fn chrono_free_stamp() -> String {
 }
 
 fn main() -> eframe::Result<()> {
-    if std::env::args().any(|a| a == "--quit") {
+    if std::env::args_os().any(|a| a == "--quit") {
         #[cfg(windows)]
         if !single::request_quit() {
             eprintln!("waX VPN is not running");
         }
+        return Ok(());
+    }
+    #[cfg(windows)]
+    if elevation::finish_restart().is_err() {
+        eprintln!("Administrator restart could not complete its bounded parent handoff");
         return Ok(());
     }
     #[cfg(windows)]
@@ -1866,4 +1870,4 @@ fn main() -> eframe::Result<()> {
         options,
         Box::new(|cc| Ok(Box::new(WaxApp::new(cc, instance)))),
     )
-                        }
+                    }
