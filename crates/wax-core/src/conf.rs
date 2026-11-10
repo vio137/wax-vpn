@@ -102,6 +102,27 @@ impl WireGuardConfig {
                 .ok_or_else(|| err("expected Key = Value"))?;
             let key = key.trim();
             let value = value.trim();
+            // Repeated scalar keys used to silently replace the earlier value.
+            // Reject them before parsing or echoing any potentially secret value.
+            let duplicate_section = match section {
+                Section::Interface if match key {
+                    "PrivateKey" => private_key.is_some(),
+                    "MTU" => mtu.is_some(),
+                    "ListenPort" => listen_port.is_some(),
+                    _ => false,
+                } => Some("Interface"),
+                Section::Peer if match key {
+                    "PublicKey" => cur_public.is_some(),
+                    "PresharedKey" => cur_psk.is_some(),
+                    "Endpoint" => cur_endpoint.is_some(),
+                    "PersistentKeepalive" => cur_keepalive.is_some(),
+                    _ => false,
+                } => Some("Peer"),
+                _ => None,
+            };
+            if let Some(section_name) = duplicate_section {
+                return Err(err(&format!("duplicate {key} in [{section_name}]; keep only one value")));
+            }
             match section {
                 Section::Interface => match key {
                     "PrivateKey" => private_key = Some(keys::key_from_base64(value)?),
@@ -222,6 +243,53 @@ mod tests {
         let rendered = cfg.to_conf_string();
         let cfg2 = WireGuardConfig::parse(&rendered).unwrap();
         assert_eq!(cfg, cfg2);
+    }
+
+    #[test]
+    fn rejects_duplicate_singleton_keys_with_section_and_no_values() {
+        let base = sample();
+        let psk = keys::key_to_base64(&[3; 32]);
+        for (key, section) in [("PrivateKey", "Interface"), ("MTU", "Interface"),
+            ("ListenPort", "Interface"), ("PublicKey", "Peer"), ("PresharedKey", "Peer"),
+            ("Endpoint", "Peer"), ("PersistentKeepalive", "Peer")] {
+            let first = match key {
+                "ListenPort" => format!("{key} = 0"),
+                "PresharedKey" => format!("{key} = {psk}"),
+                _ => base.lines().find(|line| line.starts_with(&format!("{key} ="))).unwrap().to_string(),
+            };
+            // Duplicate detection precedes parsing the second value.
+            let text = base.replace(&format!("[{section}]"),
+                &format!("[{section}]\n{first}\n{key} = do-not-echo-secret"));
+            let error = WireGuardConfig::parse(&text).unwrap_err().to_string();
+            assert!(error.contains(&format!("duplicate {key} in [{section}]")), "{error}");
+            assert!(error.contains("line "));
+            assert!(!error.contains("do-not-echo-secret"));
+            assert!(!error.contains(&psk));
+        }
+        // Identical repeated values are ambiguous too, not just conflicting ones.
+        let text = base.replace("MTU = 1280", "MTU = 1280\nMTU = 1280");
+        assert!(WireGuardConfig::parse(&text).unwrap_err().to_string().contains("duplicate MTU"));
+        // Reopening Interface must not bypass the scalar check.
+        let text = format!("{base}\n[Interface]\nMTU = 1400\n");
+        assert!(WireGuardConfig::parse(&text).unwrap_err().to_string().contains("duplicate MTU in [Interface]"));
+    }
+
+    #[test]
+    fn repeated_lists_and_independent_peer_singletons_still_parse() {
+        let base = sample();
+        let psk = keys::key_to_base64(&[3; 32]);
+        let public = keys::key_to_base64(&[4; 32]);
+        let text = base.replace("MTU = 1280", "MTU = 1280\nListenPort = 0\nAddress = 10.1.0.2/32\nDNS = 9.9.9.9")
+            .replace("PersistentKeepalive = 25", &format!("PersistentKeepalive = 25\nPresharedKey = {psk}\nAllowedIPs = 10.0.0.0/8"));
+        let text = format!("{text}\n[Peer]\nPublicKey = {public}\nPresharedKey = {psk}\nEndpoint = localhost:12345\nPersistentKeepalive = 0\nAllowedIPs = 192.168.0.0/16\n");
+        let parsed = WireGuardConfig::parse(&text).unwrap();
+        assert_eq!(parsed.interface.addresses.len(), 3);
+        assert_eq!(parsed.interface.dns.len(), 3);
+        assert_eq!(parsed.interface.listen_port, Some(0));
+        assert_eq!(parsed.peers.len(), 2);
+        assert_eq!(parsed.peers[0].allowed_ips.len(), 3);
+        assert_eq!(parsed.peers[1].persistent_keepalive, Some(0));
+        assert_eq!(WireGuardConfig::parse(&parsed.to_conf_string()).unwrap(), parsed);
     }
 
     #[test]
