@@ -105,3 +105,7 @@ never derived from measured traffic.
 
 The interface typeface is Inter Display by Rasmus Andersson
 (https://rsms.me/inter/), used under the SIL Open Font License 1.1.
+
+### Configuration compatibility
+
+waX VPN imports standard WireGuard keys, addresses, IP DNS servers, peer endpoints and AllowedIPs. It does not execute wg-quick scripts or implement wg-quick routing-table settings. Profiles containing PreUp, PostUp, PreDown, PostDown, Table, SaveConfig or FwMark are rejected explicitly rather than silently changing their behavior. Remove a directive only if you understand what it did; an imported profile without it can behave differently.

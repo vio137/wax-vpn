@@ -119,8 +119,11 @@ impl WireGuardConfig {
                     }
                     "MTU" => mtu = Some(value.parse().map_err(|_| err("bad MTU"))?),
                     "ListenPort" => listen_port = Some(value.parse().map_err(|_| err("bad ListenPort"))?),
-                    // wg-quick convenience keys we don't action but tolerate
-                    "PreUp" | "PostUp" | "PreDown" | "PostDown" | "Table" | "SaveConfig" | "FwMark" => {}
+                    // Never silently strip instructions that can change a
+                    // profile's routing, firewall, DNS or lifecycle behavior.
+                    "PreUp" | "PostUp" | "PreDown" | "PostDown" | "Table" | "SaveConfig" | "FwMark" => {
+                        return Err(err(&format!("unsupported wg-quick directive {key}; waX VPN does not run scripts or apply this setting")));
+                    }
                     other => return Err(err(&format!("unknown Interface key {other}"))),
                 },
                 Section::Peer => match key {
@@ -224,6 +227,17 @@ mod tests {
             WireGuardConfig::parse(&plain).unwrap(),
             WireGuardConfig::parse(&windows).unwrap(),
         );
+    }
+
+    #[test]
+    fn rejects_unsupported_directives_without_echoing_values() {
+        for key in ["PreUp", "PostUp", "PreDown", "PostDown", "Table", "SaveConfig", "FwMark"] {
+            let text = sample().replace("[Interface]", &format!("[Interface]\n{key} = do-not-echo-private-value"));
+            let error = WireGuardConfig::parse(&text).unwrap_err().to_string();
+            assert!(error.contains("unsupported wg-quick directive"), "{key}: {error}");
+            assert!(error.contains(key));
+            assert!(!error.contains("do-not-echo-private-value"));
+        }
     }
 
     #[test]
