@@ -874,7 +874,15 @@ impl WaxApp {
             if let Some(issue) = self.cleanup_issue.clone() {
                 ui.horizontal(|ui| {
                     ui.label(RichText::new(issue).size(10.5).color(theme::WARN));
-                    if ui.link(RichText::new("Retry").size(10.5).color(theme::WARN)).clicked() {
+                    let can_retry = matches!(self.state, ConnState::Disconnected | ConnState::Failed(_));
+                    let retry = ui.add_enabled_ui(can_retry, |ui| {
+                        ui.link(RichText::new("Retry").size(10.5).color(theme::WARN))
+                    }).inner.on_disabled_hover_text("Disconnect before retrying cleanup");
+                    if retry.clicked() && can_retry {
+                        // Lock controls until the cleanup result arrives. This
+                        // prevents a concurrent Connect from being torn down.
+                        self.state = ConnState::Disconnecting;
+                        self.status_line = "Retrying cleanup...".into();
                         let tx = self.events_tx.clone();
                         std::thread::spawn(move || {
                             let _ = tx.send(AppEvent::CleanupResult(
