@@ -7,6 +7,8 @@ mod recovery;
 // Preparatory policy only. Production notification ownership is not wired yet.
 #[cfg(test)]
 mod network_change;
+#[cfg(all(windows, test))]
+mod network_notify;
 #[cfg(windows)]
 mod single;
 #[cfg(not(windows))]
