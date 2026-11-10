@@ -36,6 +36,14 @@ fn split_list(value: &str) -> impl Iterator<Item = &str> {
     value.split(',').map(|s| s.trim()).filter(|s| !s.is_empty())
 }
 
+// Bare numeric addresses represent a single host, never a wider network.
+fn parse_ip_prefix(value: &str) -> Option<IpNet> {
+    IpNet::from_str(value).ok().or_else(|| {
+        let ip = IpAddr::from_str(value).ok()?;
+        IpNet::new(ip, if ip.is_ipv4() { 32 } else { 128 }).ok()
+    })
+}
+
 impl WireGuardConfig {
     pub fn parse(text: &str) -> Result<WireGuardConfig, CoreError> {
         enum Section { None, Interface, Peer }
@@ -130,7 +138,7 @@ impl WireGuardConfig {
                     "PrivateKey" => private_key = Some(keys::key_from_base64(value)?),
                     "Address" => {
                         for a in split_list(value) {
-                            addresses.push(IpNet::from_str(a).map_err(|_| err(&format!("bad address {a}")))?);
+                            addresses.push(parse_ip_prefix(a).ok_or_else(|| err(&format!("bad address {a}")))?);
                         }
                     }
                     "DNS" => {
@@ -153,7 +161,7 @@ impl WireGuardConfig {
                     "PresharedKey" => cur_psk = Some(keys::key_from_base64(value)?),
                     "AllowedIPs" => {
                         for a in split_list(value) {
-                            cur_allowed.push(IpNet::from_str(a).map_err(|_| err(&format!("bad AllowedIP {a}")))?);
+                            cur_allowed.push(parse_ip_prefix(a).ok_or_else(|| err(&format!("bad AllowedIP {a}")))?);
                         }
                     }
                     "Endpoint" => cur_endpoint = Some(value.to_string()),
@@ -346,6 +354,32 @@ mod tests {
     }
 
     #[test]
+    fn bare_ip_values_normalize_to_host_prefixes_without_relaxing_validation() {
+        let text = sample()
+            .replace("Address = 10.0.0.2/32, fd00::2/128", "Address = 10.0.0.2, fd00::2 # hosts\nAddress = 10.1.0.2/24")
+            .replace("AllowedIPs = 0.0.0.0/0, ::/0", "AllowedIPs = 192.0.2.1, 2001:db8::1 # hosts\nAllowedIPs = 10.0.0.0/8");
+        let parsed = WireGuardConfig::parse(&text).unwrap();
+        assert_eq!(parsed.interface.addresses.iter().map(ToString::to_string).collect::<Vec<_>>(),
+            ["10.0.0.2/32", "fd00::2/128", "10.1.0.2/24"]);
+        assert_eq!(parsed.peers[0].allowed_ips.iter().map(ToString::to_string).collect::<Vec<_>>(),
+            ["192.0.2.1/32", "2001:db8::1/128", "10.0.0.0/8"]);
+        let normalized = parsed.to_conf_string();
+        assert!(normalized.contains("Address = 10.0.0.2/32, fd00::2/128"));
+        assert!(normalized.contains("AllowedIPs = 192.0.2.1/32, 2001:db8::1/128"));
+        assert_eq!(WireGuardConfig::parse(&normalized).unwrap(), parsed);
+        for value in ["999.1.2.3", "fd00:::2", "private.example", "10.0.0.2/33", "fd00::2/129", "10.0.0.2/", "[fd00::2]"] {
+            for key in ["Address", "AllowedIPs"] {
+                let invalid = sample().lines().map(|line| {
+                    if line.starts_with(&format!("{key} =")) { format!("{key} = {value}") }
+                    else { line.to_string() }
+                }).collect::<Vec<_>>().join("\n");
+                assert!(WireGuardConfig::parse(&invalid).is_err(), "accepted {key} = {value}");
+            }
+        }
+        assert!(WireGuardConfig::parse(&text.replace("MTU = 1280", "MTU = 1279")).is_err());
+    }
+
+    #[test]
     fn accepts_utf8_bom_and_windows_line_endings() {
         let plain = sample();
         let windows = format!("\u{feff}{}", plain.replace('\n', "\r\n"));
@@ -391,4 +425,4 @@ mod tests {
         let text = format!("[Interface]\nPrivateKey = {priv_b64}\nAddress = 10.0.0.2/32\n");
         assert!(WireGuardConfig::parse(&text).is_err());
     }
-                }
+                    }
