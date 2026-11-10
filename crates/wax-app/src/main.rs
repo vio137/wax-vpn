@@ -1322,15 +1322,37 @@ impl WaxApp {
         ui.add_space(8.0);
         theme::section_heading(ui, "Import", "Paste a WireGuard config");
         theme::card_frame().show(ui, |ui| {
-            egui::ScrollArea::vertical()
-                .id_salt("import-scroll")
-                .max_height(110.0)
+            let input_id = ui.make_persistent_id("wireguard-import-input");
+            let focused = ui.memory(|m| m.has_focus(input_id));
+            let border = if focused {
+                theme::alpha(theme::ACCENT, 140)
+            } else {
+                theme::alpha(theme::SUB, 45)
+            };
+            egui::Frame::default()
+                .fill(theme::PANEL)
+                .stroke(egui::Stroke::new(1.0, border))
+                .corner_radius(egui::CornerRadius::same(8))
+                .inner_margin(egui::Margin::symmetric(12, 8))
                 .show(ui, |ui| {
-                    ui.add(
-                        egui::TextEdit::multiline(&mut self.import_paste)
-                            .hint_text("[Interface]\nPrivateKey = ...")
-                            .desired_width(f32::INFINITY),
-                    );
+                    egui::ScrollArea::vertical()
+                        .id_salt("import-scroll")
+                        .max_height(110.0)
+                        .show(ui, |ui| {
+                            let resp = ui.add(
+                                egui::TextEdit::multiline(&mut self.import_paste)
+                                    .id(input_id)
+                                    .font(egui::FontId::monospace(12.0))
+                                    .text_color(theme::TEXT)
+                                    .frame(egui::Frame::NONE)
+                                    .desired_rows(4)
+                                    .hint_text("[Interface]\nPrivateKey = ...")
+                                    .desired_width(f32::INFINITY),
+                            );
+                            resp.widget_info(|| egui::WidgetInfo::labeled(
+                                egui::Role::TextInput, true, "WireGuard configuration to import"
+                            ));
+                        });
                 });
             ui.add_space(4.0);
             if theme::primary_button(ui, "Import config", !self.import_paste.trim().is_empty()) {
