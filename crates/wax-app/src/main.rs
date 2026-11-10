@@ -1182,20 +1182,27 @@ impl WaxApp {
                         .max_rect(r.shrink2(egui::vec2(14.0, 0.0)))
                         .layout(Layout::left_to_right(Align::Center)),
                 );
-                row_ui.vertical(|ui| {
-                    ui.label(
-                        RichText::new(&p.name)
-                            .size(13.5)
-                            .color(if selected { theme::TEXT } else { theme::SUB })
-                            .strong(),
-                    );
-                    ui.label(
-                        RichText::new(format!("{ep}  ·  {addr}"))
-                            .size(10.5)
-                            .color(theme::MUTE)
-                            .monospace(),
-                    );
-                });
+                // Reserve action space before laying out potentially long text.
+                let text_width = (row_ui.available_width() - 280.0).max(80.0);
+                row_ui.allocate_ui_with_layout(
+                    egui::vec2(text_width, 48.0),
+                    Layout::top_down(Align::Min),
+                    |ui| {
+                        ui.add(egui::Label::new(
+                            RichText::new(&p.name)
+                                .size(13.5)
+                                .color(if selected { theme::TEXT } else { theme::SUB })
+                                .strong(),
+                        ).truncate()).on_hover_text(&p.name);
+                        let detail = format!("{ep}  ·  {addr}");
+                        ui.add(egui::Label::new(
+                            RichText::new(&detail)
+                                .size(10.5)
+                                .color(theme::MUTE)
+                                .monospace(),
+                        ).truncate()).on_hover_text(detail);
+                    },
+                );
                 row_ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     let now = ui.input(|inp| inp.time);
                     let armed = matches!(self.confirm_delete, Some((idx, t0)) if idx == i && now - t0 < 3.0);
