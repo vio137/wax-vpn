@@ -112,9 +112,8 @@ impl WireGuardConfig {
                     }
                     "DNS" => {
                         for d in split_list(value) {
-                            if let Ok(ip) = IpAddr::from_str(d) {
-                                dns.push(ip);
-                            }
+                            let ip = IpAddr::from_str(d).map_err(|_| err("DNS supports only IP addresses; search domains and hostnames are not supported"))?;
+                            dns.push(ip);
                         }
                     }
                     "MTU" => mtu = Some(value.parse().map_err(|_| err("bad MTU"))?),
@@ -237,6 +236,17 @@ mod tests {
             assert!(error.contains("unsupported wg-quick directive"), "{key}: {error}");
             assert!(error.contains(key));
             assert!(!error.contains("do-not-echo-private-value"));
+        }
+    }
+
+    #[test]
+    fn rejects_unsupported_dns_without_silent_partial_import() {
+        for dns in ["internal.private", "1.1.1.1, internal.private", "not-an-ip"] {
+            let text = sample().replace("DNS = 1.1.1.1, 2606:4700:4700::1111", &format!("DNS = {dns}"));
+            let error = WireGuardConfig::parse(&text).unwrap_err().to_string();
+            assert!(error.contains("DNS supports only IP addresses"));
+            assert!(!error.contains("internal.private"));
+            assert!(!error.contains("not-an-ip"));
         }
     }
 
