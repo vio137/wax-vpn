@@ -12,7 +12,7 @@ This is an independent behavior/structure study with REA 6.8.0 and Ghidra 12.1.4
 - [x] REA service imports: named-pipe/service APIs, route/address notifications, WFP transaction/filter APIs. These support architecture hypotheses, not complete feature reconstruction.
 - [x] REA certificate identities: Cloudflare signer certificate embedded in service. This inspection does not validate Authenticode trust.
 - [x] REA Rust metadata probe: compiler path marker found, no cargo-auditable dependency section. Dependencies remain unknown.
-- [ ] Deep CLI feature tracing and native relationships, in an isolated research workflow.
+- [ ] Deep CLI feature tracing and native relationships. Default Ghidra analysis timed out after20minutes, with repeated unresolved-flow decompiler warnings. Reduced pass disables Decompiler Switch Analysis; switch recovery/complete calls remain unknown.
 - [x] Resolve MSI File/Component tables: Flutter engine plus x64 ELF app.so (Dart AOT payload), separate service/CLI/diagnostics/DEX/updater. File sizes and SHA256 recorded locally. No assets copied.
 - [ ] Trace Flutter settings/state candidates. Supplemental strings show reconnect/package-update/captive-portal/connectivity names, not runtime behavior.
 - [x] Runtime CLI help/version on an isolated Windows runner: Authenticode valid Cloudflare, Inc., version2026.8.2115.0. No MSI install/service/registration/connection. One unsupported exploratory help command caused final harness exit2, not a signature failure; corrected rerun green42765965388. Full UI behavior still unknown.
@@ -53,4 +53,4 @@ Publisher-verified official CLI help describes maintained connection intent; spl
 
 ## Follow-up source audit
 
-GUI startup detected an already-running adapter but its stats thread exited because that tunnel had no owned handle in the GUI. Independent fix uses read-only status polling for the external tunnel, reflects stop without reconnecting a guessed profile, and uses fixed query errors. Targeted Windows verification is pending. This does not add a service or network probe.
+GUI startup detected an already-running adapter but its stats thread exited because that tunnel had no owned handle in the GUI. Independent fix uses read-only status polling for the external tunnel, reflects stop without reconnecting a guessed profile, and uses fixed query errors. Targeted Windows verification green8b123c1/run42766598088: GUI detects externally owned tunnel stop without reconnect. This does not add a service or network probe.

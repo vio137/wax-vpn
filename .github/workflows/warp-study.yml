@@ -29,6 +29,7 @@ jobs:
       - name: REA static native analysis only (never execute WARP)
         env:
           REA_GHIDRA_STARTUP_TIMEOUT_MS: '1200000'
+          REA_GHIDRA_DISABLED_ANALYZERS: 'Decompiler Switch Analysis'
           GHIDRA_HEADLESS_MAXMEM: 3G
         run: |
           REA="$PWD/analysis/node_modules/.bin/rea"
@@ -36,8 +37,10 @@ jobs:
           "$REA" inspect-pe-imports "$PWD/target/warp_cli.exe" --format json > evidence/cli-imports.json
           "$REA" inspect-pe-imports "$PWD/target/warp_svc.exe" --format json > evidence/service-imports.json
           "$REA" inspect-pe-certificates "$PWD/target/warp_svc.exe" --format json > evidence/service-certificate-identities.json
+          printf '%s\n' 'Reduced analysis: Decompiler Switch Analysis disabled after repeated unresolved-flow warnings and20min default-analysis timeout. Switch recovery/call completeness remain unknown.' > evidence/analysis-scope.txt
           "$REA" analyze "$PWD/target/warp_cli.exe" --provider ghidra --format json > evidence/cli-native-overview.json
           "$REA" search "$PWD/target/warp_cli.exe" 'diagnos|reconnect|disconnect|split|dns|mode|status|MTU|protocol|captive|update' --mode regex --provider ghidra --format json > evidence/cli-feature-strings.json
+          "$REA" trace "$PWD/target/warp_cli.exe" 'registration' --provider ghidra --format json > evidence/cli-registration-trace.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
