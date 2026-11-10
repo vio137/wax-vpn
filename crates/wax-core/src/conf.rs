@@ -32,8 +32,9 @@ pub struct WireGuardConfig {
     pub peers: Vec<PeerConfig>,
 }
 
-fn split_list(value: &str) -> impl Iterator<Item = &str> {
-    value.split(',').map(|s| s.trim()).filter(|s| !s.is_empty())
+fn split_list(value: &str) -> Option<Vec<&str>> {
+    let values: Vec<_> = value.split(',').map(str::trim).collect();
+    if values.iter().any(|item| item.is_empty()) { None } else { Some(values) }
 }
 
 // Bare numeric addresses represent a single host, never a wider network.
@@ -137,12 +138,12 @@ impl WireGuardConfig {
                 Section::Interface => match key {
                     "PrivateKey" => private_key = Some(keys::key_from_base64(value)?),
                     "Address" => {
-                        for a in split_list(value) {
+                        for a in split_list(value).ok_or_else(|| err("empty Address list entry"))? {
                             addresses.push(parse_ip_prefix(a).ok_or_else(|| err(&format!("bad address {a}")))?);
                         }
                     }
                     "DNS" => {
-                        for d in split_list(value) {
+                        for d in split_list(value).ok_or_else(|| err("empty DNS list entry"))? {
                             let ip = IpAddr::from_str(d).map_err(|_| err("DNS supports only IP addresses; search domains and hostnames are not supported"))?;
                             dns.push(ip);
                         }
@@ -160,7 +161,9 @@ impl WireGuardConfig {
                     "PublicKey" => cur_public = Some(keys::key_from_base64(value)?),
                     "PresharedKey" => cur_psk = Some(keys::key_from_base64(value)?),
                     "AllowedIPs" => {
-                        for a in split_list(value) {
+                        // Older waX normalized files wrote an empty line for no routes.
+                        if value.is_empty() { continue; }
+                        for a in split_list(value).ok_or_else(|| err("empty AllowedIPs list entry"))? {
                             cur_allowed.push(parse_ip_prefix(a).ok_or_else(|| err(&format!("bad AllowedIP {a}")))?);
                         }
                     }
@@ -219,8 +222,10 @@ impl WireGuardConfig {
             if let Some(psk) = &peer.preshared_key {
                 out.push_str(&format!("PresharedKey = {}\n", keys::key_to_base64(psk)));
             }
-            let list: Vec<String> = peer.allowed_ips.iter().map(|a| a.to_string()).collect();
-            out.push_str(&format!("AllowedIPs = {}\n", list.join(", ")));
+            if !peer.allowed_ips.is_empty() {
+                let list: Vec<String> = peer.allowed_ips.iter().map(|a| a.to_string()).collect();
+                out.push_str(&format!("AllowedIPs = {}\n", list.join(", ")));
+            }
             if let Some(ep) = &peer.endpoint {
                 out.push_str(&format!("Endpoint = {ep}\n"));
             }
@@ -380,6 +385,37 @@ mod tests {
     }
 
     #[test]
+    fn rejects_list_gaps_but_preserves_legacy_empty_allowed_ips() {
+        for (key, good) in [("Address", "10.0.0.2"), ("DNS", "1.1.1.1"), ("AllowedIPs", "10.0.0.0/8")] {
+            for value in [format!(", {good}"), format!("{good},"), format!("{good}, ,{good}"), ",".to_string(), " , # hidden".to_string()] {
+                let invalid = sample().lines().map(|line| {
+                    if line.starts_with(&format!("{key} =")) { format!("{key} = {value}") }
+                    else { line.to_string() }
+                }).collect::<Vec<_>>().join("\n");
+                let error = WireGuardConfig::parse(&invalid).unwrap_err().to_string();
+                assert!(error.contains(&format!("empty {key} list entry")), "{error}");
+                assert!(error.contains("line "));
+                assert!(!error.contains(good));
+            }
+        }
+        for key in ["Address", "DNS"] {
+            let invalid = sample().lines().map(|line| {
+                if line.starts_with(&format!("{key} =")) { format!("{key} = # empty") }
+                else { line.to_string() }
+            }).collect::<Vec<_>>().join("\n");
+            assert!(WireGuardConfig::parse(&invalid).is_err());
+        }
+        let old = sample().replace("AllowedIPs = 0.0.0.0/0, ::/0", "AllowedIPs = # legacy no routes");
+        let parsed = WireGuardConfig::parse(&old).unwrap();
+        assert!(parsed.peers[0].allowed_ips.is_empty());
+        let normalized = parsed.to_conf_string();
+        assert!(!normalized.contains("AllowedIPs ="));
+        assert_eq!(WireGuardConfig::parse(&normalized).unwrap(), parsed);
+        let repeated = old.replace("AllowedIPs = # legacy no routes", "AllowedIPs =\nAllowedIPs = 10.0.0.1, fd00::1\nAllowedIPs = 192.0.2.0/24");
+        assert_eq!(WireGuardConfig::parse(&repeated).unwrap().peers[0].allowed_ips.len(), 3);
+    }
+
+    #[test]
     fn accepts_utf8_bom_and_windows_line_endings() {
         let plain = sample();
         let windows = format!("\u{feff}{}", plain.replace('\n', "\r\n"));
@@ -425,4 +461,4 @@ mod tests {
         let text = format!("[Interface]\nPrivateKey = {priv_b64}\nAddress = 10.0.0.2/32\n");
         assert!(WireGuardConfig::parse(&text).is_err());
     }
-                    }
+            }
