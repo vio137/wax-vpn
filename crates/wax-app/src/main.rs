@@ -71,6 +71,7 @@ pub struct WaxApp {
     warp_summary: String,
     warp_tos: bool,
     warp_busy: bool,
+    warp_notice: Option<(String, bool)>,
     import_paste: String,
     import_name: String,
     import_error: Option<String>,
@@ -154,6 +155,7 @@ impl WaxApp {
             warp_summary: String::new(),
             warp_tos: false,
             warp_busy: false,
+            warp_notice: None,
             import_paste: String::new(),
             import_name: String::new(),
             import_error: None,
@@ -188,9 +190,9 @@ impl WaxApp {
 
     fn refresh_warp_summary(&mut self) {
         match wax_warp::load_account() {
-            Ok(Some(account)) => {
+            Ok(Some(_account)) => {
                 self.warp_registered = true;
-                self.warp_summary = format!("Registered - license {}", account.license);
+                self.warp_summary = "Registered on this device".into();
             }
             _ => {
                 self.warp_registered = false;
@@ -484,12 +486,14 @@ impl WaxApp {
                 }
                 AppEvent::WarpDone(Ok(msg)) => {
                     self.warp_busy = false;
+                    self.warp_notice = Some((msg.clone(), false));
                     self.status_line = msg;
                     self.refresh_warp_summary();
                     self.reload_profiles();
                 }
                 AppEvent::WarpDone(Err(e)) => {
                     self.warp_busy = false;
+                    self.warp_notice = Some((e.clone(), true));
                     self.status_line = format!("WARP: {e}");
                 }
             }
@@ -500,6 +504,7 @@ impl WaxApp {
     fn warp_register(&mut self) {
         self.warp_busy = true;
         self.status_line = "Registering WARP device...".to_string();
+        self.warp_notice = Some(("Registering WARP device...".into(), false));
         let tx = self.events_tx.clone();
         std::thread::spawn(move || {
             let result = (|| -> Result<String, String> {
@@ -533,6 +538,7 @@ impl WaxApp {
 
     fn warp_unregister(&mut self) {
         self.warp_busy = true;
+        self.warp_notice = Some(("Removing WARP registration...".into(), false));
         let tx = self.events_tx.clone();
         std::thread::spawn(move || {
             let result = (|| -> Result<String, String> {
@@ -1517,6 +1523,12 @@ impl WaxApp {
             );
             ui.add_space(4.0);
             ui.label(RichText::new(&self.warp_summary).size(12.5).color(theme::TEXT));
+            if let Some((notice, failed)) = &self.warp_notice {
+                ui.add_space(4.0);
+                ui.label(RichText::new(notice).size(11.5).color(
+                    if *failed { theme::BAD } else { theme::SUB }
+                ));
+            }
             ui.add_space(6.0);
             if self.warp_registered {
                 if theme::danger_button(ui, "Unregister WARP") && !self.warp_busy {
