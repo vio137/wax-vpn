@@ -1,20 +1,24 @@
-# waX VPN v0.1.11
+# waX VPN v0.1.12
 
-Unsigned Windows x64 native administrator-restart checkpoint. Windows may show an unknown-publisher warning. The official WireGuardNT driver is independently signed by its vendor. No kill switch: traffic can use the normal connection if the tunnel drops.
+Unsigned Windows x64 profile-read checkpoint. Windows may show an unknown-publisher warning. The official WireGuardNT driver is independently signed by its vendor. No kill switch: traffic can use the normal connection if the tunnel drops.
 
 ## Changes
 
-- Replaced the interpolated PowerShell restart command with native ShellExecuteW using the runas verb. Windows still owns the UAC consent/credential prompt. There is no elevation bypass, service or network call.
-- The executable path is a separate UTF-16 API argument, not shell script text. Apostrophes and spaces are not interpreted as PowerShell syntax.
-- A reported failed or cancelled launch keeps the current window open and shows a failure message. An accepted launch request exits the old instance. The elevated child waits up to 10 seconds for that parent process to exit before acquiring the existing single-instance mutex. Wait failure or timeout aborts the child without killing another process.
+- Profile loading reports a count of unreadable or malformed .conf files instead of silently hiding them. The warning contains no file names, keys or config contents. Skipped files are not changed.
+- A directory-level reload failure keeps the previous list visible with an explicit warning. Manual connection from that stale snapshot is guarded until a successful reload. Existing tunnel ownership/recovery is unchanged.
+- Profiles has a Reload profiles action. A successful reload clears the read warning; this does not repair unreadable files.
 
 ## Verification
 
-Exact release source ee886d0d5229a774a5602f264fe7edfea482cc2d / full manual gate 42828756989 passed Windows workspace tests, tunnel/GUI, fresh install/uninstall and publication. Prepared source f945aaf / full manual preview 42826605856 also passed. A fresh released installer download is 10,949,648 bytes with SHA256 `488b6bd619baddc38a491a6e6b2baabc9e6e4b69c3dc0f63df40faf02090270b`, matching the released SHA256SUMS. Raw test output confirms parser rejection cases, ShellExecute return-code boundary, UTF-16 roundtrip for apostrophe/space/Unicode/non-Unicode paths, and bounded process-wait cases passed. These tests do not invoke UAC or demonstrate the full restart handoff.
+Prepared source d5941d4 / full manual preview 42834021598 passed Windows workspace tests, tunnel/GUI and fresh install/uninstall. Exact v0.1.12 build and publication remain pending.
 
-Retained exact stable results confirm tunnel-side handshake/ping/DNS/IPv4 MTU 1380, split exclusions, adapter-loss recovery after 5 seconds, pending-retry disable over 48 samples/12 seconds, manual reconnect while automatic recovery was off, close-to-tray/original HWND+PID restore/graceful quit and malformed-settings preservation/warnings. No console windows were observed in 440 samples at about 100 ms; shorter windows could be missed. Crash snapshot at 3 seconds before cleanup showed adapter gone, DNS none, zero old kill-switch rules. Actual Connected, Profiles, Features, WARP, About and installed pixels were inspected; all show v0.1.11. Profiles has scrollable lower controls outside the captured viewport.
+Named unit tests cover mixed valid/malformed/unreadable entries, unchanged original bytes, missing folder versus directory failure, sorted names and count-only warning text. The first mixed-load fixture at 412c26c / run 42831837117 failed because its intended-valid config had no peer. The existing parser correctly rejected it. The fixture was corrected to a peer-bearing config and explicitly checked for parse validity; parser rules and assertions were not relaxed.
 
-Real UAC acceptance and cancellation, the resulting failure message pixels, a successful elevated restart and the complete parent-to-child handoff remain untested. ShellExecute success reports an accepted launch request, not proof that a usable elevated UI has opened.
+Retained GUI results and actual warning pixels demonstrate a skipped-file count, the previous demo profile still visible after a directory reload failure, and warnings clearing after the directory was restored and the malformed fixture removed. Connect/Delete are disabled in the failed-reload Profiles capture. Startup directory-error pixels and an invoked manual Connect failure from that stale snapshot remain untested. Core directory-error behavior and the manual guard are tested or source-checked respectively, not full UI proof for those cases. Lower Import controls remain scrollable beyond the captured viewport.
+
+Peer handshake, tunnel-side ping, DNS and IPv4 MTU 1380, split route exclusions, owned adapter-loss recovery after 6 seconds, pending-retry disable over 48 samples/12 seconds, manual reconnect while recovery was off, close-to-tray/original HWND+PID restore/graceful quit and malformed-settings preservation/warnings passed. No console windows were observed in 438 samples at about 100 ms; shorter windows could be missed. Crash snapshot at 3 seconds before cleanup showed adapter gone, DNS none and zero old kill-switch rules. Actual Profiles/warning and installed pixels were inspected. Fresh install/launch/uninstall passed.
+
+Real UAC acceptance/cancellation, native restart failure pixels and the full elevated parent-to-child handoff from v0.1.11 remain untested. Native restart policy/path/wait unit tests pass; runas retains the Windows prompt.
 
 ## Scope and limits
 
