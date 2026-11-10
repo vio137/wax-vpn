@@ -2,7 +2,6 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod gargantua;
 use wax_diagnostics::health as connection_health;
 mod recovery;
 #[cfg(windows)]
@@ -96,11 +95,6 @@ pub struct WaxApp {
     instance: Option<single::Instance>,
     confirm_delete: Option<(usize, f64)>,
     cleanup_issue: Option<String>,
-    scene: gargantua::Gargantua,
-    energy: f32,
-    speed: f32,
-    phase: f32,
-    last_tick: Instant,
     #[cfg(windows)]
     tray: Option<tray::Tray>,
 }
@@ -184,11 +178,6 @@ impl WaxApp {
             instance,
             confirm_delete: None,
             cleanup_issue: None,
-            scene: gargantua::Gargantua::new(),
-            energy: 0.5,
-            speed: 0.7,
-            phase: 0.0,
-            last_tick: Instant::now(),
             #[cfg(windows)]
             tray: tray::Tray::new(&cc.egui_ctx),
         };
@@ -811,7 +800,6 @@ impl eframe::App for WaxApp {
             }
         }
 
-        let t = self.start.elapsed().as_secs_f32();
 
         // ---------- custom title bar (frameless window) ----------
         egui::Panel::top("titlebar")
@@ -846,10 +834,10 @@ impl eframe::App for WaxApp {
         // ---------- icon rail ----------
         egui::Panel::left("rail")
             .resizable(false)
-            .exact_size(76.0)
+            .exact_size(if ctx.content_rect().width() < 840.0 { 152.0 } else { 176.0 })
             .frame(egui::Frame::default().fill(theme::PANEL).inner_margin(egui::Margin::symmetric(6, 10)))
             .show(ui, |ui| {
-                ui.add_space(6.0);
+                ui.add_space(14.0);
                 let items = [
                     (Tab::Connect, "Connect"),
                     (Tab::Profiles, "Profiles"),
@@ -869,43 +857,19 @@ impl eframe::App for WaxApp {
         egui::CentralPanel::default()
             .frame(egui::Frame::default().fill(theme::BG).inner_margin(egui::Margin::symmetric(18, 12)))
             .show(ui, |ui| {
-                // Scene timing. Brightness and rotation speed are fixed moods
-                // per connection state - never tied to measured throughput.
-                let now = Instant::now();
-                let dt = (now - self.last_tick).as_secs_f32().min(0.1);
-                self.last_tick = now;
-                let (energy_t, speed_t) = match &self.state {
-                    ConnState::Disconnected => (0.5_f32, 0.7_f32),
-                    ConnState::Connecting => (0.8, 1.35),
-                    ConnState::Connected { .. } => (1.0, 1.0),
-                    ConnState::Disconnecting => (0.55, 0.8),
-                    ConnState::Failed(_) => (0.3, 0.45),
-                };
-                let k = (dt * 4.0).min(1.0);
-                self.energy += (energy_t - self.energy) * k;
-                self.speed += (speed_t - self.speed) * k;
-                if !self.settings.reduced_motion {
-                    self.phase += dt * self.speed;
-                }
-                let (phase, twinkle_t) = if self.settings.reduced_motion {
-                    (1.5, 4.2)
-                } else {
-                    (self.phase, t)
-                };
-
-                // A whisper of starfield, brand-coherent with the site.
-                {
-                    let rect = ui.max_rect();
-                    let painter = ui.painter().with_clip_rect(rect);
-                    self.scene
-                        .paint_stars(&painter, rect, rect.center(), 30.0, twinkle_t, 0.20);
-                }
-
+                let title = match self.tab { Tab::Connect => "Connect", Tab::Profiles => "Profiles", Tab::Features => "Features", Tab::Warp => "WARP", Tab::About => "About" };
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new(title).font(theme::semi(14.0)).color(theme::TEXT));
+                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| { ui.label(RichText::new(format!("v{VERSION}")).size(12.0).color(theme::SUB)); });
+                });
+                ui.add_space(12.0);
+                theme::hairline(ui);
+                ui.add_space(12.0);
                 let fade = theme::enter(ui, ui.scope_id().with(("tab", self.tab)), self.settings.reduced_motion);
                 ui.scope(|ui| {
                     ui.set_opacity(fade);
                     if self.tab == Tab::Connect {
-                        self.tab_connect(ui, t, phase, twinkle_t);
+                        self.tab_connect(ui);
                     } else {
                         egui::ScrollArea::vertical()
                             .id_salt(("tab-content", self.tab))
@@ -975,89 +939,42 @@ impl WaxApp {
         std::process::exit(0);
     }
 
-    fn tab_connect(&mut self, ui: &mut egui::Ui, _t: f32, phase: f32, twinkle_t: f32) {
-        let rect = ui.max_rect().shrink2(egui::vec2(24.0, 18.0));
-        let col_w = 400.0_f32.min(rect.width());
-        // One reserved composition for every connection state. Changing text
-        // must never move the title, action, stats or status baseline.
-        let content_h: f32 = 460.0;
-        // Quiet facts pin to the window bottom, independent of the column.
-        {
-            let strip = egui::Rect::from_center_size(
-                egui::pos2(rect.center().x, rect.bottom() - 10.0),
-                egui::vec2(col_w, 20.0),
-            );
-            let mut sui = ui.new_child(
-                egui::UiBuilder::new()
-                    .max_rect(strip)
-                    .layout(Layout::top_down(Align::Center)),
-            );
-            let ui = &mut sui;
-            if let Some(issue) = self.cleanup_issue.clone() {
-                ui.horizontal(|ui| {
-                    ui.label(RichText::new(issue).size(10.5).color(theme::WARN));
-                    let can_retry = matches!(self.state, ConnState::Disconnected | ConnState::Failed(_));
-                    let retry = ui.add_enabled_ui(can_retry, |ui| {
-                        ui.link(RichText::new("Retry").size(10.5).color(theme::WARN))
-                    }).inner.on_disabled_hover_text("Disconnect before retrying cleanup");
-                    if retry.clicked() && can_retry {
-                        // Lock controls until the cleanup result arrives. This
-                        // prevents a concurrent Connect from being torn down.
-                        self.state = ConnState::Disconnecting;
-                        self.status_line = "Retrying cleanup...".into();
-                        let tx = self.events_tx.clone();
-                        std::thread::spawn(move || {
-                            let _ = tx.send(AppEvent::CleanupResult(
-                                Tunnel::force_disconnect().map_err(|e| e.to_string()),
-                            ));
-                            let _ = tx.send(AppEvent::Disconnected);
-                        });
-                    }
-                });
-            }
-            ui.label(
-                RichText::new(format!(
-                    "v{VERSION}"
-                ))
-                .size(10.5)
-                .color(theme::MUTE),
-            );
-        }
-        let col_h = content_h.min(rect.height());
-        let col = egui::Rect::from_center_size(
-            egui::pos2(rect.center().x, rect.center().y - 10.0),
-            egui::vec2(col_w, col_h),
+    fn tab_connect(&mut self, ui: &mut egui::Ui) {
+        let rect = ui.max_rect();
+        let col_w = 480.0_f32.min(rect.width());
+        let col = egui::Rect::from_min_size(
+            egui::pos2(rect.center().x - col_w / 2.0, rect.top() + 12.0),
+            egui::vec2(col_w, rect.height() - 12.0),
         );
-        let mut cui = ui.new_child(
-            egui::UiBuilder::new()
-                .max_rect(col)
-                .layout(Layout::top_down(Align::Center)),
-        );
-        let ui = &mut cui;
-
-        // Brand mark: the black hole, small and quiet. Brightness and spin
-        // follow the connection state as mood, never as measured speed.
-        let er = 34.0;
-        let (erect, _) = ui.allocate_exact_size(egui::vec2(er * 5.0, er * 2.2), egui::Sense::hover());
-        self.scene
-            .paint_hole(ui.painter(), erect.center(), er, phase, twinkle_t, self.energy);
-        ui.add_space(16.0);
-
-        let (word, wcol) = match &self.state {
-            ConnState::Disconnected => ("Disconnected", theme::TEXT),
-            ConnState::Connecting => ("Connecting", theme::ACCENT),
+        let mut content = ui.new_child(egui::UiBuilder::new().max_rect(col).layout(Layout::top_down(Align::Min)));
+        let ui = &mut content;
+        let (word, color, detail) = match &self.state {
+            ConnState::Disconnected => ("Disconnected", theme::SUB, "Connect through your selected WireGuard profile."),
+            ConnState::Connecting => ("Connecting", theme::WARN, "Preparing your WireGuard connection."),
+            ConnState::Disconnecting => ("Disconnecting", theme::SUB, "Removing the tunnel and restoring network settings."),
+            ConnState::Failed(_) => ("Connection failed", theme::BAD, "Review the connection message below before retrying."),
             ConnState::Connected { .. } => match connection_health::health(self.stats.last_handshake, SystemTime::now()) {
-                connection_health::Health::AwaitingHandshake => ("Tunnel ready", theme::WARN),
-                connection_health::Health::RecentHandshake => ("Connected", theme::GOOD),
-                connection_health::Health::OlderHandshake => ("Tunnel up", theme::WARN),
+                connection_health::Health::AwaitingHandshake => ("Tunnel ready", theme::WARN, "Waiting for evidence from the peer."),
+                connection_health::Health::RecentHandshake => ("Connected", theme::GOOD, "Your WireGuard tunnel is up."),
+                connection_health::Health::OlderHandshake => ("Tunnel up", theme::WARN, "The peer handshake is older. Idle peers may not handshake."),
             },
-            ConnState::Disconnecting => ("Disconnecting", theme::SUB),
-            ConnState::Failed(_) => ("Connection failed", theme::BAD),
         };
-        ui.label(RichText::new(word).font(theme::semi(32.0)).color(wcol));
+        ui.horizontal(|ui| {
+            let (r, _) = ui.allocate_exact_size(egui::vec2(8.0, 16.0), egui::Sense::hover());
+            ui.painter().circle_filled(r.center(), 3.5, color);
+            let context = match self.state { ConnState::Connected { .. } => "Peer evidence", ConnState::Connecting => "Establishing tunnel", ConnState::Failed(_) => "Action needed", _ => "WireGuard connection" };
+            ui.label(RichText::new(context).size(13.0).color(theme::SUB));
+        });
         ui.add_space(8.0);
-
-        // Profile: the name opens the picker while disconnected.
+        ui.label(RichText::new(word).font(theme::semi(32.0)).color(theme::TEXT));
+        ui.add_space(4.0);
+        let (detail_rect, _) = ui.allocate_exact_size(egui::vec2(col_w, 32.0), egui::Sense::hover());
+        let mut detail_ui = ui.new_child(egui::UiBuilder::new().max_rect(detail_rect).layout(Layout::top_down(Align::Min)));
+        detail_ui.add(egui::Label::new(RichText::new(detail).size(13.0).color(theme::SUB)).wrap());
+        ui.add_space(8.0);
+        theme::hairline(ui);
+        ui.add_space(12.0);
+        ui.label(RichText::new("Selected profile").size(12.0).color(theme::SUB));
         let (pname, pendpoint) = self
             .selected
             .and_then(|i| self.profiles.get(i))
@@ -1070,11 +987,11 @@ impl WaxApp {
                     .unwrap_or_else(|| "no endpoint".to_string());
                 (p.name.clone(), ep)
             })
-            .unwrap_or_else(|| ("No profile selected".to_string(), "import or register WARP".to_string()));
+            .unwrap_or_else(|| ("No profile selected".to_string(), "Import a WireGuard .conf profile".to_string()));
         let can_switch = matches!(self.state, ConnState::Disconnected | ConnState::Failed(_))
             && self.profiles.len() > 1;
         let name_resp = ui.add(
-            egui::Label::new(RichText::new(&pname).font(theme::semi(15.0)).color(theme::SUB))
+            egui::Label::new(RichText::new(&pname).font(theme::semi(16.0)).color(theme::SUB)).truncate()
                 .sense(if can_switch { egui::Sense::click() } else { egui::Sense::hover() }),
         );
         if name_resp.hovered() && can_switch {
@@ -1083,10 +1000,10 @@ impl WaxApp {
         if name_resp.clicked() && can_switch {
             self.picker_open = !self.picker_open;
         }
-        ui.label(RichText::new(&pendpoint).size(11.5).color(theme::MUTE).monospace());
+        ui.add(egui::Label::new(RichText::new(&pendpoint).size(13.0).color(theme::SUB).monospace()).truncate()).on_hover_text(&pendpoint);
         let (hint_rect, _) = ui.allocate_exact_size(egui::vec2(col_w, 16.0), egui::Sense::hover());
         if can_switch {
-            let mut hint_ui = ui.new_child(egui::UiBuilder::new().max_rect(hint_rect).layout(Layout::top_down(Align::Center)));
+            let mut hint_ui = ui.new_child(egui::UiBuilder::new().max_rect(hint_rect).layout(Layout::top_down(Align::Min)));
             hint_ui.label(RichText::new(if self.picker_open { "choose a profile" } else { "click to switch" }).size(10.0).color(theme::MUTE));
         }
         if self.picker_open && can_switch {
@@ -1147,9 +1064,10 @@ impl WaxApp {
             });
         }
 
-        ui.add_space(26.0);
 
-        // The one confident action.
+        ui.add_space(8.0);
+        theme::hairline(ui);
+        ui.add_space(20.0);
         let (action_label, can_act) = match &self.state {
             ConnState::Disconnected | ConnState::Failed(_) => ("Connect", self.selected.is_some()),
             ConnState::Connected { .. } => ("Disconnect", true),
@@ -1181,22 +1099,20 @@ impl WaxApp {
                 _ => {}
             }
         }
+
         ui.add_space(8.0);
-        let (stage_rect, _) = ui.allocate_exact_size(egui::vec2(col_w, 32.0), egui::Sense::hover());
+        let (stage_rect, _) = ui.allocate_exact_size(egui::vec2(col_w, 28.0), egui::Sense::hover());
         let mut stage_ui = ui.new_child(egui::UiBuilder::new().max_rect(stage_rect).layout(Layout::top_down(Align::Center)));
-        { let ui = &mut stage_ui;
-            if self.selected.is_none() {
-                ui.label(RichText::new("Add a profile from the Profiles tab to connect").size(11.0).color(theme::MUTE));
-            } else if !self.is_admin {
-                if ui.link(RichText::new("Restart as administrator to connect").size(11.5).color(theme::WARN)).clicked() { self.restart_as_admin(); }
-            } else if let ConnState::Failed(msg) = &self.state {
-                ui.add(egui::Label::new(RichText::new(msg).size(11.0).color(theme::BAD)).wrap());
-            } else if matches!(self.state, ConnState::Connecting) {
-                let stage = if self.recovery.is_pending() { self.status_line.as_str() } else { self.connect_stages.last().copied().unwrap_or("Starting") };
-                ui.label(RichText::new(stage).size(12.0).color(theme::SUB));
-            }
+        if self.selected.is_none() {
+            stage_ui.label(RichText::new("Add a profile from Profiles to connect").size(12.0).color(theme::SUB));
+        } else if !self.is_admin {
+            if stage_ui.link(RichText::new("Restart as administrator to connect").size(12.0).color(theme::WARN)).clicked() { self.restart_as_admin(); }
+        } else if let ConnState::Failed(msg) = &self.state {
+            stage_ui.add(egui::Label::new(RichText::new(msg).size(12.0).color(theme::BAD)).wrap());
+        } else if matches!(self.state, ConnState::Connecting) {
+            let stage = if self.recovery.is_pending() { self.status_line.as_str() } else { self.connect_stages.last().copied().unwrap_or("Starting") };
+            stage_ui.label(RichText::new(stage).size(12.0).color(theme::SUB));
         }
-        ui.add_space(8.0);
         theme::hairline(ui);
         ui.add_space(12.0);
         let connected = matches!(self.state, ConnState::Connected { .. });
@@ -1210,19 +1126,39 @@ impl WaxApp {
         });
         ui.add_space(12.0);
         theme::hairline(ui);
-        ui.add_space(8.0);
-        ui.allocate_ui_with_layout(egui::vec2(col_w, 40.0), Layout::top_down(Align::Center), |ui| {
-            if connected {
-                let now = SystemTime::now();
-                let age = self.stats.last_handshake.and_then(|h| now.duration_since(h).ok());
-                let (detail, color) = match connection_health::health(self.stats.last_handshake, now) {
-                    connection_health::Health::AwaitingHandshake => ("Waiting for peer handshake. Check endpoint and peer keys if this continues.".to_string(), theme::WARN),
-                    connection_health::Health::RecentHandshake => (format!("Peer handshake {} ago. Internet reachability is not tested.", age.map(fmt_duration).unwrap_or_default()), theme::SUB),
-                    connection_health::Health::OlderHandshake => (format!("Last handshake {} ago. Idle peers may not handshake.", age.map(fmt_duration).unwrap_or_default()), theme::WARN),
-                };
-                ui.add(egui::Label::new(RichText::new(detail).size(11.0).color(color)).wrap());
+        ui.add_space(12.0);
+        let evidence = if connected {
+            let age = self.stats.last_handshake.and_then(|h| SystemTime::now().duration_since(h).ok());
+            match connection_health::health(self.stats.last_handshake, SystemTime::now()) {
+                connection_health::Health::AwaitingHandshake => "Waiting for peer handshake. Internet reachability is not tested.".into(),
+                connection_health::Health::RecentHandshake => format!("Peer handshake {} ago. Internet reachability is not tested.", age.map(fmt_duration).unwrap_or_default()),
+                connection_health::Health::OlderHandshake => format!("Last handshake {} ago. Idle peers may not handshake.", age.map(fmt_duration).unwrap_or_default()),
             }
-        });
+        } else { "Traffic can use the normal connection when the tunnel is off.".into() };
+        ui.add(egui::Label::new(RichText::new(evidence).size(12.0).color(theme::SUB)).wrap());
+            if let Some(issue) = self.cleanup_issue.clone() {
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new(issue).size(10.5).color(theme::WARN));
+                    let can_retry = matches!(self.state, ConnState::Disconnected | ConnState::Failed(_));
+                    let retry = ui.add_enabled_ui(can_retry, |ui| {
+                        ui.link(RichText::new("Retry").size(10.5).color(theme::WARN))
+                    }).inner.on_disabled_hover_text("Disconnect before retrying cleanup");
+                    if retry.clicked() && can_retry {
+                        // Lock controls until the cleanup result arrives. This
+                        // prevents a concurrent Connect from being torn down.
+                        self.state = ConnState::Disconnecting;
+                        self.status_line = "Retrying cleanup...".into();
+                        let tx = self.events_tx.clone();
+                        std::thread::spawn(move || {
+                            let _ = tx.send(AppEvent::CleanupResult(
+                                Tunnel::force_disconnect().map_err(|e| e.to_string()),
+                            ));
+                            let _ = tx.send(AppEvent::Disconnected);
+                        });
+                    }
+                });
+            }
+
     }
 
     fn tab_profiles(&mut self, ui: &mut egui::Ui) {
@@ -1753,7 +1689,7 @@ fn mini_stat(ui: &mut egui::Ui, label: &str, value: &str) {
     ui.with_layout(Layout::top_down(Align::Center), |ui| {
         ui.set_min_width(ui.available_width());
         ui.label(RichText::new(label).size(11.0).color(theme::MUTE));
-        ui.label(RichText::new(value).size(14.0).color(theme::TEXT).monospace());
+        ui.label(RichText::new(value).font(theme::semi(16.0)).color(theme::TEXT));
     });
 }
 
@@ -1780,44 +1716,17 @@ fn chrome_button(ui: &mut egui::Ui, glyph: &str, tooltip: &str) -> bool {
 }
 
 fn rail_button(ui: &mut egui::Ui, tab: Tab, label: &str, active: bool) -> bool {
-    let (rect, resp) = ui.allocate_exact_size(egui::vec2(64.0, 54.0), egui::Sense::click());
+    let (rect, resp) = ui.allocate_exact_size(egui::vec2(ui.available_width(), 40.0), egui::Sense::click());
     resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), label));
-    let hov = ui.ctx().animate_bool_responsive(resp.id.with("h"), resp.hovered());
-    let on = ui.ctx().animate_bool(resp.id.with("on"), active);
-    let bg = 6.0 * hov + 12.0 * on;
-    if bg > 0.5 {
-        ui.painter().rect_filled(
-            rect,
-            egui::CornerRadius::same(10),
-            theme::alpha(egui::Color32::WHITE, bg as u8),
-        );
-    }
-    let col = if active {
-        theme::ACCENT
-    } else if resp.hovered() {
-        theme::TEXT
-    } else {
-        theme::SUB
-    };
-    if on > 0.03 {
-        let bar = egui::Rect::from_center_size(
-            egui::pos2(rect.left() + 2.0, rect.center().y),
-            egui::vec2(2.5, 22.0),
-        );
-        ui.painter().rect_filled(bar, egui::CornerRadius::same(1), theme::alpha(theme::ACCENT, (255.0 * on) as u8));
-    }
-    rail_icon(ui.painter(), tab, rect.center_top() + egui::vec2(0.0, 18.0), 9.0, col);
-    ui.painter().text(
-        rect.center_bottom() + egui::vec2(0.0, -9.0),
-        egui::Align2::CENTER_CENTER,
-        label,
-        egui::FontId::proportional(10.0),
-        col,
-    );
-    resp.clone().on_hover_text(label);
-    if resp.hovered() {
-        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
-    }
+    let hovered = ui.ctx().animate_bool_responsive(resp.id.with("hover"), resp.hovered());
+    let opacity = if active { 28 } else { (12.0 * hovered) as u8 };
+    ui.painter().rect_filled(rect, egui::CornerRadius::same(8), theme::alpha(theme::TEXT, opacity));
+    let color = if active { theme::TEXT } else { theme::SUB };
+    rail_icon(ui.painter(), tab, rect.left_center() + egui::vec2(20.0, 0.0), 7.0, color);
+    ui.painter().text(rect.left_center() + egui::vec2(40.0, 0.0), egui::Align2::LEFT_CENTER, label,
+        if active { theme::semi(14.0) } else { egui::FontId::proportional(14.0) }, color);
+    if resp.has_focus() { ui.painter().rect_stroke(rect, egui::CornerRadius::same(8), egui::Stroke::new(1.0, theme::ACCENT), egui::StrokeKind::Inside); }
+    if resp.hovered() { ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand); }
     resp.clicked()
 }
 

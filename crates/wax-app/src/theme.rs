@@ -1,26 +1,25 @@
 //! Design tokens and shared widgets for the waX VPN interface.
 //!
-//! Direction (unslop pass, CC BY 4.0 rubric by Damir Sokolovsky): calm and
-//! editorial. Deep-ink chrome, one warm amber accent used sparingly, hairline
-//! dividers instead of card boxes, Inter type with a real hierarchy, generous
-//! intentional spacing. Motion is short, eased, and only ever
-//! color/surface/opacity, never layout.
+//! Astryx-informed native design: semantic neutral surfaces, 4px spacing,
+//! text navigation, one primary action and bounded state slots. The React
+//! reference lives separately; the shipped client stays native Rust/egui.
+//! Astryx design guidance is MIT, copyright Meta Platforms, Inc.
 
 use eframe::egui::{self, Color32, Pos2, Sense, Stroke, Vec2};
 
-pub const BG: Color32 = Color32::from_rgb(11, 13, 18);
-pub const PANEL: Color32 = Color32::from_rgb(14, 17, 24);
+pub const BG: Color32 = Color32::from_rgb(27, 27, 27);
+pub const PANEL: Color32 = Color32::from_rgb(36, 36, 36);
 #[allow(dead_code)]
-pub const CARD: Color32 = Color32::from_rgb(18, 22, 31);
+pub const CARD: Color32 = Color32::from_rgb(40, 40, 40);
 #[allow(dead_code)]
-pub const CARD_HOVER: Color32 = Color32::from_rgb(23, 28, 39);
-pub const HAIRLINE: Color32 = Color32::from_rgba_premultiplied(14, 14, 14, 14);
-pub const TEXT: Color32 = Color32::from_rgb(230, 233, 240);
-pub const SUB: Color32 = Color32::from_rgb(154, 163, 178);
-pub const MUTE: Color32 = Color32::from_rgb(110, 118, 132);
-pub const ACCENT: Color32 = Color32::from_rgb(242, 176, 102);
-pub const GOOD: Color32 = Color32::from_rgb(88, 214, 141);
-pub const WARN: Color32 = Color32::from_rgb(251, 191, 36);
+pub const CARD_HOVER: Color32 = Color32::from_rgb(48, 48, 48);
+pub const HAIRLINE: Color32 = Color32::from_rgb(54, 54, 54);
+pub const TEXT: Color32 = Color32::from_rgb(242, 242, 242);
+pub const SUB: Color32 = Color32::from_rgb(174, 174, 174);
+pub const MUTE: Color32 = Color32::from_rgb(164, 164, 164);
+pub const ACCENT: Color32 = Color32::from_rgb(239, 239, 239);
+pub const GOOD: Color32 = Color32::from_rgb(139, 208, 143);
+pub const WARN: Color32 = Color32::from_rgb(241, 205, 95);
 pub const BAD: Color32 = Color32::from_rgb(248, 113, 113);
 
 pub fn alpha(c: Color32, a: u8) -> Color32 {
@@ -48,7 +47,7 @@ pub fn card_frame() -> egui::Frame {
     egui::Frame::default()
         .fill(alpha(Color32::WHITE, 5))
         .stroke(Stroke::new(1.0, HAIRLINE))
-        .corner_radius(egui::CornerRadius::same(12))
+        .corner_radius(egui::CornerRadius::same(8))
         .inner_margin(egui::Margin::symmetric(14, 10))
 }
 
@@ -94,8 +93,8 @@ pub fn toggle_row(ui: &mut egui::Ui, on: &mut bool, title: &str, desc: &str) -> 
     let mut changed = false;
     ui.horizontal(|ui| {
         ui.vertical(|ui| {
-            ui.label(egui::RichText::new(title).size(13.0).color(TEXT));
-            ui.label(egui::RichText::new(desc).size(11.0).color(MUTE));
+            ui.label(egui::RichText::new(title).size(14.0).color(TEXT));
+            ui.label(egui::RichText::new(desc).size(12.0).color(SUB));
         });
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             changed = toggle(ui, on, title);
@@ -108,10 +107,10 @@ pub fn toggle_row(ui: &mut egui::Ui, on: &mut bool, title: &str, desc: &str) -> 
 }
 
 pub fn section_heading(ui: &mut egui::Ui, title: &str, sub: &str) {
-    ui.label(egui::RichText::new(title).font(semi(20.0)).color(TEXT));
+    ui.label(egui::RichText::new(title).font(semi(24.0)).color(TEXT));
     ui.add_space(2.0);
     ui.label(egui::RichText::new(sub).size(12.0).color(SUB));
-    ui.add_space(12.0);
+    ui.add_space(20.0);
 }
 
 /// The one confident action style. Real egui button: accessible name from text.
@@ -126,9 +125,9 @@ pub fn primary_button_named(ui: &mut egui::Ui, label: &str, enabled: bool, a11y_
             .color(if enabled { BG } else { MUTE }),
     )
     .fill(if enabled { ACCENT } else { alpha(ACCENT, 36) })
-    .corner_radius(egui::CornerRadius::same(12))
-    .min_size(Vec2::new(ui.available_width(), 46.0));
-    let resp = ui.add_enabled(enabled, btn);
+    .corner_radius(egui::CornerRadius::same(8))
+    .min_size(Vec2::new(ui.available_width(), 40.0));
+    let resp = ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| ui.add_enabled(enabled, btn)).inner;
     let a11y = a11y_name.to_string();
     resp.widget_info(move || egui::WidgetInfo::labeled(egui::Role::Button, enabled, a11y.clone()));
     resp.clicked()

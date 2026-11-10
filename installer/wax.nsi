@@ -63,6 +63,7 @@ Section "waX VPN" SecMain
     File "payload\wax.exe"
     File "payload\wireguard.dll"
     File "payload\LICENSE.txt"
+    File "payload\LICENSE-astryx.txt"
     File "payload\README.txt"
     File "payload\LICENSE-wireguard-nt.txt"
 
