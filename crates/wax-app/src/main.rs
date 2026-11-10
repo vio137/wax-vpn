@@ -72,6 +72,7 @@ pub struct WaxApp {
     warp_tos: bool,
     warp_busy: bool,
     import_paste: String,
+    import_name: String,
     import_error: Option<String>,
     tab: Tab,
     hidden: bool,
@@ -154,6 +155,7 @@ impl WaxApp {
             warp_tos: false,
             warp_busy: false,
             import_paste: String::new(),
+            import_name: String::new(),
             import_error: None,
             tab: Tab::Connect,
             hidden: false,
@@ -1342,6 +1344,18 @@ impl WaxApp {
         ui.add_space(8.0);
         theme::section_heading(ui, "Import", "Paste a WireGuard config");
         theme::card_frame().show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.label(RichText::new("Profile name").size(11.5).color(theme::SUB));
+                let resp = ui.add(
+                    egui::TextEdit::singleline(&mut self.import_name)
+                        .hint_text("Optional, e.g. Home")
+                        .desired_width(220.0),
+                );
+                resp.widget_info(|| egui::WidgetInfo::labeled(
+                    egui::Role::TextInput, true, "Imported profile name"
+                ));
+            });
+            ui.add_space(8.0);
             let input_id = ui.make_persistent_id("wireguard-import-input");
             let focused = ui.memory(|m| m.has_focus(input_id));
             let border = if focused {
@@ -1377,8 +1391,14 @@ impl WaxApp {
             ui.add_space(4.0);
             if theme::primary_button(ui, "Import config", !self.import_paste.trim().is_empty()) {
                 let text = self.import_paste.trim().to_string();
-                if self.import_text(format!("Imported {}", chrono_free_stamp()), &text) {
+                let name = if self.import_name.trim().is_empty() {
+                    format!("Imported {}", chrono_free_stamp())
+                } else {
+                    self.import_name.trim().to_string()
+                };
+                if self.import_text(name, &text) {
                     self.import_paste.clear();
+                    self.import_name.clear();
                 }
             }
             if let Some(err) = &self.import_error {
