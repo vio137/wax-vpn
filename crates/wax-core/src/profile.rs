@@ -90,7 +90,9 @@ fn load_profiles_from(dir: &Path) -> Result<ProfileLoadReport, CoreError> {
     for entry in entries {
         // A directory enumeration failure is not an empty or complete list.
         let path = entry?.path();
-        if path.extension().and_then(|e| e.to_str()) != Some("conf") {
+        if !path.extension().and_then(|e| e.to_str())
+            .is_some_and(|extension| extension.eq_ignore_ascii_case("conf"))
+        {
             continue;
         }
         let Some(name) = path.file_stem().and_then(|s| s.to_str()) else {
@@ -215,6 +217,35 @@ mod tests {
         assert_eq!(fs::read(dir.join("Zulu.conf")).unwrap(), config.as_bytes());
     }
     #[test]
+    fn profile_loader_accepts_mixed_case_conf_extensions_without_changing_files() {
+        let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+        let dir = std::env::temp_dir().join(format!("wax-case-load-{}-{stamp}", std::process::id()));
+        struct Cleanup(PathBuf);
+        impl Drop for Cleanup { fn drop(&mut self) { let _ = fs::remove_dir_all(&self.0); } }
+        let _cleanup = Cleanup(dir.clone());
+        fs::create_dir_all(&dir).unwrap();
+        let config = WireGuardConfig {
+            interface: crate::InterfaceConfig { private_key:[1;32], addresses:vec![], dns:vec![], mtu:None, listen_port:None },
+            peers:vec![crate::PeerConfig { public_key:[2;32], preshared_key:None,
+                allowed_ips:vec!["0.0.0.0/0".parse().unwrap()], endpoint:None, persistent_keepalive:None }],
+        }.to_conf_string();
+        assert!(WireGuardConfig::parse(&config).is_ok());
+        for name in ["Office.CONF", "Home.CoNf", "Mobile.conf"] {
+            fs::write(dir.join(name), &config).unwrap();
+        }
+        fs::write(dir.join("broken.cOnF"), b"not a configuration").unwrap();
+        fs::write(dir.join("ignored.CONF.bak"), b"ignored").unwrap();
+        let report = load_profiles_from(&dir).unwrap();
+        assert_eq!(report.profiles.iter().map(|p| p.name.as_str()).collect::<Vec<_>>(), vec!["Home", "Mobile", "Office"]);
+        assert_eq!(report.skipped, 1);
+        for name in ["Office.CONF", "Home.CoNf", "Mobile.conf"] {
+            assert_eq!(fs::read(dir.join(name)).unwrap(), config.as_bytes());
+        }
+        assert_eq!(fs::read(dir.join("broken.cOnF")).unwrap(), b"not a configuration");
+        assert_eq!(fs::read(dir.join("ignored.CONF.bak")).unwrap(), b"ignored");
+        assert_eq!(fs::read_dir(&dir).unwrap().count(), 5);
+    }
+    #[test]
     fn profile_filenames_are_windows_safe() {
         for input in ["CON", "nul.office", "COM1", "LPT9", "com¹", "AUX."] {
             assert!(sanitize_filename(input).starts_with('_'), "{input}");
@@ -226,4 +257,4 @@ mod tests {
         assert_eq!(sanitize_filename("COM10"), "COM10");
         assert_eq!(sanitize_filename("a/b"), "a_b");
     }
-}
+                   }
