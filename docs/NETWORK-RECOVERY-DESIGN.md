@@ -38,4 +38,4 @@ At source31f09d0, adapter-loss recovery called the next attempt immediately and 
 
 ## Separate installer checkpoint
 
-Width-only diagnostics source8863f19/run42771027828 passed the tunnel/GUI/recovery job, but its first fresh-install job did not quit within15seconds after GUI launch. Uninstall was not reached. The same-source job is being rerun; do not treat this source as fully gate-green. This is separate from physical-network recovery.
+Width-only diagnostics source8863f19/run42771027828 passed the tunnel/GUI/recovery job, but its first fresh-install job did not quit within15seconds after GUI launch. Uninstall was not reached. The same-source job passed install, quit and uninstall on attempt2 (exact artifact13741628083). The first intermittent quit failure remains unresolved; a retry pass does not diagnose it. Fixed-stage logs are prepared to help capture recurrence. This is separate from physical-network recovery.
