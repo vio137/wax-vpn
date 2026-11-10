@@ -563,7 +563,8 @@ jobs:
               function Capture-StateSizes([string]$stateName) {
                 foreach ($size in @(@(760,540),@(880,600),@(960,700))) {
                   [WaxLayoutCapture]::MoveWindow([IntPtr]$win.Current.NativeWindowHandle,0,0,$size[0],$size[1],$true) | Out-Null
-                  Start-Sleep -Milliseconds 200
+                  # Let the compositor paint after resize before comparing pixels and UIA.
+                  Start-Sleep -Milliseconds 500
                   $bounds = $win.Current.BoundingRectangle
                   $image = New-Object System.Drawing.Bitmap ([int]$bounds.Width),([int]$bounds.Height)
                   $graphics = [System.Drawing.Graphics]::FromImage($image)

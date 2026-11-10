@@ -1084,11 +1084,11 @@ impl WaxApp {
             self.picker_open = !self.picker_open;
         }
         ui.label(RichText::new(&pendpoint).size(11.5).color(theme::MUTE).monospace());
-        ui.allocate_ui_with_layout(egui::vec2(col_w, 16.0), Layout::top_down(Align::Center), |ui| {
-            if can_switch {
-                ui.label(RichText::new(if self.picker_open { "choose a profile" } else { "click to switch" }).size(10.0).color(theme::MUTE));
-            }
-        });
+        let (hint_rect, _) = ui.allocate_exact_size(egui::vec2(col_w, 16.0), egui::Sense::hover());
+        if can_switch {
+            let mut hint_ui = ui.new_child(egui::UiBuilder::new().max_rect(hint_rect).layout(Layout::top_down(Align::Center)));
+            hint_ui.label(RichText::new(if self.picker_open { "choose a profile" } else { "click to switch" }).size(10.0).color(theme::MUTE));
+        }
         if self.picker_open && can_switch {
             ui.add_space(6.0);
             theme::card_frame().show(ui, |ui| {

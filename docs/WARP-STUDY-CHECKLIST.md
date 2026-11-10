@@ -41,7 +41,7 @@ This is an independent behavior/structure study with REA 6.8.0 and Ghidra 12.1.4
 - https://developers.cloudflare.com/cloudflare-one/team-and-resources/devices/cloudflare-one-client/troubleshooting/diagnostic-logs/ (diagnostic categories)
 - https://github.com/NationalSecurityAgency/ghidra/releases/tag/Ghidra_12.1.4_build (native analysis engine)
 
-Cloudflare One enterprise documentation is not interchangeable with consumer availability. No signup or terms acceptance was needed for static extraction/inspection. Latest stablev0.1.3 (41cbe58,run42768192198) includes MTU, diagnostics, state clarity and startup observer fixes. Releases remain unsigned, with no kill switch or IPv6 leak-protection claim.
+Cloudflare One enterprise documentation is not interchangeable with consumer availability. No signup or terms acceptance was needed for static extraction/inspection. Latest stable v0.1.4 (e84e2c3, run42773347398) includes MTU, diagnostics, state clarity and startup observer fixes. Releases remain unsigned, with no kill switch or IPv6 leak-protection claim.
 
 ## Package findings
 
@@ -62,3 +62,12 @@ Released https://github.com/vio137/wax-vpn/releases/tag/v0.1.3 after full manual
 ## v0.1.4 checkpoint
 
 Released https://github.com/vio137/wax-vpn/releases/tag/v0.1.4 sourcee84e2c3 after full stable gate42773347398. SHA256090a469c7f81ad483a4cf1218a1f389fbb78149c576aaa535935a6398f4a97dc,10,942,141bytes. Stable Diagnostics/Connected/installed pixels inspected. Actual adapter-loss recovery4seconds/original process alive; fresh install/quit/uninstall pass; crash snapshot3seconds adaptergone/DNSnone/rules0 before cleanup, cleanup pass. IPv6SKIP no baseline/no kill switch. Earlier fresh-install quit timeout remains unresolved intermittent history. The Connect stats/state layout feedback is addressed separately in1a39ed3, pending Windows multi-state/multi-size pixel checks forv0.1.5.
+
+
+## v0.1.5 layout preparation
+
+Follow-up 2ab0d2a passed Windows gate42775144956. Session/Received/Sent label bounds match exactly across Disconnected/Connecting/Connected at760x540,880x600and960x700. Actual880and960Connecting pixels inspected. Smallest Connecting screenshot still shows the previous Disconnected paint despite UIA state, so it is not counted as Connecting pixel proof. Final gate increases compositor wait to500ms and reserves the optional16pxprofile hint too. Exact-version release verification is pending.
+
+## Astryx redesign request
+
+User requested https://github.com/meta/astryx on10November13:02IST. Verified repository and MIT license; installed CLI/core/neutral-theme0.7.11 in a separate design workspace. Astryx components require React19+/StyleX, so they are not directly native Rust/egui controls. Use actual Astryx tooling/components as the redesign reference and independently implement native equivalents without silently introducing a web runtime. This full redesign is separate from the v0.1.5 alignment checkpoint. No new service, signup, spending or terms acceptance.
