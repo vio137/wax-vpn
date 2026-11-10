@@ -1,24 +1,21 @@
-# waX VPN v0.1.12
+# waX VPN v0.1.13
 
-Unsigned Windows x64 profile-read checkpoint. Windows may show an unknown-publisher warning. The official WireGuardNT driver is independently signed by its vendor. No kill switch: traffic can use the normal connection if the tunnel drops.
+Unsigned Windows x64 tray-initialization fallback checkpoint. Windows may show an unknown-publisher warning. The official WireGuardNT driver is independently signed by its vendor. No kill switch: traffic can use the normal connection if the tunnel drops.
 
 ## Changes
 
-- Profile loading reports a count of unreadable or malformed .conf files instead of silently hiding them. The warning contains no file names, keys or config contents. Skipped files are not changed.
-- A directory-level reload failure keeps the previous list visible with an explicit warning. Manual connection from that stale snapshot is guarded until a successful reload. Existing tunnel ownership/recovery is unchanged.
-- Profiles has a Reload profiles action. A successful reload clears the read warning; this does not repair unreadable files.
+- Both close paths share one background policy. If the tray initializes, closing still hides the window. If tray initialization fails, closing requests minimize instead of hiding an unreachable window.
+- A generic tray-unavailable notice explains taskbar restoration and Ctrl+Q to quit. The close tooltip also reflects the fallback. No service, network call or security setting was added.
 
 ## Verification
 
-Exact release source 9f55336c36632a8a3730c4f55a61b8843547e29d / full manual gate 42836227105 passed Windows workspace tests, tunnel/GUI, fresh install/uninstall and publication. Prepared source d5941d4 / full manual preview 42834021598 also passed. A fresh released installer download is 10,950,262 bytes with SHA256 `10efca64ccb29c5a9e2d539d5c6f284d66625ceeb48fd3ebfea9331d8b78f358`, matching the released SHA256SUMS.
+Prepared source 6cd6c98 / full manual preview 42840085150 passed Windows workspace tests, tunnel/GUI and fresh install/uninstall. Exact v0.1.13 build and publication remain pending. The named background-policy unit test confirms hide only with a tray, minimize without a tray, and warning presence/absence. This is command-selection proof, not Windows UI proof.
 
-Named unit tests cover mixed valid/malformed/unreadable entries, unchanged original bytes, missing folder versus directory failure, sorted names and count-only warning text. The first mixed-load fixture at 412c26c / run 42831837117 failed because its intended-valid config had no peer. The existing parser correctly rejected it. The fixture was corrected to a peer-bearing config and explicitly checked for parse validity; parser rules and assertions were not relaxed.
+A genuine tray initialization failure was not reproduced. Fallback warning pixels and actual taskbar restoration without a tray remain untested. No production environment switch was added to fake tray failure. Successful tray construction does not prove that Windows displayed its notification-area icon. The real tray menu remains manual-only on a Windows desktop.
 
-Retained GUI results and actual warning pixels demonstrate a skipped-file count, the previous demo profile still visible after a directory reload failure, and warnings clearing after the directory was restored and the malformed fixture removed. Connect/Delete are disabled in the failed-reload Profiles capture. Startup directory-error pixels and an invoked manual Connect failure from that stale snapshot remain untested. Core directory-error behavior and the manual guard are tested or source-checked respectively, not full UI proof for those cases. Lower Import controls remain scrollable beyond the captured viewport.
+Retained preview results confirm normal close-to-tray with the tunnel adapter still up, restored original HWND/PID and Connect rail, and graceful quit with adapter removed. Actual Connected and installed pixels were inspected. Peer handshake, tunnel-side ping, DNS and IPv4 MTU 1380, split route exclusions, owned adapter-loss recovery after 6 seconds, pending-retry disable over 48 samples/12 seconds, manual reconnect while recovery was off, profile reload warnings and malformed-settings preservation/warnings passed. No console windows were observed in 452 samples at about 100 ms; shorter windows could be missed. Crash snapshot at 3 seconds before cleanup showed adapter gone, DNS none and zero old kill-switch rules. Fresh install/launch/uninstall passed.
 
-Peer handshake, tunnel-side ping, DNS and IPv4 MTU 1380, split route exclusions, owned adapter-loss recovery after 6 seconds, pending-retry disable over 48 samples/12 seconds, manual reconnect while recovery was off, close-to-tray/original HWND+PID restore/graceful quit and malformed-settings preservation/warnings passed. No console windows were observed in 437 samples at about 100 ms; shorter windows could be missed. Crash snapshot at 3 seconds before cleanup showed adapter gone, DNS none and zero old kill-switch rules. Actual Connected, Profiles, Features, WARP, About, warning and installed pixels were inspected; all show v0.1.12. Fresh install/launch/uninstall passed.
-
-Real UAC acceptance/cancellation, native restart failure pixels and the full elevated parent-to-child handoff from v0.1.11 remain untested. Native restart policy/path/wait unit tests pass; runas retains the Windows prompt.
+Profile startup directory-error pixels and an invoked stale manual Connect failure remain untested. The earlier profile-load unit fixture at 412c26c / run 42831837117 failed because a supposed-valid config had no peer; d5941d4 corrected the fixture, not the parser or assertions. Real UAC acceptance/cancellation, native restart failure pixels and the full elevated parent-to-child handoff remain untested; native policy/path/wait unit tests pass and runas retains the Windows prompt.
 
 ## Scope and limits
 
