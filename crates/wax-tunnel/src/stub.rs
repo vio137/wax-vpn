@@ -33,7 +33,3 @@ impl Tunnel {
         Ok(None)
     }
 }
-
-pub fn disable_kill_switch() -> Result<(), TunnelError> {
-    Ok(())
-}

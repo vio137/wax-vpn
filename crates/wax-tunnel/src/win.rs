@@ -10,7 +10,7 @@ use wax_core::Profile;
 
 use crate::{ConnectOptions, TunnelError, TunnelStats, ADAPTER_NAME, ADAPTER_POOL};
 
-const KILLSWITCH_RULE_PREFIX: &str = "waX VPN KillSwitch";
+const LEGACY_FIREWALL_RULE_PREFIX: &str = "waX VPN KillSwitch";
 
 /// Locate wireguard.dll shipped side-by-side with the app.
 fn dll_candidates() -> Vec<PathBuf> {
@@ -142,9 +142,9 @@ fn reset_dns(adapter: &str) -> Result<(), TunnelError> {
     }
 }
 
-pub fn disable_kill_switch() -> Result<(), TunnelError> {
+fn cleanup_legacy_firewall_rules() -> Result<(), TunnelError> {
     powershell(&format!(
-        "Remove-NetFirewallRule -DisplayName '{KILLSWITCH_RULE_PREFIX}*' -ErrorAction SilentlyContinue"
+        "Remove-NetFirewallRule -DisplayName '{LEGACY_FIREWALL_RULE_PREFIX}*' -ErrorAction SilentlyContinue"
     ))
 }
 
@@ -154,7 +154,6 @@ pub struct Tunnel {
     adapter: Adapter,
     #[allow(dead_code)]
     wireguard: Wireguard,
-    opts: ConnectOptions,
 }
 
 fn parse_endpoint(endpoint: &str) -> Result<(String, u16), TunnelError> {
@@ -183,12 +182,11 @@ impl Tunnel {
     /// honest in-progress UI instead of a dead spinner.
     pub fn connect_progress(
         profile: &Profile,
-        opts: &ConnectOptions,
+        _opts: &ConnectOptions,
         mut progress: impl FnMut(&'static str),
     ) -> Result<Tunnel, TunnelError> {
-        if opts.kill_switch {
-            return Err(TunnelError::Message("Kill switch is unavailable in v0.1.0: the previous block-all firewall implementation is disabled. No tunnel or firewall changes were made.".into()));
-        }
+        // Upgrade cleanup only. Never create or alter global firewall policy.
+        cleanup_legacy_firewall_rules()?;
         progress("Loading WireGuard driver");
         let wireguard = load_driver()?;
         progress("Preparing the waX adapter");
@@ -244,7 +242,7 @@ impl Tunnel {
         progress("Starting the tunnel");
         adapter.up().map_err(|e| TunnelError::Driver(format!("bring adapter up: {e}")))?;
         log::info!("tunnel up for profile {}", profile.name);
-        Ok(Tunnel { adapter, wireguard, opts: opts.clone() })
+        Ok(Tunnel { adapter, wireguard })
     }
 
     pub fn stats(&self) -> TunnelStats {
@@ -266,7 +264,7 @@ impl Tunnel {
         self.adapter.is_up().unwrap_or(false)
     }
 
-    /// Bring the tunnel down, restoring DNS and removing kill-switch rules.
+    /// Bring the tunnel down, restoring DNS.
     pub fn shutdown(self) -> Result<(), TunnelError> {
         // Run every cleanup step even when one fails, then report all
         // failures together - never a silent partial cleanup.
@@ -276,11 +274,6 @@ impl Tunnel {
         }
         if let Err(e) = reset_dns(ADAPTER_NAME) {
             problems.push(e.to_string());
-        }
-        if self.opts.kill_switch {
-            if let Err(e) = disable_kill_switch() {
-                problems.push(format!("kill-switch rules remain: {e}"));
-            }
         }
         if problems.is_empty() {
             Ok(())
@@ -301,8 +294,8 @@ impl Tunnel {
         if let Err(e) = reset_dns(ADAPTER_NAME) {
             problems.push(e.to_string());
         }
-        if let Err(e) = disable_kill_switch() {
-            problems.push(format!("kill-switch rules remain: {e}"));
+        if let Err(e) = cleanup_legacy_firewall_rules() {
+            problems.push(format!("legacy firewall cleanup: {e}"));
         }
         if !problems.is_empty() {
             return Err(TunnelError::Message(problems.join("; ")));

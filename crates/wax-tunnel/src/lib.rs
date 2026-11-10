@@ -2,8 +2,7 @@
 //!
 //! On Windows this drives the official WireGuardNT kernel driver
 //! (wireguard.dll, loaded side-by-side) through the `wireguard-nt` crate.
-//! DNS is configured with netsh. Kill-switch requests are unavailable in
-//! v0.1.0 and rejected before network changes.
+//! DNS is configured with netsh. Traffic is not blocked if the tunnel drops.
 
 use std::time::SystemTime;
 
@@ -27,19 +26,8 @@ pub struct TunnelStats {
     pub last_handshake: Option<SystemTime>,
 }
 
-#[derive(Clone, Debug)]
-pub struct ConnectOptions {
-    /// Reserved option: v0.1.0 rejects true before network changes.
-    pub kill_switch: bool,
-    /// While the kill switch is on, still allow local-subnet traffic.
-    pub allow_lan: bool,
-}
-
-impl Default for ConnectOptions {
-    fn default() -> Self {
-        Self { kill_switch: false, allow_lan: true }
-    }
-}
+#[derive(Clone, Debug, Default)]
+pub struct ConnectOptions;
 
 #[derive(Debug, thiserror::Error)]
 pub enum TunnelError {

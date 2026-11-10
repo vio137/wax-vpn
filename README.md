@@ -38,7 +38,7 @@ against the attached `SHA256SUMS` file.
 | --- | --- |
 | `wax-core` | Keys (audited `x25519-dalek`), wg-quick `.conf` parsing/serialization, profile storage |
 | `wax-warp` | Cloudflare WARP API client (wgcf equivalent), account persistence, profile generation |
-| `wax-tunnel` | Adapter lifecycle on WireGuardNT, DNS (netsh), firewall-based kill switch (PowerShell) |
+| `wax-tunnel` | Adapter lifecycle on WireGuardNT and DNS (netsh) |
 | `wax-cli` (`wax.exe`) | Full CLI: profiles, import, connect/disconnect/status, WARP commands |
 | `wax-app` (`waX VPN.exe`) | egui GUI: animated connect orb, profile picker, stats, settings, WARP panel, drag-and-drop import |
 
@@ -56,12 +56,11 @@ verification-evidence artifact):
   close-to-tray with the process and tunnel adapter still up.
 - Tunnel DNS applied on connect and restored on disconnect; no firewall
   leftovers after disconnect.
-- Crash recovery: adapter and DNS are reclaimed by Windows when the owner
-  process dies; kill-switch firewall rules persist across an owner crash
-  (persistence observed - effective traffic blocking is not traffic-tested).
+- Crash recovery: adapter and DNS are reclaimed by Windows when the owner dies.
+
+No kill switch is included. If the tunnel drops, traffic can use the normal connection. IPv6 leak protection is not claimed.
 
 Not yet verified (honest list):
-- Effective traffic blocking by the kill switch (rule presence only).
 - Tray-menu Open/Quit interaction (the runner session has no notification
   area; the graceful-quit path itself is verified via `wax-vpn.exe --quit`).
 - WARP registration against the live Cloudflare API (requires a person to

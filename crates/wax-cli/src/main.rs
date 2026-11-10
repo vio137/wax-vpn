@@ -33,12 +33,6 @@ enum Commands {
     /// Connect a profile (requires administrator)
     Connect {
         name: String,
-        /// Block all traffic outside the tunnel
-        #[arg(long)]
-        kill_switch: bool,
-        /// With --kill-switch, keep local network reachable
-        #[arg(long, default_value_t = true)]
-        allow_lan: bool,
         /// Configure and bring the tunnel up, then exit (used by automation)
         #[arg(long)]
         no_wait: bool,
@@ -144,7 +138,7 @@ fn run() -> Result<(), String> {
             profile::delete_profile(&name).map_err(|e| e.to_string())?;
             println!("Removed profile '{name}'.");
         }
-        Commands::Connect { name, kill_switch, allow_lan, no_wait } => {
+        Commands::Connect { name, no_wait } => {
             if !wax_tunnel::is_elevated() {
                 return Err("connecting needs administrator rights - re-run from an elevated terminal or use the waX VPN app, which offers a Restart as administrator button".into());
             }
@@ -152,7 +146,7 @@ fn run() -> Result<(), String> {
                 return Err("`--no-wait` is not safe yet: a tunnel stops when its owning process exits, so a fire-and-forget connect would die instantly. Omit --no-wait and keep this terminal open, or use the waX VPN app, which holds the tunnel while it runs. A proper background mode is planned.".into());
             }
             let p = profile::load_profile(&name).map_err(|e| e.to_string())?;
-            let opts = ConnectOptions { kill_switch, allow_lan };
+            let opts = ConnectOptions::default();
             let tunnel = Tunnel::connect(&p, &opts).map_err(|e| e.to_string())?;
             println!("Connected to '{}'. Tunnel adapter '{}' is up.", p.name, wax_tunnel::ADAPTER_NAME);
             println!("Press Ctrl+C to disconnect.");

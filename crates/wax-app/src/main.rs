@@ -130,13 +130,9 @@ impl WaxApp {
         cc.egui_ctx.set_fonts(fonts);
 
         let (tx, rx) = channel();
-        let mut settings = settings::load();
-        // v0.1.0: reject the old block-all firewall implementation. Do not
-        // silently retain an ON flag that promises unavailable protection.
-        if settings.kill_switch {
-            settings.kill_switch = false;
-            settings::save(&settings);
-        }
+        let settings = settings::load();
+        // Serde ignores removed preview fields; rewriting drops them on disk.
+        settings::save(&settings);
         let profiles = profile::load_profiles().unwrap_or_default();
         let selected = settings
             .last_profile
@@ -287,10 +283,7 @@ impl WaxApp {
         self.state = ConnState::Connecting;
         self.connect_stages.clear();
         self.status_line = format!("Connecting to {}...", profile.name);
-        let opts = ConnectOptions {
-            kill_switch: self.settings.kill_switch,
-            allow_lan: self.settings.allow_lan,
-        };
+        let opts = ConnectOptions::default();
         let tunnel = self.tunnel.clone();
         let tx = self.events_tx.clone();
         let tx_stage = tx.clone();
@@ -418,22 +411,12 @@ impl WaxApp {
                     if !matches!(self.state, ConnState::Connected { .. }) {
                         continue;
                     }
-                    if !self.settings.kill_switch {
-                        // No kill switch: clean leftovers before reconnecting.
-                        let _ = Tunnel::force_disconnect();
-                    }
-                    // With the kill switch on, leave its rules in place so the
-                    // machine stays fail-closed between attempts; connecting
-                    // re-adds them idempotently.
+                    let _ = Tunnel::force_disconnect();
                     if self.settings.auto_reconnect {
                         self.reconnecting = true;
                         self.reconnect_attempts = 1;
                         self.status_line = "Connection lost - reconnecting (1/3)".into();
                         self.connect();
-                    } else if self.settings.kill_switch {
-                        self.state = ConnState::Failed(
-                            "Connection lost; kill-switch rules remain enabled".into(),
-                        );
                     } else {
                         self.state = ConnState::Failed("Connection lost".into());
                     }
@@ -462,11 +445,7 @@ impl WaxApp {
                 }
                 AppEvent::ConnectFailed(e) => {
                     self.reconnecting = false;
-                    let msg = if self.reconnect_attempts > 0 && self.settings.kill_switch {
-                        format!("{e} - kill-switch rules remain enabled")
-                    } else {
-                        e
-                    };
+                    let msg = e;
                     self.reconnect_attempts = 0;
                     self.state = ConnState::Failed(msg.clone());
                     self.status_line = msg;
@@ -958,7 +937,7 @@ impl WaxApp {
             }
             ui.label(
                 RichText::new(format!(
-                    "Kill switch unavailable  ·  v{VERSION}"
+                    "v{VERSION}"
                 ))
                 .size(10.5)
                 .color(theme::MUTE),
@@ -1510,9 +1489,6 @@ impl WaxApp {
 
     fn tab_features(&mut self, ui: &mut egui::Ui) {
         theme::section_heading(ui, "Features", "Protection and behaviour");
-        ui.label(RichText::new("Kill switch unavailable in v0.1.0").color(theme::BAD).size(14.0));
-        ui.label(RichText::new("The previous firewall implementation is disabled. Traffic can use your normal connection if the tunnel drops. Do not rely on waX VPN for fail-closed protection.").size(12.0).color(theme::SUB));
-        ui.add_space(14.0);
         if theme::toggle_row(
             ui,
             &mut self.settings.autostart,

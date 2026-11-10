@@ -22,7 +22,7 @@ Use a reviewed SemVer tag such as v0.1.0, not a CI run counter. Derive displayed
 
 ## Remaining gaps
 
-- Effective kill-switch behavior, including tunnel and endpoint allowances
+- No kill switch is included; traffic is not blocked if the tunnel drops
 - IPv6 leak probe with working baseline, not absence of IPv6 connectivity
 - Real-desktop tray actions and consumer installer/signature checks
 - WARP registration remains explicit-consent gated

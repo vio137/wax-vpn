@@ -286,18 +286,18 @@ jobs:
 
           # Unsupported protection must fail before changing network state.
           $reject = & .\bin\wax.exe connect demo --kill-switch 2>&1
-          if ($LASTEXITCODE -ne 0 -and "$reject" -match 'Kill switch is unavailable') {
-            Note 'PASS unavailable kill-switch flag rejected explicitly before tunnel/firewall changes'
-          } else { Note 'FAIL unavailable kill-switch flag was not rejected' }
+          if ($LASTEXITCODE -ne 0 -and "$reject" -match 'unexpected argument') {
+            Note 'PASS removed CLI flag rejected by argument parser'
+          } else { Note 'FAIL removed CLI flag was not rejected' }
           $v6 = [Net.Sockets.TcpClient]::new([Net.Sockets.AddressFamily]::InterNetworkV6)
           try {
             $t = $v6.ConnectAsync([Net.IPAddress]::Parse('2606:4700:4700::1111'),443)
             $reachable = $t.Wait(2500) -and $v6.Connected
-            if ($reachable) { Note 'INFO IPv6 baseline reachable; kill switch unavailable so IPv6 leak protection is NOT offered' }
-            else { Note 'SKIP IPv6 leak protection test: no proven IPv6 baseline and kill switch unavailable' }
-          } catch { Note 'SKIP IPv6 leak protection test: no proven IPv6 baseline and kill switch unavailable' } finally { $v6.Dispose() }
+            if ($reachable) { Note 'INFO IPv6 baseline reachable; no kill switch so IPv6 leak protection is NOT offered' }
+            else { Note 'SKIP IPv6 leak protection test: no proven IPv6 baseline and no kill switch' }
+          } catch { Note 'SKIP IPv6 leak protection test: no proven IPv6 baseline and no kill switch' } finally { $v6.Dispose() }
           } else {
-            Note 'INFO extended crash/kill-switch legs skipped on push builds (hourly schedule and manual dispatch run them)'
+            Note 'INFO extended crash/IPv6 legs skipped on push builds (hourly schedule and manual dispatch run them)'
           }
 
           $results | Out-File -Encoding utf8 verify-results.txt

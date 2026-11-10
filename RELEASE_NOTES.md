@@ -6,7 +6,7 @@ Pure-Rust egui interface, official WireGuardNT driver, importable WireGuard prof
 
 ### Protection limit
 
-Kill switch is unavailable and disabled in this release. The old Windows Firewall Block Any design conflicts with its allow rules. Saved ON settings are reset to OFF; the GUI explains the limit and CLI --kill-switch requests are rejected before network changes. If the tunnel drops, traffic may use the normal connection. This is NOT fail-closed protection. IPv6 leak protection is not claimed. Do not use this build where either is required.
+There is no kill switch in v0.1.0. It has been removed from the interface, settings, CLI and tunnel backend. Old preview settings are ignored and rewritten without those fields. Only cleanup of stale preview firewall rules remains. If the tunnel drops, traffic may use the normal connection. This is NOT fail-closed protection. IPv6 leak protection is not claimed. Do not use this build where either is required.
 
 ### Release verification gates
 

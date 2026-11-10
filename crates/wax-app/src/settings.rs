@@ -5,8 +5,6 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
-    pub kill_switch: bool,
-    pub allow_lan: bool,
     pub autostart: bool,
     pub auto_reconnect: bool,
     pub reduced_motion: bool,
@@ -18,8 +16,6 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            kill_switch: false,
-            allow_lan: true,
             autostart: false,
             auto_reconnect: true,
             reduced_motion: false,
@@ -57,5 +53,19 @@ pub fn save(settings: &Settings) {
     }
     if let Ok(json) = serde_json::to_string_pretty(settings) {
         let _ = std::fs::write(p, json);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn removed_preview_settings_are_discarded() {
+        let old = r#"{"kill_switch":true,"allow_lan":false,"reduced_motion":true}"#;
+        let settings: Settings = serde_json::from_str(old).unwrap();
+        assert!(settings.reduced_motion);
+        let migrated = serde_json::to_string(&settings).unwrap();
+        assert!(!migrated.contains("kill_switch"));
+        assert!(!migrated.contains("allow_lan"));
     }
 }
