@@ -23,7 +23,7 @@ use settings::Settings;
 use wax_core::{profile, Profile};
 use wax_tunnel::{ConnectOptions, Tunnel, TunnelStats};
 
-const VERSION: &str = env!("CARGO_PKG_VERSION");
+const VERSION: &str = env!("WAX_BUILD_VERSION");
 
 #[derive(Clone, Debug)]
 pub enum ConnState {
@@ -1640,7 +1640,7 @@ impl WaxApp {
                     ui.add_space(2.0);
                     ui.label(RichText::new("waX VPN").size(17.0).color(theme::TEXT).strong());
                     ui.label(
-                        RichText::new(format!("v{VERSION} · preview channel"))
+                        RichText::new(format!("v{VERSION}"))
                             .size(11.0)
                             .color(theme::MUTE),
                     );
