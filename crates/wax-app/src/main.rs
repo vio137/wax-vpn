@@ -717,16 +717,21 @@ impl eframe::App for WaxApp {
         let dropped = ctx.input(|i| i.raw.dropped_files.clone());
         for file in dropped {
             let path = file.path().to_path_buf();
-            if path.extension().and_then(|e| e.to_str()) == Some("conf") {
+            if path.extension().and_then(|e| e.to_str())
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("conf"))
+            {
                 let name = path
                     .file_stem()
                     .and_then(|s| s.to_str())
                     .unwrap_or("imported")
                     .to_string();
-                if let Ok(text) = std::fs::read_to_string(&path) {
-                    self.import_text(name, &text);
-                    self.tab = Tab::Profiles;
+                match std::fs::read_to_string(&path) {
+                    Ok(text) => { self.import_text(name, &text); }
+                    Err(e) => {
+                        self.import_error = Some(format!("Could not read '{name}': {e}"));
+                    }
                 }
+                self.tab = Tab::Profiles;
             }
         }
 

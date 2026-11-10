@@ -10,6 +10,7 @@ on:
 
 permissions:
   contents: write
+  actions: read
 
 concurrency:
   group: wax-build
@@ -18,6 +19,9 @@ concurrency:
 jobs:
   build:
     runs-on: windows-latest
+    outputs:
+      publish: ${{ steps.pub.outputs.publish }}
+      skip: ${{ steps.staleness.outputs.skip }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -34,8 +38,9 @@ jobs:
         id: staleness
         shell: pwsh
         run: |
-          $rel = gh release list --limit 20 --json tagName,isPrerelease,targetCommitish | ConvertFrom-Json | Where-Object { $_.tagName -like 'v*-preview.*' } | Select-Object -First 1
-          if ($rel -and $rel.targetCommitish -eq "${{ github.sha }}") {
+          $rel = gh release list --limit 20 --json tagName,isPrerelease | ConvertFrom-Json | Where-Object { $_.tagName -like 'v*-preview.*' } | Select-Object -First 1
+          $releasedSha = if ($rel) { gh api "repos/${{ github.repository }}/commits/$($rel.tagName)" --jq .sha } else { "" }
+          if ($rel -and $releasedSha -eq "${{ github.sha }}") {
             "skip=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
             Write-Host "HEAD already released as $($rel.tagName); skipping"
           } else {
@@ -126,18 +131,11 @@ jobs:
           if ($manual -or $codeChanged) { "publish=true" | Out-File $env:GITHUB_OUTPUT -Append } else { "publish=false" | Out-File $env:GITHUB_OUTPUT -Append }
           Write-Host "manual=$manual codeChanged=$codeChanged changed: $($changed -join ', ')"
 
-      - name: Publish prerelease
-        if: steps.staleness.outputs.skip != 'true' && steps.pub.outputs.publish == 'true'
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          $tag = "v0.1.0-preview.${{ github.run_number }}"
-          gh release create $tag "waX-VPN-Setup-$tag-x64.exe" "SHA256SUMS-$tag.txt" --title "waX VPN $tag" --prerelease --notes-file RELEASE_NOTES.md
 
   verify:
     name: verify (demo tunnel + GUI)
     needs: build
+    if: needs.build.outputs.skip != 'true'
     runs-on: windows-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -155,7 +153,7 @@ jobs:
 
       - name: Real tunnel test against the official WireGuard demo server
         env:
-          WAX_FULL_VERIFY: ${{ github.event_name != 'push' && '1' || '0' }}
+          WAX_FULL_VERIFY: '1' # Temporary: close requested kill-switch/IPv6 verification gaps
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Continue'
@@ -255,6 +253,48 @@ jobs:
             if (-not $dnsCrashAfter -or $dnsCrashAfter.ServerAddresses.Count -eq 0) { Note 'PASS DNS clean after simulated crash + cleanup' } else { Note "FAIL DNS residue after crash: $($dnsCrashAfter.ServerAddresses -join ',')" }
             $rulesCrash = Get-NetFirewallRule -DisplayName 'waX VPN KillSwitch*' -ErrorAction SilentlyContinue
             if (-not $rulesCrash) { Note 'PASS no firewall rules after crash cleanup' } else { Note 'FAIL firewall rules left after crash' }
+          }
+
+          # Controlled direct-route probes: no public-IP service or account access.
+          # Reuse the configured DNS provider's endpoints, with baseline first.
+          function TcpProbe([string]$address) {
+            $ip = [Net.IPAddress]::Parse($address)
+            $c = [Net.Sockets.TcpClient]::new($ip.AddressFamily)
+            try {
+              $t = $c.ConnectAsync($ip, 443)
+              return ($t.Wait(2500) -and $c.Connected)
+            } catch { return $false } finally { $c.Dispose() }
+          }
+          $physical = Get-NetRoute -DestinationPrefix '0.0.0.0/0' -AddressFamily IPv4 | Where-Object { $_.InterfaceAlias -ne 'waX VPN' } | Sort-Object RouteMetric | Select-Object -First 1
+          $probeRoute = $null
+          if ($physical) {
+            $probeRoute = New-NetRoute -DestinationPrefix '1.1.1.1/32' -InterfaceIndex $physical.InterfaceIndex -NextHop $physical.NextHop -RouteMetric 1 -PolicyStore ActiveStore -ErrorAction SilentlyContinue
+          }
+          $v4Baseline = TcpProbe '1.1.1.1'
+          $v6Baseline = TcpProbe '2606:4700:4700::1111'
+          Note "INFO off-tunnel TCP443 baselines: IPv4=$v4Baseline IPv6=$v6Baseline"
+          try {
+            $probeOwner = Start-Process -FilePath "$PWD\bin\wax.exe" -ArgumentList 'connect','demo','--kill-switch' -PassThru -WindowStyle Hidden
+            Start-Sleep -Seconds 12
+            if ($probeOwner.HasExited) { Note 'FAIL effective kill-switch probe: owner exited' } else {
+              $through = ping -n 1 -w 3000 192.168.4.1
+              if ($LASTEXITCODE -eq 0) { Note 'PASS kill switch permits tunnel-side ping while enabled' } else { Note 'FAIL kill switch blocks tunnel-side ping (allow rules may be overridden)' }
+              if ($v4Baseline -and $probeRoute) {
+                if (TcpProbe '1.1.1.1') { Note 'FAIL IPv4 kill-switch bypass: direct host-route TCP443 remained reachable' } else { Note 'PASS IPv4 direct host-route TCP443 blocked while kill switch enabled' }
+              } else { Note 'SKIP IPv4 effective blocking: no proven direct-route baseline' }
+              if ($v6Baseline) {
+                if (TcpProbe '2606:4700:4700::1111') { Note 'FAIL IPv6 bypass: baseline endpoint remains reachable outside IPv4-only tunnel with kill switch' } else { Note 'PASS IPv6 baseline TCP443 blocked with kill switch' }
+              } else { Note 'SKIP IPv6 leak test: hosted runner has no proven IPv6 TCP443 baseline' }
+              $probeOwner.Kill()
+              Start-Sleep -Seconds 2
+              if ($v4Baseline -and $probeRoute) {
+                if (TcpProbe '1.1.1.1') { Note 'FAIL IPv4 direct-route reachable after tunnel owner crash' } else { Note 'PASS IPv4 direct-route TCP443 remains blocked after owner crash' }
+              }
+            }
+          } finally {
+            .\bin\wax.exe disconnect | Out-Null
+            if ($probeOwner -and -not $probeOwner.HasExited) { $probeOwner.Kill() }
+            if ($probeRoute) { $probeRoute | Remove-NetRoute -Confirm:$false -ErrorAction SilentlyContinue }
           }
 
           # 6b. Crash leg with kill switch ON: rules are system objects and
@@ -589,3 +629,110 @@ jobs:
             gui-screenshot-features.png
             gui-screenshot-warp.png
             gui-screenshot-about.png
+
+  installer-smoke:
+    name: fresh-runner installer launch
+    needs: build
+    if: needs.build.outputs.skip != 'true'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: wax-vpn-installer
+          path: installer-download
+      - name: Install, launch installed GUI, quit and uninstall
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $dir = Join-Path $env:ProgramFiles 'waX VPN'
+          if (Test-Path $dir) { throw 'Runner is not clean: waX installation already exists' }
+          $setup = Get-ChildItem installer-download -Filter '*.exe' | Select-Object -First 1
+          $install = Start-Process $setup.FullName -ArgumentList '/S' -Wait -PassThru
+          if ($install.ExitCode -ne 0) { throw "Installer exit $($install.ExitCode)" }
+          $exe = Join-Path $dir 'waX VPN.exe'
+          if (-not (Test-Path $exe)) { throw 'Installed GUI missing' }
+          $p = Start-Process $exe -PassThru
+          try {
+            Add-Type -AssemblyName UIAutomationClient
+            Add-Type -AssemblyName UIAutomationTypes
+            $window = $null
+            for ($i=0; $i -lt 20 -and -not $window; $i++) {
+              Start-Sleep -Seconds 1
+              $condition = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ProcessIdProperty, $p.Id)
+              $window = [System.Windows.Automation.AutomationElement]::RootElement.FindFirst([System.Windows.Automation.TreeScope]::Children, $condition)
+            }
+            if (-not $window -or $window.Current.IsOffscreen) { throw 'Installed GUI main window not on-screen' }
+            $name = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, 'Profiles')
+            if (-not $window.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $name)) { throw 'Installed GUI rail missing' }
+            Add-Type -AssemblyName System.Drawing
+            $r = $window.Current.BoundingRectangle
+            $image = New-Object Drawing.Bitmap([int]$r.Width, [int]$r.Height)
+            $g = [Drawing.Graphics]::FromImage($image)
+            $g.CopyFromScreen([int]$r.X,[int]$r.Y,0,0,$image.Size)
+            $image.Save((Join-Path $PWD 'installed-gui.png'))
+            $g.Dispose(); $image.Dispose()
+            'PASS fresh runner: NSIS install and installed GUI main window with rail' | Out-File installer-results.txt
+          } finally {
+            & $exe --quit
+            Start-Sleep -Seconds 3
+            if (-not $p.HasExited) { $p.Kill(); throw 'Installed GUI did not quit gracefully' }
+            $uninstall = Start-Process (Join-Path $dir 'uninstall.exe') -ArgumentList '/S' -Wait -PassThru
+            Start-Sleep -Seconds 3
+            if (Test-Path $exe) { throw 'Uninstall left GUI binary behind' }
+            'PASS uninstall removed installed GUI; user data intentionally retained' | Out-File installer-results.txt -Append
+          }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: installer-evidence
+          path: |
+            installer-results.txt
+            installed-gui.png
+
+  publish:
+    needs: [build, verify, installer-smoke]
+    if: needs.build.outputs.publish == 'true' && needs.build.outputs.skip != 'true'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: wax-vpn-installer
+          path: release-assets
+      - name: Upload unsigned signing input
+        if: vars.WAX_SIGNPATH_ENABLED == 'true'
+        id: signpath-input
+        uses: actions/upload-artifact@v4
+        with:
+          name: wax-signpath-input
+          path: release-assets/*.exe
+          if-no-files-found: error
+      - name: SignPath signing request (disabled until approved setup)
+        if: vars.WAX_SIGNPATH_ENABLED == 'true'
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG }}
+          github-artifact-id: ${{ steps.signpath-input.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: signed-assets
+      - name: Verify signed installer and replace release asset
+        if: vars.WAX_SIGNPATH_ENABLED == 'true'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $signed = @(Get-ChildItem signed-assets -Recurse -Filter '*.exe')
+          if ($signed.Count -ne 1) { throw 'Expected exactly one signed installer' }
+          if ((Get-AuthenticodeSignature $signed[0].FullName).Status -ne 'Valid') { throw 'Installer signature is not valid' }
+          Copy-Item $signed[0].FullName (Join-Path release-assets $signed[0].Name) -Force
+          Get-FileHash -Algorithm SHA256 $signed[0].FullName | ForEach-Object { "$($_.Hash.ToLower())  $($signed[0].Name)" } | Out-File -Encoding ascii (Get-ChildItem release-assets -Filter 'SHA256SUMS-*.txt').FullName
+      - name: Publish verified prerelease
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = "v0.1.0-preview.${{ github.run_number }}"
+          gh release create $tag (Get-ChildItem release-assets | ForEach-Object FullName) --target "${{ github.sha }}" --title "waX VPN $tag" --prerelease --notes-file RELEASE_NOTES.md
