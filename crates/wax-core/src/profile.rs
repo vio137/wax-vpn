@@ -177,6 +177,14 @@ mod tests {
         assert_eq!(import_into(&dir, "CON", &config).unwrap().name, "_CON");
         assert!(import_into(&dir, "bad", "not a configuration").is_err());
         assert!(!dir.join("bad.conf").exists());
+        let before_count = fs::read_dir(&dir).unwrap().count();
+        let duplicate = config.replace("[Peer]", "[Peer]\nEndpoint = localhost:12345\nEndpoint = do-not-echo-secret");
+        let error = import_into(&dir, "duplicate", &duplicate).unwrap_err().to_string();
+        assert!(error.contains("duplicate Endpoint in [Peer]"));
+        assert!(!error.contains("do-not-echo-secret"));
+        assert!(!dir.join("duplicate.conf").exists());
+        assert_eq!(fs::read_dir(&dir).unwrap().count(), before_count);
+        assert_eq!(fs::read(dir.join("office_name.conf")).unwrap(), original);
         // Concurrent imports cannot overwrite each other or return one name.
         let handles = (0..4).map(|_| {
             let dir=dir.clone(); let config=config.clone();
@@ -257,4 +265,4 @@ mod tests {
         assert_eq!(sanitize_filename("COM10"), "COM10");
         assert_eq!(sanitize_filename("a/b"), "a_b");
     }
-                   }
+}
