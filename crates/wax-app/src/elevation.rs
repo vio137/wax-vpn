@@ -54,7 +54,7 @@ fn wait_for_parent(pid: u32, timeout_ms: u32) -> Result<(), ()> {
 
 #[cfg(windows)]
 pub fn finish_restart() -> Result<(), ()> {
-    let args = std::env::args().collect::<Vec<_>>();
+    let args = std::env::args_os().skip(1).map(|arg| arg.into_string().map_err(|_| ())).collect::<Result<Vec<_>, _>>()?;
     if let Some(pid) = parent_pid(&args)? {
         if !wax_tunnel::is_elevated() || pid == std::process::id() { return Err(()); }
         // Do not race the original process's named single-instance mutex.
@@ -101,4 +101,4 @@ mod tests {
         assert!(wait_for_parent(std::process::id(), 1).is_err());
         assert!(wait_for_parent(u32::MAX, 1).is_ok());
     }
-              }
+}
