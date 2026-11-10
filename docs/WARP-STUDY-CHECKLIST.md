@@ -15,7 +15,7 @@ This is an independent behavior/structure study with REA 6.8.0 and Ghidra 12.1.4
 - [ ] Deep CLI feature tracing and native relationships, in an isolated research workflow.
 - [x] Resolve MSI File/Component tables: Flutter engine plus x64 ELF app.so (Dart AOT payload), separate service/CLI/diagnostics/DEX/updater. File sizes and SHA256 recorded locally. No assets copied.
 - [ ] Trace Flutter settings/state candidates. Supplemental strings show reconnect/package-update/captive-portal/connectivity names, not runtime behavior.
-- [x] Runtime CLI help/version on an isolated Windows runner: Authenticode valid Cloudflare, Inc., version2026.8.2115.0. No MSI install/service/registration/connection. One unsupported exploratory help command caused final harness exit2, not a signature failure; fix pending. Full UI behavior still unknown.
+- [x] Runtime CLI help/version on an isolated Windows runner: Authenticode valid Cloudflare, Inc., version2026.8.2115.0. No MSI install/service/registration/connection. One unsupported exploratory help command caused final harness exit2, not a signature failure; corrected rerun green42765965388. Full UI behavior still unknown.
 - [ ] Reconcile static evidence, runtime observations and documentation into final findings.
 
 ## Independent waX priorities
@@ -24,7 +24,7 @@ This is an independent behavior/structure study with REA 6.8.0 and Ghidra 12.1.4
 | --- | --- | --- | --- |
 | P0 | Honor profile MTU | waX source audit found it parsed but unused | IPv4 1380 applied and checked on Windows; IPv6 branch not runtime-proven |
 | P1 | Redacted local diagnostics/status export | Separate warp_diag binary plus official diagnostic-log documentation | CLI implementation in validation; allowlist only, no profiles/logs/accounts/network calls |
-| P1 | Clear tunnel state and actionable error categories | Separate service/CLI structure; detailed state documented in diagnostics | Prepared: distinguish adapter-ready/no handshake, recent peer handshake, older handshake; never assert Internet reachability. Pixel check pending |
+| P1 | Clear tunnel state and actionable error categories | Separate service/CLI structure; detailed state documented in diagnostics | Prepared: distinguish adapter-ready/no handshake, recent peer handshake, older handshake; never assert Internet reachability. Recent-handshake pixels inspected and gates green168c994. No/older-handshake runtime pixels still pending |
 | P2 | Network-change reconnect handling | Service imports NotifyRouteChange2 / NotifyUnicastIpAddressChange | Static capability observed; runtime semantics unknown |
 | P2 | Optional background service | Distinct service and named-pipe imports | Design first; least-privilege IPC and install/uninstall work needed |
 | P2 | Update verification and explicit install choice | Updater binary, launcher updater plugin/WinSparkle reference | No silent auto-update or new service |
@@ -50,3 +50,7 @@ Read-only MSI ServiceInstall rows declare the main CloudflareWARP service automa
 ## Observed CLI help surface
 
 Publisher-verified official CLI help describes maintained connection intent; split tunnel host/IP routing and route dumps; aggregate/enhanced stats; DNS logging/fallback/families; key rotation; trusted-network disconnect; WireGuard/MASQUE preference; and tunnel/DNS/proxy modes. These are help descriptions, not verified networking behavior. waX currently uses WireGuardNT and profile DNS configuration, not Cloudflare's DNS proxy, MASQUE, enterprise policy or account services. Implementing labels without the corresponding behavior would be misleading.
+
+## Follow-up source audit
+
+GUI startup detected an already-running adapter but its stats thread exited because that tunnel had no owned handle in the GUI. Independent fix uses read-only status polling for the external tunnel, reflects stop without reconnecting a guessed profile, and uses fixed query errors. Targeted Windows verification is pending. This does not add a service or network probe.

@@ -53,6 +53,7 @@ enum AppEvent {
     ConnectFailed(String),
     Disconnected,
     Stats(TunnelStats),
+    ExternalStatus(Result<Option<TunnelStats>, ()>),
     WarpDone(Result<String, String>),
 }
 
@@ -186,7 +187,7 @@ impl WaxApp {
         if let Ok(Some(stats)) = Tunnel::existing_status() {
             app.state = ConnState::Connected { since: Instant::now() };
             app.stats = stats;
-            app.spawn_stats_loop();
+            app.spawn_external_stats_loop();
         }
         app
     }
@@ -215,6 +216,20 @@ impl WaxApp {
         self.split_edit_for = None;
         self.confirm_delete = None;
         self.picker_open = false;
+    }
+
+    // Read status of a tunnel owned by a CLI/earlier process. Never pretend
+    // we own its handle and never reconnect a guessed profile when it ends.
+    fn spawn_external_stats_loop(&self) {
+        let tunnel = self.tunnel.clone();
+        let tx = self.events_tx.clone();
+        std::thread::spawn(move || loop {
+            std::thread::sleep(Duration::from_secs(1));
+            if tunnel.lock().unwrap().is_some() { break; }
+            let state = Tunnel::existing_status().map_err(|_| ());
+            let finished = matches!(state, Ok(None));
+            if tx.send(AppEvent::ExternalStatus(state)).is_err() || finished { break; }
+        });
     }
 
     fn spawn_stats_loop(&self) {
@@ -464,6 +479,25 @@ impl WaxApp {
                         Some(e) => format!("Disconnected, but cleanup needs attention: {e}"),
                     };
                     self.stats = TunnelStats::default();
+                }
+                AppEvent::ExternalStatus(state) => {
+                    if matches!(self.state, ConnState::Connected { .. }) && self.tunnel.lock().unwrap().is_none() {
+                        match state {
+                            Ok(Some(stats)) => {
+                                self.stats = stats;
+                                self.status_line = "Existing tunnel status refreshed".into();
+                            }
+                            Ok(None) => {
+                                self.state = ConnState::Disconnected;
+                                self.stats = TunnelStats::default();
+                                self.status_line = "Externally owned tunnel stopped".into();
+                            }
+                            Err(()) => {
+                                self.stats = TunnelStats::default();
+                                self.status_line = "Tunnel status unavailable. Administrator access or the driver may need attention.".into();
+                            }
+                        }
+                    }
                 }
                 AppEvent::Stats(s) => self.stats = s,
                 AppEvent::Stage(stage) => {

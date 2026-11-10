@@ -262,12 +262,26 @@ jobs:
           $diagnostics = Get-Content diagnostics.json -Raw | ConvertFrom-Json
           if ($diagnostics.tunnel_status -eq 'adapter_up' -and $diagnostics.internet_reachability -eq 'not_tested' -and $diagnostics.schema_version -eq 1) { Note 'PASS allowlisted diagnostics reports adapter state without internet claim' } else { Note 'FAIL diagnostics schema/state mismatch' }
 
+          # Launch GUI while CLI owns the adapter. Startup monitoring must
+          # refresh stats and notice that externally owned tunnel stopping.
+          $observer = Start-Process -FilePath "$PWD\bin\wax-vpn.exe" -PassThru
+          Start-Sleep -Seconds 5
+
           # 5. Disconnect and verify restoration
           .\bin\wax.exe disconnect
           if ($LASTEXITCODE -ne 0) { Note 'FAIL disconnect command'; if (-not $proc.HasExited) { $proc.Kill() }; exit 1 }
           Start-Sleep -Seconds 2
           if (-not $proc.HasExited) { $proc.Kill() }
           Start-Sleep -Seconds 3
+          Add-Type -AssemblyName UIAutomationClient
+          Add-Type -AssemblyName UIAutomationTypes
+          $desktop = [System.Windows.Automation.AutomationElement]::RootElement
+          $observerWindow = $desktop.FindFirst([System.Windows.Automation.TreeScope]::Children, (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ProcessIdProperty, $observer.Id)))
+          $disconnected = if ($observerWindow) { $observerWindow.FindFirst([System.Windows.Automation.TreeScope]::Descendants, (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, 'Disconnected'))) } else { $null }
+          if ($disconnected) { Note 'PASS startup observer detects externally owned tunnel stopping without reconnect' } else { Note 'FAIL startup observer still stale or window missing' }
+          $quitObserver = Start-Process -FilePath "$PWD\bin\wax-vpn.exe" -ArgumentList '--quit' -PassThru
+          $quitObserver.WaitForExit(10000) | Out-Null
+          if (-not $observer.WaitForExit(10000)) { Note 'FAIL observer did not quit'; $observer.Kill() }
           $dnsAfter = Get-DnsClientServerAddress -InterfaceAlias 'waX VPN' -AddressFamily IPv4 -ErrorAction SilentlyContinue
           if (-not $dnsAfter -or $dnsAfter.ServerAddresses.Count -eq 0) { Note 'PASS DNS restored on disconnect' } else { Note "FAIL DNS left behind: $($dnsAfter.ServerAddresses -join ',')" }
           $leftRules = Get-NetFirewallRule -DisplayName 'waX VPN KillSwitch*' -ErrorAction SilentlyContinue
