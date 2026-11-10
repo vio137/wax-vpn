@@ -1,4 +1,4 @@
-//! UI wording reflects WireGuard evidence, not an Internet connectivity probe.
+//! CLI and GUI wording reflects WireGuard evidence, not an Internet connectivity probe.
 use std::time::{Duration, SystemTime};
 
 #[derive(Debug, PartialEq, Eq)]

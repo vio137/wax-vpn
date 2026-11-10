@@ -1,4 +1,6 @@
 //! Small allowlisted support report. Never read profiles, settings, logs or accounts.
+pub mod health;
+
 use wax_tunnel::{TunnelError, TunnelStats};
 
 pub fn report(version: &str, elevated: bool, state: Result<Option<TunnelStats>, TunnelError>) -> String {

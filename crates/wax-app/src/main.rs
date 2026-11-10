@@ -3,7 +3,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod gargantua;
-mod connection_health;
+use wax_diagnostics::health as connection_health;
 mod recovery;
 #[cfg(windows)]
 mod single;

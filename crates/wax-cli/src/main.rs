@@ -172,11 +172,20 @@ fn run() -> Result<(), String> {
         }
         Commands::Status => match Tunnel::existing_status().map_err(|e| e.to_string())? {
             Some(stats) => {
-                println!("Connected. rx {} / tx {}", fmt_bytes(stats.rx_bytes), fmt_bytes(stats.tx_bytes));
+                let now = std::time::SystemTime::now();
+                let label = match wax_diagnostics::health::health(stats.last_handshake, now) {
+                    wax_diagnostics::health::Health::AwaitingHandshake => "Tunnel ready",
+                    wax_diagnostics::health::Health::RecentHandshake => "Connected",
+                    wax_diagnostics::health::Health::OlderHandshake => "Tunnel up",
+                };
+                println!("{label}. rx {} / tx {}", fmt_bytes(stats.rx_bytes), fmt_bytes(stats.tx_bytes));
+                println!("Internet reachability is not tested.");
                 match stats.last_handshake {
                     Some(t) => {
-                        let age = std::time::SystemTime::now().duration_since(t).map(|d| d.as_secs()).unwrap_or(0);
-                        println!("Last handshake {}s ago.", age);
+                        match now.duration_since(t) {
+                            Ok(age) => println!("Last handshake {}s ago. Idle peers may not handshake.", age.as_secs()),
+                            Err(_) => println!("Handshake timestamp is in the future; peer state is uncertain."),
+                        }
                     }
                     None => println!("No handshake yet."),
                 }
