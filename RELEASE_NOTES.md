@@ -10,7 +10,7 @@ Unsigned Windows x64 reliability checkpoint. Windows may show an unknown-publish
 
 ## Verification
 
-Source 6c123c5 / full manual gate 42798191756 passed Windows build/tests, full tunnel/GUI and fresh install/quit/uninstall. Named tests cover registry write/update/readback/idempotent removal in a non-startup sandbox key and additive profile import with sanitized-name collisions, preservation, invalid input and concurrent imports in a temporary directory. Actual Profiles and Connected pixels inspected. Exact v0.1.8 stable verification is pending.
+Source 6c123c5 / full manual gate 42798191756 passed Windows build/tests, full tunnel/GUI and fresh install/quit/uninstall. Named tests cover registry write/update/readback/idempotent removal in a non-startup sandbox key and additive profile import with sanitized-name collisions, preservation, invalid input and concurrent imports in a temporary directory. Actual Profiles and Connected pixels inspected. Exact v0.1.8 stable source 0e85e65 / gate 42799656921 passed build, full runtime, fresh install/quit/uninstall and publication. Actual stable Connected, Profiles, Features and installed pixels inspected. Fresh released installer: 10,948,015 bytes, SHA256 36bd283289494906f1b238d8e3375bf0ee6ea90e3f054bf4c8892917fe634222. Stable adapter-loss recovery: 4 seconds with the original GUI process. Pending-retry disable and manual reconnect while disabled passed. Installed cleanup finished in 3929 ms, with the native absence query at 2 ms.
 
 ## Scope and limits
 
