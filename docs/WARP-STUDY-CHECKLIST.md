@@ -90,3 +90,9 @@ Source433f867/full manual gate42777283654 passed. Actual Windows pages and all s
 ## v0.1.7 maintenance checkpoint
 
 Exact source848a68a/full stable gate42791204943 passed build/runtime/installer/publish. Fresh installer10,944,296bytesSHA2569ff8c7598442a69a34cfdfd9ca052075017e3434c608a80ade7e9a502e3c991d. Stable Connected/installed/diagnostics pixels inspected. Native adapter-presence query replaces one subprocess without skipping DNS or narrow legacy-rule cleanup. Recovery-disable cancels in-flight automatic attempts via generation invalidation (policy-tested, Windows failure sequence unproven). Route/address/interface groundwork remains test-only, not physical roaming. Crash3sadaptergoneDNSnone/rules0beforecleanup;cleanupPASS;IPv6SKIP;realtraymanual. Earlier intermittent15squit failure remains undiagnosed; stable installed cleanup4654ms/nativeabsence2ms.
+
+## Post-v0.1.7 reliability work
+
+Startup option bb13b51 / hourly full gate 42795176113 passed Windows sandbox registry write/update/readback/idempotent removal, full runtime and fresh installer. Actual Features pixels inspected. Failure warning and Windows sign-in launch remain unproven; no continuous registry monitoring is claimed.
+
+Profile import source audit found shared-core fs::write could overwrite an existing profile from CLI, while GUI prechecking remained race-prone. Imports now use exclusive creation and return the actual sanitized name, incrementing suffixes on collision. Explicit save/update calls are unchanged. A focused temporary-directory test covers sanitization collisions, preservation, invalid config without a created file and concurrent import names. Windows evidence pending.

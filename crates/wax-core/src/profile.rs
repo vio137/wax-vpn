@@ -2,6 +2,8 @@
 //! config directory (%APPDATA%/wax-vpn/profiles on Windows).
 
 use std::fs;
+use std::io::Write;
+use std::path::Path;
 use std::path::PathBuf;
 
 use crate::{conf::WireGuardConfig, CoreError};
@@ -100,16 +102,77 @@ pub fn delete_profile(name: &str) -> Result<(), CoreError> {
     Ok(())
 }
 
+/// Imports are additive. Exclusive creation avoids a check-then-overwrite race
+/// between GUI/CLI instances and returns the actual canonical filename stem.
 pub fn import_conf(name: &str, text: &str) -> Result<Profile, CoreError> {
+    import_into(&profiles_dir(), name, text)
+}
+
+fn import_into(dir: &Path, name: &str, text: &str) -> Result<Profile, CoreError> {
     let config = WireGuardConfig::parse(text)?;
-    let profile = Profile { name: name.to_string(), config };
-    save_profile(&profile)?;
-    Ok(profile)
+    let serialized = config.to_conf_string();
+    fs::create_dir_all(dir)?;
+    let base = sanitize_filename(name);
+    let mut number = 1u32;
+    loop {
+        let candidate = if number == 1 { base.clone() } else { format!("{base} - {number}") };
+        let path = dir.join(format!("{candidate}.conf"));
+        let mut options = fs::OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
+        { use std::os::unix::fs::OpenOptionsExt; options.mode(0o600); }
+        match options.open(&path) {
+            Ok(mut file) => {
+                let result = file.write_all(serialized.as_bytes()).and_then(|_| file.sync_all());
+                drop(file);
+                if let Err(error) = result {
+                    let _ = fs::remove_file(&path);
+                    return Err(error.into());
+                }
+                return Ok(Profile { name: candidate, config });
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+                number = number.checked_add(1).ok_or_else(|| std::io::Error::other("profile_name_exhausted"))?;
+            }
+            Err(error) => return Err(error.into()),
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn additive_import_preserves_existing_and_canonicalizes_names() {
+        let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+        let dir = std::env::temp_dir().join(format!("wax-import-{}-{stamp}", std::process::id()));
+        struct Cleanup(PathBuf);
+        impl Drop for Cleanup { fn drop(&mut self) { let _ = fs::remove_dir_all(&self.0); } }
+        let _cleanup = Cleanup(dir.clone());
+        let config = WireGuardConfig {
+            interface: crate::InterfaceConfig { private_key:[1;32], addresses:vec![], dns:vec![], mtu:Some(1380), listen_port:None },
+            peers:vec![],
+        }.to_conf_string();
+        let first = import_into(&dir, "office/name.", &config).unwrap();
+        assert_eq!(first.name, "office_name");
+        let original = fs::read(dir.join("office_name.conf")).unwrap();
+        let second = import_into(&dir, "office?name", &config).unwrap();
+        assert_eq!(second.name, "office_name - 2");
+        assert_eq!(fs::read(dir.join("office_name.conf")).unwrap(), original);
+        assert_eq!(import_into(&dir, "CON", &config).unwrap().name, "_CON");
+        assert!(import_into(&dir, "bad", "not a configuration").is_err());
+        assert!(!dir.join("bad.conf").exists());
+        // Concurrent imports cannot overwrite each other or return one name.
+        let handles = (0..4).map(|_| {
+            let dir=dir.clone(); let config=config.clone();
+            std::thread::spawn(move || import_into(&dir, "office_name", &config).unwrap().name)
+        }).collect::<Vec<_>>();
+        let names=handles.into_iter().map(|h| h.join().unwrap()).collect::<std::collections::BTreeSet<_>>();
+        assert_eq!(names.len(),4);
+        assert!(!names.contains("office_name"));
+        assert!(!names.contains("office_name - 2"));
+        assert_eq!(fs::read(dir.join("office_name.conf")).unwrap(), original);
+    }
     #[test]
     fn profile_filenames_are_windows_safe() {
         for input in ["CON", "nul.office", "COM1", "LPT9", "com¹", "AUX."] {

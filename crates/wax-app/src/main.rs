@@ -397,21 +397,8 @@ impl WaxApp {
     }
 
     fn import_text(&mut self, name: String, text: &str) -> bool {
-        // Import is additive: dropping another same-named config must not
-        // overwrite a working profile or inherit its split exclusions.
-        let mut candidate = name.clone();
-        let mut suffix = 2u32;
-        while profile::profile_path(&candidate).exists() {
-            candidate = format!("{name} - {suffix}");
-            suffix += 1;
-        }
-        // Use the actual sanitized on-disk name for selection and settings.
-        let canonical = profile::profile_path(&candidate)
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .unwrap_or("profile")
-            .to_string();
-        match profile::import_conf(&canonical, text) {
+        // Core import exclusively creates a new canonical name for every caller.
+        match profile::import_conf(&name, text) {
             Ok(p) => {
                 self.status_line = format!("Imported profile '{}'", p.name);
                 self.import_error = None;
