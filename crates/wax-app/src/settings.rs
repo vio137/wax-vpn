@@ -46,7 +46,11 @@ pub fn save(settings: &Settings) { let _ = save_checked(settings); }
 
 fn load_from(p: &std::path::Path) -> Result<Settings, ()> {
     match std::fs::read_to_string(p) {
-        Ok(text) => serde_json::from_str(&text).map_err(|_| ()),
+        Ok(text) => {
+            // Windows editors may prefix otherwise valid UTF-8 JSON with a BOM.
+            let text = text.strip_prefix('\u{feff}').unwrap_or(&text);
+            serde_json::from_str(text).map_err(|_| ())
+        },
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Settings::default()),
         Err(_) => Err(()),
     }
@@ -104,6 +108,41 @@ mod tests {
         assert!(!read.auto_reconnect); assert!(read.reduced_motion);
         assert_eq!(read.split_exclusions.get("office").unwrap(), "192.168.0.0/16");
         assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 1);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+    #[test]
+    fn utf8_bom_settings_load_and_save_without_resetting_preferences() {
+        let dir = directory(); let p = dir.join("settings.json");
+        let mut value = Settings::default(); value.auto_reconnect = false;
+        value.reduced_motion = true;
+        value.last_profile = Some("office".into());
+        value.split_exclusions.insert("office".into(), "192.168.0.0/16".into());
+        let text = format!("\u{feff}{}", serde_json::to_string_pretty(&value).unwrap());
+        std::fs::write(&p, text.as_bytes()).unwrap();
+        let mut read = load_from(&p).unwrap();
+        assert!(!read.auto_reconnect); assert!(read.reduced_motion);
+        assert_eq!(read.last_profile.as_deref(), Some("office"));
+        assert_eq!(read.split_exclusions.get("office").unwrap(), "192.168.0.0/16");
+        assert_eq!(std::fs::read(&p).unwrap(), text.as_bytes());
+        read.autostart = true;
+        save_to(&p, &read).unwrap();
+        let saved = load_from(&p).unwrap();
+        assert!(saved.autostart); assert!(!saved.auto_reconnect); assert!(saved.reduced_motion);
+        assert_eq!(saved.last_profile, read.last_profile);
+        assert_eq!(saved.split_exclusions, read.split_exclusions);
+        assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 1);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+    #[test]
+    fn invalid_bom_settings_stay_errors_and_are_not_replaced() {
+        let dir = directory(); let p = dir.join("settings.json");
+        for text in ["\u{feff}", "\u{feff}{broken", "\u{feff}\u{feff}{}"] {
+            std::fs::write(&p, text.as_bytes()).unwrap();
+            assert!(load_from(&p).is_err());
+            assert!(save_to(&p, &Settings::default()).is_err());
+            assert_eq!(std::fs::read(&p).unwrap(), text.as_bytes());
+            assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 1);
+        }
         std::fs::remove_dir_all(dir).unwrap();
     }
     #[test]
