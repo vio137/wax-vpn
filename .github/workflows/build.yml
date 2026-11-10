@@ -528,6 +528,14 @@ jobs:
               }
               if ($up) { Note 'PASS GUI-driven connect: handshake after clicking Connect in the app' } else { Note 'FAIL GUI-driven connect: no handshake within 120s of clicking Connect' }
               if ($up) {
+                Start-Sleep -Seconds 2
+                Add-Type -AssemblyName System.Drawing
+                $windowBounds = $win.Current.BoundingRectangle
+                $connectedImage = New-Object System.Drawing.Bitmap ([int]$windowBounds.Width),([int]$windowBounds.Height)
+                $connectedGraphics = [System.Drawing.Graphics]::FromImage($connectedImage)
+                $connectedGraphics.CopyFromScreen([int]$windowBounds.X,[int]$windowBounds.Y,0,0,$connectedImage.Size)
+                $connectedImage.Save('gui-screenshot-connected.png')
+                $connectedGraphics.Dispose(); $connectedImage.Dispose()
                 function Test-IPv4InPrefix([string]$prefix, [string]$ip) {
                   $parts = $prefix -split '/'
                   $plen = [int]$parts[1]
@@ -629,6 +637,7 @@ jobs:
             gui-screenshot-features.png
             gui-screenshot-warp.png
             gui-screenshot-about.png
+            gui-screenshot-connected.png
 
   installer-smoke:
     name: fresh-runner installer launch

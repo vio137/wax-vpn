@@ -21,7 +21,7 @@ fn report_for_platform(elevated: bool, state: Result<Option<TunnelStats>, Tunnel
     let age = stats.and_then(|s| s.last_handshake).and_then(|t| std::time::SystemTime::now().duration_since(t).ok()).map(|d| d.as_secs());
     serde_json::to_string_pretty(&serde_json::json!({
         "schema_version": 1,
-        "app_version": env!("CARGO_PKG_VERSION"),
+        "app_version": env!("WAX_BUILD_VERSION"),
         "os": std::env::consts::OS,
         "architecture": std::env::consts::ARCH,
         "administrator_check_passed": elevated,

@@ -3,6 +3,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod gargantua;
+mod connection_health;
 #[cfg(windows)]
 mod single;
 #[cfg(not(windows))]
@@ -966,7 +967,11 @@ impl WaxApp {
         let (word, wcol) = match &self.state {
             ConnState::Disconnected => ("Disconnected", theme::TEXT),
             ConnState::Connecting => ("Connecting", theme::ACCENT),
-            ConnState::Connected { .. } => ("Connected", theme::GOOD),
+            ConnState::Connected { .. } => match connection_health::health(self.stats.last_handshake, SystemTime::now()) {
+                connection_health::Health::AwaitingHandshake => ("Tunnel ready", theme::WARN),
+                connection_health::Health::RecentHandshake => ("Connected", theme::GOOD),
+                connection_health::Health::OlderHandshake => ("Tunnel up", theme::WARN),
+            },
             ConnState::Disconnecting => ("Disconnecting", theme::SUB),
             ConnState::Failed(_) => ("Connection failed", theme::BAD),
         };
@@ -1158,17 +1163,23 @@ impl WaxApp {
             ui.add_space(12.0);
             theme::hairline(ui);
             ui.add_space(10.0);
-            let hs = self
-                .stats
-                .last_handshake
-                .and_then(|h| SystemTime::now().duration_since(h).ok())
-                .map(fmt_duration)
-                .unwrap_or_else(|| "-".into());
-            ui.label(
-                RichText::new(format!("last handshake {hs} ago"))
-                    .size(11.0)
-                    .color(theme::GOOD),
-            );
+            let now = SystemTime::now();
+            let age = self.stats.last_handshake.and_then(|h| now.duration_since(h).ok());
+            let (detail, color) = match connection_health::health(self.stats.last_handshake, now) {
+                connection_health::Health::AwaitingHandshake => (
+                    "Waiting for peer handshake. Check the endpoint and peer keys if this continues.".to_string(),
+                    theme::WARN,
+                ),
+                connection_health::Health::RecentHandshake => (
+                    format!("Peer handshake {} ago. Internet reachability is not tested.", age.map(fmt_duration).unwrap_or_default()),
+                    theme::SUB,
+                ),
+                connection_health::Health::OlderHandshake => (
+                    format!("Last peer handshake {} ago. Idle peers may not handshake; try traffic or reconnect if needed.", age.map(fmt_duration).unwrap_or_default()),
+                    theme::WARN,
+                ),
+            };
+            ui.label(RichText::new(detail).size(11.0).color(color));
         }
 
     }

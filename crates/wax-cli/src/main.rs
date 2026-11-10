@@ -8,7 +8,7 @@ use wax_core::{keys, profile};
 use wax_tunnel::{ConnectOptions, Tunnel};
 
 #[derive(Parser)]
-#[command(name = "wax", version, about = "waX VPN - WireGuard client for Windows", long_about = None)]
+#[command(name = "wax", version = env!("WAX_BUILD_VERSION"), about = "waX VPN - WireGuard client for Windows", long_about = None)]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
