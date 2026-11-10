@@ -1235,8 +1235,23 @@ impl WaxApp {
         });
         if let Some(i) = delete_idx {
             if let Some(p) = self.profiles.get(i) {
-                let _ = profile::delete_profile(&p.name);
-                self.reload_profiles();
+                let name = p.name.clone();
+                match profile::delete_profile(&name) {
+                    Ok(()) => {
+                        self.settings.split_exclusions.remove(&name);
+                        if self.settings.last_profile.as_deref() == Some(name.as_str()) {
+                            self.settings.last_profile = None;
+                        }
+                        settings::save(&self.settings);
+                        self.reload_profiles();
+                        self.split_edit_for = None;
+                        self.import_error = None;
+                        self.status_line = format!("Deleted profile '{name}'");
+                    }
+                    Err(e) => {
+                        self.import_error = Some(format!("Could not delete '{name}': {e}"));
+                    }
+                }
             }
         }
         if let Some(i) = connect_idx {
