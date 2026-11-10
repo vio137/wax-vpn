@@ -197,8 +197,10 @@ mod tests {
         fs::create_dir_all(&dir).unwrap();
         let config = WireGuardConfig {
             interface: crate::InterfaceConfig { private_key:[1;32], addresses:vec![], dns:vec![], mtu:None, listen_port:None },
-            peers:vec![],
+            peers:vec![crate::PeerConfig { public_key:[2;32], preshared_key:None,
+                allowed_ips:vec!["0.0.0.0/0".parse().unwrap()], endpoint:None, persistent_keepalive:None }],
         }.to_conf_string();
+        assert!(WireGuardConfig::parse(&config).is_ok());
         fs::write(dir.join("Zulu.conf"), &config).unwrap();
         fs::write(dir.join("alpha.conf"), &config).unwrap();
         fs::write(dir.join("bad.conf"), b"not a configuration").unwrap();
