@@ -665,8 +665,11 @@ jobs:
                   }
                   if (-not $pending) { throw 'No real pending retry observed' }
                   Note 'INFO observed real Cancel retry action before disabling Auto-reconnect'
+                  Note 'INFO GUI recovery-disable stage: locating Features'
                   $features = Find-WaxControl 'Features' ([System.Windows.Automation.ControlType]::Button)
+                  Note 'INFO GUI recovery-disable stage: invoking Features'
                   $features.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+                  Note 'INFO GUI recovery-disable stage: locating Auto-reconnect'
                   $auto = $null
                   for ($i=0; $i -lt 20 -and -not $auto; $i++) {
                     $auto = Find-WaxControl 'Auto-reconnect' ([System.Windows.Automation.ControlType]::CheckBox)
@@ -675,7 +678,9 @@ jobs:
                   if (-not $auto) { throw 'Auto-reconnect checkbox missing' }
                   $toggle = $auto.GetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern)
                   if ($toggle.Current.ToggleState -ne [System.Windows.Automation.ToggleState]::On) { throw 'Auto-reconnect was not enabled' }
+                  Note 'INFO GUI recovery-disable stage: invoking toggle'
                   $toggle.Toggle()
+                  Note 'INFO GUI recovery-disable stage: toggle returned'
                   Start-Sleep -Milliseconds 250
                   $saved = Get-Content (Join-Path $cfgDir 'settings.json') -Raw | ConvertFrom-Json
                   if ($saved.auto_reconnect -ne $false) { throw 'Disabled setting not saved' }
@@ -789,6 +794,20 @@ jobs:
           }
           if (Get-Content verify-results.txt -ErrorAction SilentlyContinue | Where-Object { $_ -match '^FAIL' }) { exit 1 }
 
+      - name: Record GUI host failure evidence
+        if: failure()
+        shell: pwsh
+        run: |
+          # Runner-local application fault records only, not profiles or account data.
+          $ErrorActionPreference = 'Continue'
+          $start = (Get-Date).AddMinutes(-15)
+          $events = Get-WinEvent -FilterHashtable @{LogName='Application'; StartTime=$start; Id=1000,1001,1026} -ErrorAction SilentlyContinue
+          $events | Where-Object { $_.Message -match '(?i)pwsh|powershell|wax-vpn|wax\.exe' } | ForEach-Object {
+            "TIME=$($_.TimeCreated.ToUniversalTime().ToString('o')) ID=$($_.Id) PROVIDER=$($_.ProviderName)"
+            $_.Message
+          } | Out-File gui-host-failure.txt -Encoding utf8
+          Get-Process pwsh,wax-vpn,wax -ErrorAction SilentlyContinue | Select-Object Id,ProcessName,StartTime,Responding | Format-Table | Out-String | Add-Content gui-host-failure.txt
+
       - name: Settings failure warning (full-only local check)
         if: always() && github.event_name != 'push'
         shell: pwsh
@@ -879,6 +898,7 @@ jobs:
             gui-screenshot-about.png
             gui-screenshot-connected.png
             gui-screenshot-recovery-cancelled.png
+            gui-host-failure.txt
             gui-settings-load-warning.png
             gui-settings-save-warning.png
 
