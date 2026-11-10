@@ -1,18 +1,20 @@
-# waX VPN v0.1.10
+# waX VPN v0.1.11
 
-Unsigned Windows x64 redraw-timing checkpoint. Windows may show an unknown-publisher warning. The official WireGuardNT driver is independently signed by its vendor. No kill switch: traffic can use the normal connection if the tunnel drops.
+Unsigned Windows x64 native administrator-restart checkpoint. Windows may show an unknown-publisher warning. The official WireGuardNT driver is independently signed by its vendor. No kill switch: traffic can use the normal connection if the tunnel drops.
 
 ## Changes
 
-- Removed an early 66 ms periodic redraw request that overrode the intended slower hidden-window and reduced-motion idle requests.
-- One periodic policy now requests 1000 ms while hidden, 250 ms while visibly disconnected with Reduced motion on, and 33 ms otherwise. Input and egui animations may still request earlier redraws. These are polling intervals, not measured frame rates, CPU savings or battery-life claims.
-- Hidden-window tray and cross-instance requests still use bounded polling. No new background service or network call.
+- Replaced the interpolated PowerShell restart command with native ShellExecuteW using the runas verb. Windows still owns the UAC consent/credential prompt. There is no elevation bypass, service or network call.
+- The executable path is a separate UTF-16 API argument, not shell script text. Apostrophes and spaces are not interpreted as PowerShell syntax.
+- A reported failed or cancelled launch keeps the current window open and shows a failure message. An accepted launch request exits the old instance. The elevated child waits up to 10 seconds for that parent process to exit before acquiring the existing single-instance mutex. Wait failure or timeout aborts the child without killing another process.
 
 ## Verification
 
-Exact release source eace04a98ff106601d889aa9c077cde61fdc5bc6 / full manual gate 42822679916 passed Windows workspace tests, tunnel/GUI, fresh install/uninstall and publication. Prepared source 5919dce / full manual gate 42820899117 also passed. The named repaint-policy unit test checks all eight hidden/motion/disconnected combinations. Exact retained results confirm close-to-tray with the adapter up, restored original HWND/PID and Connect rail, and graceful quit with adapter removed. Actual Connected and installed pixels were inspected. v0.1.10 is published. A fresh released installer download is 10,948,767 bytes with SHA256 `9b1420a793f9395deb8d3621c49f443e0a1d8eba110c48e794fd817a5ecac174`, matching the released SHA256SUMS.
+Prepared source f945aaf / full manual preview 42826605856 passed Windows workspace tests, tunnel/GUI and fresh install/uninstall. Exact v0.1.11 build and publication remain pending. Raw test output confirms parser rejection cases, ShellExecute return-code boundary, UTF-16 roundtrip for apostrophe/space/Unicode/non-Unicode paths, and bounded process-wait cases passed. These tests do not invoke UAC or demonstrate the full restart handoff.
 
-Peer handshake, tunnel-side ping, DNS and IPv4 MTU 1380, split route exclusions, owned adapter-loss recovery after 4 seconds with the original process, pending-retry disable over 48 samples/12 seconds, explicit reconnect while automatic recovery was off, and malformed-settings preservation/load/save warnings passed. No console windows were observed in 367 samples at about 100 ms; shorter windows could be missed. Crash snapshot at 3 seconds before cleanup showed adapter gone, DNS none and zero old kill-switch rules. Fresh installer install/launch/uninstall passed.
+Retained preview results confirm tunnel-side handshake/ping/DNS/IPv4 MTU 1380, split exclusions, adapter-loss recovery after 5 seconds, pending-retry disable over 48 samples/12 seconds, manual reconnect while automatic recovery was off, close-to-tray/original HWND+PID restore/graceful quit and malformed-settings preservation/warnings. No console windows were observed in 454 samples at about 100 ms; shorter windows could be missed. Crash snapshot at 3 seconds before cleanup showed adapter gone, DNS none, zero old kill-switch rules. Actual Connected and installed pixels were inspected.
+
+Real UAC acceptance and cancellation, the resulting failure message pixels, a successful elevated restart and the complete parent-to-child handoff remain untested. ShellExecute success reports an accepted launch request, not proof that a usable elevated UI has opened.
 
 ## Scope and limits
 
