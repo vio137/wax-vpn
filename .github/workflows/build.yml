@@ -844,6 +844,11 @@ jobs:
           $before = if ($had) { [IO.File]::ReadAllBytes($path) } else { $null }
           $bad = [Text.Encoding]::UTF8.GetBytes('{broken-settings-fixture')
           $process = $null
+          $profileDir = Join-Path $env:APPDATA 'wax-vpn\profiles'
+          $fixtureId = [Guid]::NewGuid().ToString('N')
+          $badProfile = Join-Path $profileDir "$fixtureId.conf"
+          $profileBackup = "$profileDir-$fixtureId-backup"
+          $profileMoved = $false
           function Find-SettingsControl([string]$name, $type) {
             $condition = New-Object System.Windows.Automation.AndCondition((New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty,$name)),(New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ControlTypeProperty,$type)))
             $window.FindFirst([System.Windows.Automation.TreeScope]::Descendants,$condition)
@@ -859,6 +864,8 @@ jobs:
           try {
             [IO.Directory]::CreateDirectory((Split-Path $path)) | Out-Null
             [IO.File]::WriteAllBytes($path,$bad)
+            [IO.Directory]::CreateDirectory($profileDir) | Out-Null
+            [IO.File]::WriteAllText($badProfile,'not-a-wireguard-configuration')
             $process = Start-Process "$PWD\bin\wax-vpn.exe" -PassThru
             $window = $null
             for ($i=0; $i -lt 20 -and -not $window; $i++) {
@@ -873,6 +880,34 @@ jobs:
             $loadWarning = 'Saved settings could not be read and were kept unchanged. Auto-reconnect is off for this session. Check your settings file before relying on saved preferences.'
             if (-not (Find-SettingsControl $loadWarning ([System.Windows.Automation.ControlType]::Text))) { throw 'settings load warning missing' }
             Save-SettingsCapture 'gui-settings-load-warning.png'
+            $profileWarning = '1 profile file(s) could not be read or parsed and were skipped. Files were not changed.'
+            if (-not (Find-SettingsControl $profileWarning ([System.Windows.Automation.ControlType]::Text))) { throw 'profile partial-load warning missing' }
+            $profilesButton = Find-SettingsControl 'Profiles' ([System.Windows.Automation.ControlType]::Button)
+            $profilesButton.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+            Start-Sleep -Milliseconds 750
+            Save-SettingsCapture 'gui-profile-partial-warning.png'
+            # Replace the directory with a file temporarily. Restore in finally.
+            Move-Item $profileDir $profileBackup
+            $profileMoved = $true
+            [IO.File]::WriteAllText($profileDir,'directory-read-failure-fixture')
+            $reload = Find-SettingsControl 'Reload profiles' ([System.Windows.Automation.ControlType]::Button)
+            $reload.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+            Start-Sleep -Milliseconds 750
+            $failedWarning = 'Profiles could not be reloaded. The previous list is shown and files were not changed. Reload in Profiles before connecting.'
+            if (-not (Find-SettingsControl $failedWarning ([System.Windows.Automation.ControlType]::Text))) { throw 'profile reload failure warning missing' }
+            if (-not (Find-SettingsControl 'demo' ([System.Windows.Automation.ControlType]::Text))) { throw 'previous visible profile lost after reload failure' }
+            Save-SettingsCapture 'gui-profile-reload-warning.png'
+            Remove-Item $profileDir
+            Move-Item $profileBackup $profileDir
+            $profileMoved = $false
+            Remove-Item $badProfile
+            $reload = Find-SettingsControl 'Reload profiles' ([System.Windows.Automation.ControlType]::Button)
+            $reload.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+            Start-Sleep -Milliseconds 750
+            if (Find-SettingsControl $failedWarning ([System.Windows.Automation.ControlType]::Text)) { throw 'profile reload warning did not clear' }
+            if (Find-SettingsControl $profileWarning ([System.Windows.Automation.ControlType]::Text)) { throw 'partial profile warning did not clear' }
+            if (-not (Find-SettingsControl 'demo' ([System.Windows.Automation.ControlType]::Text))) { throw 'valid profile missing after read recovery' }
+            'PASS partial profile warning; failed reload retained visible list; successful reload cleared warnings' | Out-File verify-results.txt -Append -Encoding utf8
             $features = Find-SettingsControl 'Features' ([System.Windows.Automation.ControlType]::Button)
             $features.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
             Start-Sleep -Milliseconds 750
@@ -891,6 +926,11 @@ jobs:
             'PASS settings malformed original preserved; recovery off; load/save warnings visible; quit' | Out-File verify-results.txt -Append -Encoding utf8
           } finally {
             if ($process -and -not $process.HasExited) { $process.Kill(); $process.WaitForExit() }
+            if ($profileMoved) {
+              Remove-Item $profileDir -Force -ErrorAction SilentlyContinue
+              Move-Item $profileBackup $profileDir
+            }
+            Remove-Item $badProfile -ErrorAction SilentlyContinue
             if ($had) { [IO.File]::WriteAllBytes($path,$before) } else { Remove-Item $path -ErrorAction SilentlyContinue }
           }
 
@@ -914,6 +954,8 @@ jobs:
             gui-host-failure.txt
             gui-settings-load-warning.png
             gui-settings-save-warning.png
+            gui-profile-partial-warning.png
+            gui-profile-reload-warning.png
 
   installer-smoke:
     name: fresh-runner installer launch
