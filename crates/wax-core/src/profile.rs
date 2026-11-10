@@ -254,6 +254,36 @@ mod tests {
         assert_eq!(fs::read_dir(&dir).unwrap().count(), 5);
     }
     #[test]
+    fn legacy_empty_allowed_ips_loads_and_malformed_import_preserves_files() {
+        let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+        let dir = std::env::temp_dir().join(format!("wax-legacy-lists-{}-{stamp}", std::process::id()));
+        struct Cleanup(PathBuf);
+        impl Drop for Cleanup { fn drop(&mut self) { let _ = fs::remove_dir_all(&self.0); } }
+        let _cleanup = Cleanup(dir.clone());
+        fs::create_dir_all(&dir).unwrap();
+        let private = crate::keys::key_to_base64(&[1;32]);
+        let public = crate::keys::key_to_base64(&[2;32]);
+        let old = format!("[Interface]\nPrivateKey = {private}\nAddress = 10.0.0.2/32\nDNS = 1.1.1.1\n[Peer]\nPublicKey = {public}\nAllowedIPs = \n");
+        let path = dir.join("legacy.conf");
+        fs::write(&path, &old).unwrap();
+        let report = load_profiles_from(&dir).unwrap();
+        assert_eq!(report.skipped, 0);
+        assert_eq!(report.profiles.len(), 1);
+        assert!(report.profiles[0].config.peers[0].allowed_ips.is_empty());
+        assert_eq!(fs::read(&path).unwrap(), old.as_bytes());
+        for (key, value) in [("Address", "10.0.0.2,,"), ("DNS", "1.1.1.1,"), ("AllowedIPs", ",10.0.0.0/8")] {
+            let invalid = old.lines().map(|line| {
+                if line.starts_with(&format!("{key} =")) { format!("{key} = {value}") }
+                else { line.to_string() }
+            }).collect::<Vec<_>>().join("\n");
+            assert!(import_into(&dir, "invalid", &invalid).is_err());
+            assert!(!dir.join("invalid.conf").exists());
+            assert_eq!(fs::read_dir(&dir).unwrap().count(), 1);
+            assert_eq!(fs::read(&path).unwrap(), old.as_bytes());
+        }
+    }
+
+    #[test]
     fn profile_filenames_are_windows_safe() {
         for input in ["CON", "nul.office", "COM1", "LPT9", "com¹", "AUX."] {
             assert!(sanitize_filename(input).starts_with('_'), "{input}");
