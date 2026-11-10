@@ -99,6 +99,11 @@ fn run_out(cmd: &str, args: &[&str]) -> Result<String, TunnelError> {
 }
 
 fn reset_dns(adapter: &str) -> Result<(), TunnelError> {
+    reset_dns_progress(adapter, &|_| {})
+}
+
+fn reset_dns_progress(adapter: &str, progress: &impl Fn(&'static str)) -> Result<(), TunnelError> {
+    progress("cleanup: adapter-presence probe starting");
     // A confirmed-absent adapter is already clean: Windows reclaimed it and
     // there is no DNS entry left to reset (netsh errors on a nonexistent
     // interface name). Only a confirmed absence skips the reset - a failed
@@ -115,8 +120,8 @@ fn reset_dns(adapter: &str) -> Result<(), TunnelError> {
         ],
     );
     match probe {
-        Ok(s) if s.contains("ABSENT") => return Ok(()),
-        Ok(s) if s.contains("PRESENT") => {}
+        Ok(s) if s.contains("ABSENT") => { progress("cleanup: adapter confirmed absent"); return Ok(()); },
+        Ok(s) if s.contains("PRESENT") => { progress("cleanup: adapter confirmed present"); }
         Ok(other) => {
             return Err(TunnelError::Message(format!(
                 "could not determine adapter presence (unexpected probe output: {other})"
@@ -129,9 +134,11 @@ fn reset_dns(adapter: &str) -> Result<(), TunnelError> {
         }
     }
     let mut problems = Vec::new();
+    progress("cleanup: IPv4 DNS reset starting");
     if let Err(e) = run("netsh", &["interface", "ipv4", "set", "dnsservers", &format!("name={adapter}"), "dhcp"]) {
         problems.push(format!("ipv4 dns reset: {e}"));
     }
+    progress("cleanup: IPv6 DNS reset starting");
     if let Err(e) = run("netsh", &["interface", "ipv6", "set", "dnsservers", &format!("name={adapter}"), "dhcp"]) {
         problems.push(format!("ipv6 dns reset: {e}"));
     }
@@ -296,6 +303,12 @@ impl Tunnel {
 
     /// Down any leftover waX VPN adapter from a previous run (CLI disconnect).
     pub fn force_disconnect() -> Result<(), TunnelError> {
+        Self::force_disconnect_progress(|_| {})
+    }
+
+    /// Fixed local cleanup substages only. Never includes addresses or profiles.
+    pub fn force_disconnect_progress(progress: impl Fn(&'static str)) -> Result<(), TunnelError> {
+        progress("cleanup: driver open starting");
         let wireguard = load_driver()?;
         let mut problems = Vec::new();
         if let Ok(adapter) = Adapter::open(&wireguard, ADAPTER_NAME) {
@@ -303,12 +316,14 @@ impl Tunnel {
                 problems.push(format!("adapter down: {e}"));
             }
         }
-        if let Err(e) = reset_dns(ADAPTER_NAME) {
+        if let Err(e) = reset_dns_progress(ADAPTER_NAME, &progress) {
             problems.push(e.to_string());
         }
+        progress("cleanup: legacy firewall removal starting");
         if let Err(e) = cleanup_legacy_firewall_rules() {
             problems.push(format!("legacy firewall cleanup: {e}"));
         }
+        progress("cleanup: legacy firewall removal finished");
         if !problems.is_empty() {
             return Err(TunnelError::Message(problems.join("; ")));
         }
