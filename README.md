@@ -30,7 +30,7 @@ opt-in Cloudflare WARP client, reimplemented in Rust. Registration only happens
 when you explicitly accept Cloudflare's Terms of Service in the app or pass
 `--accept-tos` to the CLI. waX VPN is not affiliated with Cloudflare.
 
-The released v1.0.1 has no update checker or telemetry uploader. Tunnel traffic
+The released v1.0.2 has no update checker or telemetry uploader. Tunnel traffic
 and DNS lookups can happen in the background while connected; WARP API calls
 happen only when you request WARP actions. Local diagnostics are not uploaded.
 Optional public-IP, HTTPS latency and manual quick-speed measurements are off
@@ -47,6 +47,21 @@ Grab the latest `x64.exe` installer from
 against the attached `SHA256SUMS` file. The installer needs administrator
 rights. It is unsigned for now, so Windows will show an unknown-publisher
 warning; the bundled WireGuardNT driver is independently signed by its vendor.
+
+## Startup compatibility
+
+v1.0.2 removes the Rust executables' VC++ redistributable dependency by linking
+the C runtime statically and checking packaged PE imports. It is a native app,
+not a .NET app. Windows system libraries and a compatible graphics driver are
+still required; no bare-image compatibility claim is made.
+
+If startup fails, check `%APPDATA%\wax-vpn\startup.log`. Fixed startup markers
+are local and bounded; no profile/account/settings values are written. A Rust
+panic or returned graphics setup error shows a dialog. Native driver faults
+can bypass it. The Start-menu Safe graphics shortcut uses OpenGL instead of
+wgpu, but also needs a compatible driver. Quit any existing instance first.
+The reported v1.0.0 crash has not been reproduced on the user's other PC, so
+v1.0.2 is a dependency/diagnostic mitigation rather than a confirmed fix there.
 
 ## Screenshots
 
@@ -152,8 +167,8 @@ Verified release checks (exact run and sample counts are in the release notes):
 - Adapter-loss recovery, manual reconnect, close-to-tray with the tunnel up,
   graceful quit with adapter removal.
 - Silent NSIS fresh install, same-version upgrade and uninstall: no new
-  visible `ConsoleWindowClass` windows in 158, 395 and 324 samples at a
-  requested 10ms interval in v1.0.1. Shorter flashes or other console-host
+  visible `ConsoleWindowClass` windows in 221, 502 and 344 samples at a
+  requested 10ms interval in v1.0.2. Shorter flashes or other console-host
   classes may be missed; interactive installation remains unverified.
   Installed-GUI launch and profile/settings warning paths passed.
 
@@ -168,6 +183,9 @@ Not yet verified (honest list):
 - Leak testing (IPv6, DNS) against an external observer; IPv6 leak protection
   is not claimed.
 - Consumer Windows SmartScreen behavior (unsigned installer).
+- Bare-image Windows runtime compatibility and the reported other-PC crash.
+- Safe graphics rendering and dialog dismissal on the hosted Hyper-V GPU:
+  unsupported OpenGL produced the expected visible error and local log.
 
 **No kill switch.** If the tunnel drops, traffic can use the normal
 connection.
@@ -186,6 +204,8 @@ imported profile without it can behave differently.
 ## Building
 
 ```
+# Windows PowerShell, matching the release static-CRT setting:
+$env:CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS = '-C target-feature=+crt-static'
 cargo build --release --workspace
 ```
 
