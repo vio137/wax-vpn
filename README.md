@@ -53,7 +53,7 @@ warning; the bundled WireGuardNT driver is independently signed by its vendor.
 The Rust executables avoid a VC++ redistributable dependency by linking
 the C runtime statically and checking packaged PE imports. It is a native app,
 not a .NET app. Windows system libraries are still required; no bare-image compatibility claim
-is made. Released v1.0.3 defaults to CPU software rendering (Windows GDI),
+is made. Released v1.0.4 defaults to CPU software rendering (Windows GDI),
 with GPU rendering available through `--accelerated-graphics`. Windows 10/11 x64
 is required. No separate VC++/.NET/WebView2 installation or first-run driver
 download is required. The bundled WireGuardNT DLL installs its signed kernel
@@ -77,7 +77,7 @@ panic or returned graphics setup error shows a dialog. Native driver faults
 can bypass it. The Start-menu Safe graphics shortcut uses OpenGL instead of
 wgpu, but also needs a compatible driver. Quit any existing instance first.
 The reported v1.0.0 crash has not been reproduced on the user's other PC, so
-v1.0.3 is a compatibility mitigation rather than a confirmed fix there.
+The CPU-rendering change is a compatibility mitigation rather than a confirmed fix there.
 
 ## Screenshots
 
@@ -119,7 +119,8 @@ it was taken from.
   Closing the window sends the app to the tray with the tunnel still up.
 - **Rust everywhere.** UI (egui), tunnel management, profile handling and the
   WARP client are all Rust. The only non-Rust parts are the signed WireGuardNT
-  driver itself and standard OS facilities (netsh, Windows Firewall). No
+  driver itself and native Windows networking APIs. netsh is needed only on
+  older Windows builds without SetInterfaceDnsSettings. No
   embedded browser or WebView anywhere.
 - **Profiles without ceremony.** Drop a `.conf` anywhere in the window or
   paste it in. Split tunneling per profile through CIDR exclusions. Import is
@@ -153,7 +154,7 @@ it was taken from.
 | --- | --- |
 | `wax-core` | Keys (audited `x25519-dalek`), wg-quick `.conf` parsing, profile storage |
 | `wax-warp` | Cloudflare WARP API client (wgcf equivalent), account persistence, profile generation |
-| `wax-tunnel` | Adapter lifecycle on WireGuardNT and DNS (netsh) |
+| `wax-tunnel` | Adapter lifecycle on WireGuardNT, native MTU/DNS and narrow retired-rule cleanup |
 | `wax-cli` (`wax.exe`) | CLI: profiles, import, connect/disconnect/status, WARP commands |
 | `wax-app` (`wax-vpn.exe`; installed as `waX VPN.exe`) | Native egui GUI: navigation, profile picker, stats, settings, WARP panel, drag-and-drop import |
 | `wax-diagnostics` | Allowlisted local status reports |
