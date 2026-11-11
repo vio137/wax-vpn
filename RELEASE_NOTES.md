@@ -1,21 +1,21 @@
-# waX VPN v0.1.35
+# waX VPN v0.1.36
 
-Unsigned Windows x64 profile-import guidance checkpoint. Windows may show an unknown-publisher warning. The official WireGuardNT driver is independently signed by its vendor. No kill switch: traffic can use the normal connection if the tunnel drops.
+Unsigned Windows x64 local-diagnostics clarity checkpoint. Windows may show an unknown-publisher warning. The official WireGuardNT driver is independently signed by its vendor. No kill switch: traffic can use the normal connection if the tunnel drops.
 
 ## Changes
 
-- Profiles now explains that imports keep existing profiles and give duplicate names a number. This is clearer guidance for existing behavior, not a change to parsing, storage, selection, connections or network policy.
-- Folded in test-only cancellation ownership fixtures and a one-shot Windows Notifications/Snapshot bridge. These prove the supplied stop/result/ack contract and one successful register/baseline/read/shutdown/ack sequence only. No production observer, continuous monitoring, quit-ack integration or physical-network roaming is implemented.
+- Local diagnostics now shows the report age and how to refresh it. The age is UI-only elapsed time since report arrival, not an OS measurement timestamp. Existing snapshot and Internet-not-tested guidance wraps for readability. Report JSON, copied payload, OS queries, repaint schedule and connection policy are unchanged.
+- Clear removes report and age; a new report arrival resets the age. Those age-reset transitions are code-reasoned, not separately asserted by the gate. Existing generate/clear behavior is checked. No background monitoring is added.
 
 ## Verification
 
-Product source dced2505d8a9bda67531a7f5903ae4ecf9884fb8 passed push 42976780122 and full preview 42977715778. All 41 app, 40 core, 6 WARP, 4 diagnostics and 1 tunnel tests passed. The Profiles helper fits fully on one line at the 880x600 runner window; all 14 normal, warning, BOM and installed screenshots were inspected.
+Product source 5d81e51f61cb697931f65cd20c3d8a61c5cdd9ce passed push 42981469159 and full preview 42982601482. All 41 app, 40 core, 6 WARP, 4 diagnostics and 1 tunnel tests passed. Actual diagnostics pixels at 880x600 show readable report age, refresh guidance and snapshot warning with Generate/Copy/Clear unobscured. All 14 normal, warning, BOM and installed screenshots were inspected.
 
-Raw full-preview verify-results and installer diagnostics were read. Handshake and tunnel-side ping, DNS and IPv4 MTU 1380, split exclusions, owned adapter-loss recovery after 5 seconds, pending-retry disable across 48 samples/12 seconds, manual reconnect with recovery off, original main HWND/PID plus Connect rail restoration, graceful quit/adapter removal, profile/settings warnings and BOM-backed startup passed. No console windows observed in 458 samples at about 100 ms; shorter windows could be missed. Crash evidence is a clean 3-second pre-cleanup snapshot. Fresh-runner install/quit/uninstall passed. Installed quit stages were probe 1 ms, absence 2 ms and legacy removal 6142 ms, descriptive only.
+Raw full-preview verify-results and installer diagnostics were read. Handshake and tunnel-side ping, DNS and IPv4 MTU 1380, split exclusions, adapter-loss recovery after 4 seconds, pending-retry disable across 48 samples/12 seconds, manual reconnect, original main HWND/PID plus Connect rail restoration, graceful quit/adapter removal, profile/settings warnings and BOM-backed startup passed. No console windows observed in 366 samples at about 100 ms; shorter windows could be missed. Crash evidence is a clean 3-second pre-cleanup snapshot. Fresh-runner install/quit/uninstall passed. Installed quit stages were probe 1 ms, absence 4 ms and legacy removal 4412 ms, descriptive only.
 
-Exact v0.1.35 run 42979370349 at c4e39ff0dfc0691a8cb93d8ea0043db299f9cac9 passed build, demo-tunnel/GUI verification, fresh-runner install/quit/uninstall and publish. Raw verify-results and installer diagnostics were read. The same scoped checks passed, including adapter-loss recovery after 5 seconds, pending-retry disable across 48 samples/12 seconds, original HWND/PID plus Connect rail restoration, graceful quit/adapter removal and warning/BOM cases. No console windows observed in 461 samples at about 100 ms; shorter windows could be missed. All 14 exact-release screenshots were inspected, including the readable Profiles helper at 880x600. Installed quit stages were probe 1 ms, absence 3 ms and legacy cleanup 4372 ms, descriptive only.
+Exact v0.1.36 gate and fresh installer checksum are pending. Preview evidence is not exact release verification.
 
-Freshly downloaded unsigned installer: 10,958,379 bytes. SHA256 3fe132b7b0286d8da8a0082138f815d31e1b46d65b9fa99cf44f1ca8997f042a matches the freshly downloaded SHA256SUMS-v0.1.35.txt.
+Test-only cancellation ownership and one-shot Windows Notifications/Snapshot fixtures remain groundwork only. Their successful contract/bridge checks do not prove production observation, continuous monitoring, quit acknowledgement, OS cancellation-failure safety or actual physical-network roaming. No such feature is wired into the app.
 
 ## Limits and earlier failures
 
