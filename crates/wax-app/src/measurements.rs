@@ -4,6 +4,8 @@ use egui::{RichText, Color32};
 use serde::{Deserialize, Serialize};
 use crate::theme;
 
+const SENT: Color32 = Color32::from_rgb(125,167,235);
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Config {
@@ -133,12 +135,21 @@ impl Monitor{
             let _=tx.send(Event{epoch:id,value});
         });
     }
-    pub fn ui(&mut self,ui:&mut egui::Ui,cfg:&Config,stable:bool,connected:bool){
-        theme::section_heading(ui,"Network","Observations on the current route, not a leak test.");
+    /// Returns true when the user asks to open measurement settings.
+    pub fn ui(&mut self,ui:&mut egui::Ui,cfg:&Config,stable:bool,connected:bool)->bool{
+        let settings = ui.horizontal(|ui| {
+            ui.vertical(|ui| {
+                ui.label(RichText::new("Network").font(theme::semi(24.0)).color(theme::TEXT));
+                ui.label(RichText::new("Current-route observations, not a leak test").size(12.0).color(theme::SUB));
+            });
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| ui.button("Measurement settings").clicked()).inner
+        }).inner;
+        ui.add_space(12.0);
         ui.add(egui::Label::new(RichText::new("IP, latency and speed checks contact the configured service (Cloudflare by default), which sees your public IP. Speed tests use up to 10 MB plus protocol overhead.").size(12.0).color(theme::SUB)).wrap());
         ui.add_space(10.0);
         if cfg.public_ip{
             theme::card_frame().show(ui,|ui|{
+                ui.set_width(ui.available_width());
                 ui.label(RichText::new("Public IP").font(theme::semi(15.0)));
                 ui.label(format!("Before connection: {}",ip_label(&self.before)));
                 ui.label(format!("{}: {}",if connected{"After connection"}else{"Current route"},ip_label(&self.after)));
@@ -149,23 +160,30 @@ impl Monitor{
         }
         if cfg.throughput{
             theme::card_frame().show(ui,|ui|{
+                ui.set_width(ui.available_width());
                 ui.label(RichText::new("Live tunnel throughput").font(theme::semi(15.0)));
-                ui.label(format!("Received {:.2} Mbps   Sent {:.2} Mbps",self.down.back().unwrap_or(&0.0),self.up.back().unwrap_or(&0.0)));
-                chart(ui,&self.down,Some(&self.up),"Received / sent, latest 60 one-second samples (adapter counters)");
+                ui.horizontal_wrapped(|ui| {
+                    ui.label(RichText::new(format!("Received {:.2} Mbps",self.down.back().unwrap_or(&0.0))).monospace().color(theme::GOOD));
+                    ui.add_space(12.0);
+                    ui.label(RichText::new(format!("Sent {:.2} Mbps",self.up.back().unwrap_or(&0.0))).monospace().color(SENT));
+                });
+                chart(ui,&self.down,Some(&self.up),"Mbps","Latest 60 one-second samples from local adapter counters");
                 if !connected{ui.label(RichText::new("Connect to collect adapter-counter samples.").size(11.0).color(theme::MUTE));}
             });ui.add_space(8.0);
         }
         if cfg.latency{
             theme::card_frame().show(ui,|ui|{
+                ui.set_width(ui.available_width());
                 ui.label(RichText::new("HTTPS response latency").font(theme::semi(15.0)));
                 let label=match &self.latency_value{Some(Ok(ms))=>format!("{ms:.0} ms"),Some(Err(e))=>e.clone(),None=>"No sample yet".into()};ui.label(label);
-                chart(ui,&self.rtt,None,"Latest 60 successful samples (ms), including DNS/TCP/TLS; not ICMP ping");
+                chart(ui,&self.rtt,None,"ms","Latest 60 successful samples, including DNS/TCP/TLS; not ICMP ping");
                 ui.label(RichText::new(format!("Automatic every {}s only while this page is visible and connected. Errors leave gaps in time, not zero latency.",cfg.interval_secs.clamp(10,300))).size(11.0).color(theme::MUTE));
                 if ui.add_enabled(stable&&!self.latency_busy,egui::Button::new(if self.latency_busy{"Checking latency..."}else{"Test latency now"})).clicked(){self.start(Kind::Latency,cfg);}
             });ui.add_space(8.0);
         }
         if cfg.speed_test{
             theme::card_frame().show(ui,|ui|{
+                ui.set_width(ui.available_width());
                 ui.label(RichText::new("Quick speed test").font(theme::semi(15.0)));
                 ui.label(RichText::new("One 8 MB download and 2 MB upload. Approximate single-request HTTPS speed, not line capacity. Uses the current OS route and may affect other traffic.").size(11.5).color(theme::SUB));
                 if let Some(result)=&self.speed_value{match result{Ok((d,u))=>{ui.label(format!("Download {d:.2} Mbps   Upload {u:.2} Mbps"));},Err(e)=>{ui.label(RichText::new(e).color(theme::WARN));}}}
@@ -174,25 +192,30 @@ impl Monitor{
             });
         }
         if !cfg.public_ip&&!cfg.throughput&&!cfg.latency&&!cfg.speed_test{ui.label("All measurements are off. Enable them in Features > Network measurements.");}
-        ui.add_space(8.0);ui.label(RichText::new("Change toggles and HTTPS service endpoints in Features > Network measurements. Results stay in memory and are not in local diagnostics.").size(11.5).color(theme::MUTE));
+        if !stable {ui.label(RichText::new("Wait for connection setup or cleanup before starting a manual check").size(12.0).color(theme::WARN));}
+        ui.add_space(8.0);ui.label(RichText::new("Results stay in memory and are not in local diagnostics. Toggles and services: Features > Network measurements.").size(11.5).color(theme::MUTE));
+        settings
     }
 }
 fn ip_label(v:&Option<Result<String,String>>)->&str{match v{Some(Ok(ip))=>ip,Some(Err(e))=>e,None=>"Not measured"}}
-fn chart(ui:&mut egui::Ui,a:&VecDeque<f64>,b:Option<&VecDeque<f64>>,caption:&str){
+fn chart(ui:&mut egui::Ui,a:&VecDeque<f64>,b:Option<&VecDeque<f64>>,unit:&str,caption:&str){
     let(r,_)=ui.allocate_exact_size(egui::vec2(ui.available_width(),72.0),egui::Sense::hover());
     ui.painter().rect_filled(r,egui::CornerRadius::same(6),theme::BG);
     let max=a.iter().chain(b.into_iter().flat_map(|q|q.iter())).copied().fold(0.1_f64,f64::max);
-    for k in 1..3{let y=r.top()+r.height()*k as f32/3.0;ui.painter().line_segment([egui::pos2(r.left(),y),egui::pos2(r.right(),y)],egui::Stroke::new(0.5,theme::MUTE));}
-    for(q,color)in std::iter::once((a,theme::GOOD)).chain(b.map(|q|(q,Color32::from_rgb(125,167,235)))){
-        let points:Vec<_>=q.iter().enumerate().map(|(i,v)|egui::pos2(r.left()+r.width()*i as f32/59.0,r.bottom()-4.0-(r.height()-8.0)*(*v/max)as f32)).collect();
+    let plot=egui::Rect::from_min_max(r.left_top()+egui::vec2(4.0,4.0),r.right_bottom()-egui::vec2(76.0,4.0));
+    for k in 1..3{let y=plot.top()+plot.height()*k as f32/3.0;ui.painter().line_segment([egui::pos2(plot.left(),y),egui::pos2(plot.right(),y)],egui::Stroke::new(0.5,theme::HAIRLINE));}
+    ui.painter().text(r.right_top()-egui::vec2(4.0,-4.0),egui::Align2::RIGHT_TOP,format!("{max:.1} {unit}"),egui::FontId::monospace(10.5),theme::MUTE);
+    ui.painter().text(r.right_bottom()-egui::vec2(4.0,4.0),egui::Align2::RIGHT_BOTTOM,format!("0 {unit}"),egui::FontId::monospace(10.5),theme::MUTE);
+    for(q,color)in std::iter::once((a,theme::GOOD)).chain(b.map(|q|(q,SENT))){
+        let points:Vec<_>=q.iter().enumerate().map(|(i,v)|egui::pos2(plot.left()+plot.width()*i as f32/59.0,plot.bottom()-plot.height()*(*v/max)as f32)).collect();
         if points.len()>1{ui.painter().add(egui::Shape::line(points,egui::Stroke::new(1.5,color)));}
         else if let Some(point)=points.first(){ui.painter().circle_filled(*point,2.5,color);}
     }
     ui.label(RichText::new(caption).size(10.5).color(theme::MUTE));
 }
-pub fn settings_ui(ui:&mut egui::Ui,cfg:&mut Config)->bool{
+pub fn settings_ui(ui:&mut egui::Ui,cfg:&mut Config,open_requested:bool)->bool{
     let mut changed=false;
-    ui.collapsing("Network measurements",|ui|{
+    let header=egui::CollapsingHeader::new("Network measurements").open(open_requested.then_some(true)).show(ui,|ui|{
         ui.label(RichText::new("Optional checks send your public IP to the configured HTTPS service. No signup, keys or results upload. Local throughput uses adapter counters only.").size(12.0).color(theme::SUB));
         changed|=theme::toggle_row(ui,&mut cfg.public_ip,"Public IP before / after","A bounded lookup before initial connect and once after connect; refresh manually.");
         changed|=theme::toggle_row(ui,&mut cfg.throughput,"Live throughput graph","Local adapter counters only; no extra network requests.");
@@ -203,7 +226,9 @@ pub fn settings_ui(ui:&mut egui::Ui,cfg:&mut Config)->bool{
         ui.label("Speed service origin (Cloudflare-compatible /__down and /__up)");changed|=ui.text_edit_singleline(&mut cfg.speed_origin).changed();
         changed|=ui.add(egui::Slider::new(&mut cfg.interval_secs,10..=300).text("Latency interval (seconds)")).changed();
         for raw in [&cfg.ip_endpoint,&cfg.latency_endpoint,&cfg.speed_origin]{if let Err(e)=endpoint(raw){ui.label(RichText::new(e).color(theme::WARN));}}
-    });changed
+    });
+    if open_requested {ui.scroll_to_rect(header.header_response.rect,Some(egui::Align::TOP));}
+    changed
 }
 #[cfg(test)]mod tests{
     use super::*;
