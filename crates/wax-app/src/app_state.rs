@@ -104,6 +104,8 @@ pub struct WaxApp {
     import_paste: String,
     import_name: String,
     import_error: Option<String>,
+    #[cfg(windows)]
+    file_picker: Option<Receiver<profile_file::PickerResult>>,
     tab: Tab,
     hidden: bool,
     connect_stages: Vec<&'static str>,
@@ -216,6 +218,8 @@ impl WaxApp {
             import_paste: String::new(),
             import_name: String::new(),
             import_error: None,
+            #[cfg(windows)]
+            file_picker: None,
             tab: Tab::Connect,
             hidden: false,
             connect_stages: Vec::new(),
@@ -511,6 +515,25 @@ impl WaxApp {
     }
 
     fn handle_events(&mut self, ctx: &egui::Context) {
+        #[cfg(windows)]
+        if let Some(rx) = &self.file_picker {
+            match rx.try_recv() {
+                Ok(result) => {
+                    self.file_picker = None;
+                    match result {
+                        Ok(Some(file)) => { self.import_text(file.name, &file.text); }
+                        Ok(None) => {}
+                        Err(message) => { self.import_error = Some(message.into()); }
+                    }
+                }
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    self.file_picker = None;
+                    self.import_error = Some("The Windows file picker closed unexpectedly".into());
+                }
+                Err(std::sync::mpsc::TryRecvError::Empty) => {}
+            }
+        }
+
         #[cfg(windows)]
         {
             let (want_quit, want_show) = match &self.instance {

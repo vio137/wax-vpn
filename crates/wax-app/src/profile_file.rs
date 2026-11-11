@@ -29,11 +29,11 @@ pub fn read(path: &Path) -> Result<ImportedFile, &'static str> {
     Ok(ImportedFile { name, text })
 }
 #[cfg(windows)]
-pub fn choose() -> Result<Option<ImportedFile>, &'static str> {
+fn choose(owner: isize) -> Result<Option<ImportedFile>, &'static str> {
     use std::os::windows::ffi::OsStringExt;
     use windows_sys::Win32::UI::{
         Controls::Dialogs::*,
-        WindowsAndMessaging::{GetForegroundWindow, GetWindowThreadProcessId},
+        WindowsAndMessaging::GetWindowThreadProcessId,
     };
     let filter: Vec<u16> = "WireGuard profiles (*.conf)\0*.conf\0\0"
         .encode_utf16()
@@ -42,7 +42,6 @@ pub fn choose() -> Result<Option<ImportedFile>, &'static str> {
     let mut filename = vec![0u16; 32768];
     let mut dialog: OPENFILENAMEW = unsafe { std::mem::zeroed() };
     dialog.lStructSize = std::mem::size_of::<OPENFILENAMEW>() as u32;
-    let owner = unsafe { GetForegroundWindow() };
     let mut owner_pid = 0;
     unsafe {
         GetWindowThreadProcessId(owner, &mut owner_pid);
@@ -69,6 +68,21 @@ pub fn choose() -> Result<Option<ImportedFile>, &'static str> {
         .ok_or("The selected path is too long")?;
     let path = std::path::PathBuf::from(std::ffi::OsString::from_wide(&filename[..length]));
     read(&path).map(Some)
+}
+/// The UI frame must return before Windows enters the modal dialog loop.
+/// Keeping the picker on its own thread also leaves repaint and quit responsive.
+#[cfg(windows)]
+pub type PickerResult = Result<Option<ImportedFile>, &'static str>;
+#[cfg(windows)]
+pub fn start(ctx: egui::Context) -> Result<std::sync::mpsc::Receiver<PickerResult>, &'static str> {
+    let owner = unsafe { windows_sys::Win32::UI::WindowsAndMessaging::GetForegroundWindow() };
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::Builder::new().name("profile-file-picker".into()).spawn(move || {
+        let result = choose(owner);
+        let _ = tx.send(result);
+        ctx.request_repaint();
+    }).map_err(|_| "The Windows file picker could not start")?;
+    Ok(rx)
 }
 #[cfg(test)]
 mod tests {

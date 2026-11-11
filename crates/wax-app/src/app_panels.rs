@@ -564,10 +564,9 @@ impl WaxApp {
         ui.add_space(8.0);
         theme::section_heading(ui, "Import", "Paste a WireGuard config");
         #[cfg(windows)]
-        if ui.button("Choose .conf file").on_hover_text("Read a local file and import a new profile. Existing profiles are kept.").clicked() {
-            match profile_file::choose() {
-                Ok(Some(file)) => { self.import_text(file.name, &file.text); }
-                Ok(None) => {}
+        if ui.add_enabled(self.file_picker.is_none(), egui::Button::new("Choose .conf file")).on_hover_text("Read a local file and import a new profile. Existing profiles are kept.").clicked() {
+            match profile_file::start(ui.ctx().clone()) {
+                Ok(rx) => { self.file_picker = Some(rx); }
                 Err(message) => { self.import_error = Some(message.into()); }
             }
         }
