@@ -74,6 +74,7 @@ Section "waX VPN" SecMain
     File "payload\wireguard.dll"
     File "payload\LICENSE.txt"
     File "payload\LICENSE-astryx.txt"
+    File /oname=LICENSE-egui-software.txt "..\vendor\egui-software\LICENSE-MIT"
     File "payload\README.txt"
     File "payload\LICENSE-wireguard-nt.txt"
 
@@ -116,6 +117,7 @@ Section "Uninstall"
     Delete "$INSTDIR\wireguard.dll"
     Delete "$INSTDIR\LICENSE.txt"
     Delete "$INSTDIR\LICENSE-astryx.txt"
+    Delete "$INSTDIR\LICENSE-egui-software.txt"
     Delete "$INSTDIR\README.txt"
     Delete "$INSTDIR\LICENSE-wireguard-nt.txt"
     Delete "$INSTDIR\uninstall.exe"
@@ -130,4 +132,4 @@ Section "Uninstall"
     DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\waX VPN"
     DeleteRegKey HKLM "Software\waX VPN"
     ; User profiles/settings under %APPDATA%\wax-vpn are intentionally kept.
-SectionEnd
+    SectionEnd
