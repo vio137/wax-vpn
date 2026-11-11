@@ -1,46 +1,44 @@
-# waX VPN v1.0.4
+# waX VPN v1.0.5
 
-Tunnel setup now uses native Windows APIs for administrator detection, MTU,
-DNS settings and cleanup of old waX VPN KillSwitch rules. This removes the
-PowerShell/NetTCPIP/NetSecurity and net session dependencies. No kill switch
-is created. Normal traffic can resume when the tunnel drops.
+Pin profiles, find them by name or endpoint, and return to recent profiles.
+Pins and the last eight successful tunnel starts stay on this device. Clear
+recent removes that list without deleting profiles or pins. A recent entry
+means the app started a tunnel, not that Internet access was verified.
 
-DNS uses SetInterfaceDnsSettings when the OS provides it. netsh is retained
-only on older Windows builds without that native DNS API. That API-absent
-fallback has not been runtime-tested. Windows 10/11 x64 support is unchanged.
-Installer/uninstaller taskkill use remains in this release; its replacement
-is a separate later candidate. Windows system APIs, administrator consent,
-networking, a valid profile and permission to load the bundled signed driver
-are still required. This is not a zero-OS-dependency claim.
+Connection details show the active session's configured addresses, DNS and
+peer route-entry count. For a tunnel owned by another app instance, the
+configuration is marked unknown. These details are not a live routing or DNS
+test. Private keys are not shown. Long content scrolls instead of clipping.
 
-CPU software rendering through GDI remains the default. GPU rendering stays
-opt-in with --accelerated-graphics; OpenGL Safe graphics still needs a
-compatible driver. The app is unsigned, so Windows can show a publisher warning.
+The installer no longer calls taskkill by executable name. It verifies the
+installed executable's full path and retains process handles before stopping
+anything. Current versions receive a PID-scoped graceful-quit signal first;
+older versions without that signal use bounded, exact-path native termination.
+An unrelated copy is not sent the session-global quit signal. If the process
+cannot be verified or stopped, installation/uninstallation aborts.
 
-## Evidence and limits
+## Compatibility and limits
 
-Stable gate, source 3f8dc0ced9a95e1b4f27895e808e90f6fc1421d2:
-https://github.com/vio137/wax-vpn/actions/runs/43090210410
-All required stable jobs passed before publication.
+CPU software rendering through Windows GDI remains the default. GPU rendering
+is opt-in. No separate VC++/.NET/WebView2 installation is required, but Windows
+system libraries, administrator consent, networking and a valid profile still
+are. The bundled WireGuardNT driver is signed by its vendor. The app and
+installer are unsigned and Windows may show an unknown-publisher warning.
 
-Published installer: 11,636,044 bytes. Downloaded SHA-256 matches the published
-checksum: `5f8c713207dafdd76900322295edbf2bd64a99a4df2439ae9e8b95556334dd58`.
+DNS uses the native Windows API when available. netsh remains only for older
+Windows builds without that API; the API-absent fallback is untested. IPv6
+DNS/MTU settings checks do not prove IPv6 traffic routing or leak protection.
+No kill switch is provided. Traffic can use the normal connection when the
+tunnel is off. Live WARP registration is not verified.
 
-- Windows workspace tests passed. Isolated native API tests passed IPv4/IPv6
-  MTU readback, per-family DNS set/readback/reset/readback, and removal of a
-  disabled legacy rule while preserving an unrelated disabled rule.
-- Demo peer handshake and tunnel-address ping, DNS apply/reset, IPv4 MTU1380,
-  split routes, bounded reconnect, disabling pending recovery and manual
-  reconnect passed. No claim of general Internet reachability is made.
-- CPU launch/input/connect, close-to-tray, original HWND/PID restore, quit,
-  warning states, NSIS install/upgrade/uninstall and packaged native/static-CRT
-  direct/delay import audits passed.
+The release gate runs on a hosted Windows Server 2025 runner with installed
+runtimes and a virtual display, not a clean Windows 10/11 PC. It does not prove
+the reported consumer-PC crash is fixed. A peer handshake and tunnel-address
+ping do not prove Internet reachability. Tray-menu clicks need real Windows
+review. Runner OpenGL rendering/dismissal remain unverified. Console-window
+sampling can miss a shorter flash.
 
-The host was Windows Server2025 with Hyper-V Video and preinstalled runtimes,
-not a clean Windows10/11 image. The reported consumer-PC crash has not been
-reproduced or confirmed fixed. No flawless fresh-install claim is made.
-Isolated IPv6 DNS/MTU checks do not establish IPv6 tunnel traffic or leak
-behavior. No IPv6 baseline/leak test was established. Real tray-menu clicks
-remain manual-only. OpenGL rendering/dialog dismissal were skipped on the
-unsupported host. Console sampling can miss short-lived windows. No live
-WARP signup was performed.
+## Release verification
+
+Pending the exact stable workflow and downloaded installer checksum. Do not
+interpret this preparation note as a released build.
