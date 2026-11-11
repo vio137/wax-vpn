@@ -30,7 +30,7 @@ opt-in Cloudflare WARP client, reimplemented in Rust. Registration only happens
 when you explicitly accept Cloudflare's Terms of Service in the app or pass
 `--accept-tos` to the CLI. waX VPN is not affiliated with Cloudflare.
 
-The released v1.0.3 has no update checker or telemetry uploader. Tunnel traffic
+The released v1.0.4 has no update checker or telemetry uploader. Tunnel traffic
 and DNS lookups can happen in the background while connected; WARP API calls
 happen only when you request WARP actions. Local diagnostics are not uploaded.
 Optional public-IP, HTTPS latency and manual quick-speed measurements are off
@@ -57,15 +57,19 @@ is made. Released v1.0.3 defaults to CPU software rendering (Windows GDI),
 with GPU rendering available through `--accelerated-graphics`. Windows 10/11 x64
 is required. No separate VC++/.NET/WebView2 installation or first-run driver
 download is required. The bundled WireGuardNT DLL installs its signed kernel
-driver when connecting, with administrator consent. Windows PowerShell, netsh
-and Windows networking services are still used for tunnel setup; removing
-those shell dependencies is a separate follow-up, not part of v1.0.3.
+driver when connecting, with administrator consent. v1.0.4 uses native Windows APIs for administrator detection, MTU, DNS and
+retired-rule cleanup, removing PowerShell and net session dependencies. netsh
+is retained only on older Windows builds without the native DNS API; this
+fallback has not been runtime-tested. Installer taskkill use remains a
+separate follow-up. Windows networking services are still required.
 
 The CPU path passed launch, accessible tab input, close-to-tray, no-tray fallback,
 same-window restore and quit on a Windows Server 2025 hosted runner with Hyper-V
 Video. That runner has runtimes installed and is not a clean Windows 10/11 image.
-The reported consumer PC crash remains unverified. Stable v1.0.3 evidence:
-https://github.com/vio137/wax-vpn/actions/runs/43083908145
+The reported consumer PC crash remains unverified. Stable v1.0.4 evidence:
+https://github.com/vio137/wax-vpn/actions/runs/43090210410
+Native IPv4/IPv6 DNS/MTU round-trips passed, but IPv6 tunnel traffic and leak
+behavior remain unverified.
 
 If startup fails, check `%APPDATA%\wax-vpn\startup.log`. Fixed startup markers
 are local and bounded; no profile/account/settings values are written. A Rust
