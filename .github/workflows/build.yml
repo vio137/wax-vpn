@@ -1092,6 +1092,8 @@ jobs:
             Invoke-ObservedInstaller (Join-Path $dir 'uninstall.exe') 'uninstall'
             Start-Sleep -Seconds 3
             if (Test-Path $exe) { throw 'Uninstall left GUI binary behind' }
+            if (Test-Path (Join-Path $dir 'LICENSE-astryx.txt')) { throw 'Uninstall left owned Astryx license behind' }
+            if (Test-Path $dir) { throw 'Uninstall left fresh-runner install directory behind' }
             'PASS uninstall removed installed GUI; user data intentionally retained' | Out-File installer-results.txt -Append
             if (-not (Test-Path 'installer-quit-diagnostics.txt')) { throw 'Installed quit diagnostic log missing' }
           }
