@@ -186,6 +186,7 @@ fn chart(ui:&mut egui::Ui,a:&VecDeque<f64>,b:Option<&VecDeque<f64>>,caption:&str
     for(q,color)in std::iter::once((a,theme::GOOD)).chain(b.map(|q|(q,Color32::from_rgb(125,167,235)))){
         let points:Vec<_>=q.iter().enumerate().map(|(i,v)|egui::pos2(r.left()+r.width()*i as f32/59.0,r.bottom()-4.0-(r.height()-8.0)*(*v/max)as f32)).collect();
         if points.len()>1{ui.painter().add(egui::Shape::line(points,egui::Stroke::new(1.5,color)));}
+        else if let Some(point)=points.first(){ui.painter().circle_filled(*point,2.5,color);}
     }
     ui.label(RichText::new(caption).size(10.5).color(theme::MUTE));
 }
