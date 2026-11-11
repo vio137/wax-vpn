@@ -1,5 +1,6 @@
 [workspace]
 resolver = "2"
+exclude = ["vendor/egui-software"]
 members = [
     "crates/wax-core",
     "crates/wax-warp",
@@ -20,3 +21,6 @@ lto = "thin"
 codegen-units = 1
 opt-level = 3
 strip = true
+
+[profile.dev.package.egui_software_backend]
+opt-level = 3
