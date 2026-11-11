@@ -56,8 +56,12 @@ Section "waX VPN" SecMain
     SetShellVarContext all
 
     ; Make sure nothing is holding the files
-    ExecWait 'taskkill /F /IM "waX VPN.exe" /T 2>NUL' $0
-    ExecWait '"$INSTDIR\wax.exe" disconnect' $0
+    ; nsExec captures console output without creating a console window.
+    ; ExecWait is not a shell, so do not pass shell redirection here.
+    nsExec::Exec '"$SYSDIR\taskkill.exe" /F /IM "waX VPN.exe" /T'
+    Pop $0
+    nsExec::Exec '"$INSTDIR\wax.exe" disconnect'
+    Pop $0
 
     File "payload\waX VPN.exe"
     File "payload\wax.exe"
@@ -91,8 +95,12 @@ SectionEnd
 
 Section "Uninstall"
     SetShellVarContext all
-    ExecWait 'taskkill /F /IM "waX VPN.exe" /T 2>NUL' $0
-    ExecWait '"$INSTDIR\wax.exe" disconnect' $0
+    ; nsExec captures console output without creating a console window.
+    ; ExecWait is not a shell, so do not pass shell redirection here.
+    nsExec::Exec '"$SYSDIR\taskkill.exe" /F /IM "waX VPN.exe" /T'
+    Pop $0
+    nsExec::Exec '"$INSTDIR\wax.exe" disconnect'
+    Pop $0
     Sleep 1000
 
     Delete "$INSTDIR\waX VPN.exe"
