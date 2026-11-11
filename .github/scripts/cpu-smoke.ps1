@@ -32,10 +32,10 @@ function Capture($window,$path) {
  $image.Save((Join-Path $PWD $path));$g.Dispose();$image.Dispose()
 }
 foreach ($mode in @('tray','fallback')) {
- $argsForMode=@('--software-graphics');if ($mode -eq 'fallback') { $argsForMode+='--no-tray' }
+ $argsForMode=@();if ($mode -eq 'fallback') { $argsForMode+='--no-tray' }
  New-Item -ItemType Directory -Force $dir | Out-Null
  Remove-Item $log -ErrorAction SilentlyContinue
- $p=Start-Process $exe -ArgumentList $argsForMode -PassThru
+ $p=if ($argsForMode.Count) { Start-Process $exe -ArgumentList $argsForMode -PassThru } else { Start-Process $exe -PassThru }
  try {
   $window=$null
   for ($i=0;$i -lt 80;$i++) {
