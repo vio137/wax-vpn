@@ -124,10 +124,12 @@ impl Monitor{
         if phase==2&&visible&&cfg.latency&&!self.latency_busy&&self.last_probe.is_none_or(|t|t.elapsed()>=Duration::from_secs(cfg.interval_secs.clamp(10,300))){self.start(Kind::Latency,cfg);}
     }
     fn start(&mut self,kind:Kind,cfg:&Config){
-        let tx=self.tx.clone();let epoch=self.epoch.clone();let id=epoch.load(Ordering::Acquire);let cfg=cfg.clone();
+        let tx=self.tx.clone();let epoch=self.epoch.clone();let id=epoch.load(Ordering::Acquire);
+        // A worker needs one endpoint, not a copy of all measurement settings.
+        let endpoint=match kind{Kind::Ip=>&cfg.ip_endpoint,Kind::Latency=>&cfg.latency_endpoint,Kind::Speed=>&cfg.speed_origin}.clone();
         match kind{Kind::Ip=>self.ip_busy=true,Kind::Latency=>{self.latency_busy=true;self.last_probe=Some(Instant::now());},Kind::Speed=>self.speed_busy=true}
         std::thread::spawn(move||{
-            let value=match kind{Kind::Ip=>Value::Ip(public_ip(&cfg.ip_endpoint)),Kind::Latency=>Value::Latency(latency(&cfg.latency_endpoint)),Kind::Speed=>Value::Speed(speed(&cfg.speed_origin,&epoch,id))};
+            let value=match kind{Kind::Ip=>Value::Ip(public_ip(&endpoint)),Kind::Latency=>Value::Latency(latency(&endpoint)),Kind::Speed=>Value::Speed(speed(&endpoint,&epoch,id))};
             let _=tx.send(Event{epoch:id,value});
         });
     }
