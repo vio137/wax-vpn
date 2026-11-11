@@ -34,6 +34,7 @@ const SHOW_EVENT: &str = r"Local\waXVPN.Show";
 pub struct Instance {
     mutex: HANDLE,
     quit_event: HANDLE,
+    scoped_quit_event: HANDLE,
     show_event: HANDLE,
 }
 
@@ -55,6 +56,11 @@ fn signal(name: &str) {
     }
 }
 
+fn scoped_quit() -> HANDLE {
+    let name = format!(r"Local\waXVPN.Quit.{}", std::process::id());
+    unsafe { CreateEventW(std::ptr::null(), 0, 0, wide(&name).as_ptr()) }
+}
+
 fn drain(event: HANDLE) {
     unsafe {
         WaitForSingleObject(event, 0);
@@ -68,7 +74,7 @@ pub fn acquire() -> Acquire {
             // Could not enforce: run as primary rather than block the user.
             let quit_event = CreateEventW(std::ptr::null(), 0, 0, wide(QUIT_EVENT).as_ptr());
             let show_event = CreateEventW(std::ptr::null(), 0, 0, wide(SHOW_EVENT).as_ptr());
-            return Acquire::Primary(Instance { mutex: 0, quit_event, show_event });
+            return Acquire::Primary(Instance { mutex: 0, quit_event, scoped_quit_event: scoped_quit(), show_event });
         }
         if GetLastError() == ERROR_ALREADY_EXISTS {
             signal(SHOW_EVENT);
@@ -80,7 +86,9 @@ pub fn acquire() -> Acquire {
         // A signal sent before we existed must not act on a fresh launch.
         drain(quit_event);
         drain(show_event);
-        Acquire::Primary(Instance { mutex, quit_event, show_event })
+        let scoped_quit_event = scoped_quit();
+        drain(scoped_quit_event);
+        Acquire::Primary(Instance { mutex, quit_event, scoped_quit_event, show_event })
     }
 }
 
@@ -108,7 +116,7 @@ fn signaled(event: HANDLE) -> bool {
 impl Instance {
     /// Consumes the quit signal when present (auto-reset event).
     pub fn take_quit(&self) -> bool {
-        signaled(self.quit_event)
+        signaled(self.quit_event) || signaled(self.scoped_quit_event)
     }
 
     /// Consumes the show-window signal when present.
@@ -120,7 +128,7 @@ impl Instance {
 impl Drop for Instance {
     fn drop(&mut self) {
         unsafe {
-            for h in [self.mutex, self.quit_event, self.show_event] {
+            for h in [self.mutex, self.quit_event, self.scoped_quit_event, self.show_event] {
                 if h != 0 {
                     CloseHandle(h);
                 }
