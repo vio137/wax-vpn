@@ -150,16 +150,13 @@ fn run() -> Result<(), String> {
             }
             let p = profile::load_profile(&name).map_err(|e| e.to_string())?;
             let opts = ConnectOptions::default();
+            let stop = ConsoleStop::new()?;
             let tunnel = Tunnel::connect(&p, &opts).map_err(|e| e.to_string())?;
             println!("Connected to '{}'. Tunnel adapter '{}' is up.", p.name, wax_tunnel::ADAPTER_NAME);
-            println!("Press Ctrl+C to disconnect.");
-            // Keep the process (and driver handle) alive; Ctrl+C triggers shutdown.
-            let running = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
-            let r = running.clone();
-            ctrlc_like(move || r.store(false, std::sync::atomic::Ordering::SeqCst));
-            while running.load(std::sync::atomic::Ordering::SeqCst) {
-                std::thread::sleep(std::time::Duration::from_millis(250));
-            }
+            println!("Press Ctrl+C or Enter to disconnect cleanly.");
+            // Keep the owning process alive, then use the same cleanup path
+            // for a console interrupt and the existing Enter/EOF exit.
+            stop.wait();
             tunnel.shutdown().map_err(|e| e.to_string())?;
             println!("Disconnected.");
         }
@@ -197,16 +194,62 @@ fn run() -> Result<(), String> {
     Ok(())
 }
 
-fn ctrlc_like(set: impl FnOnce() + Send + 'static) {
-    // Minimal Ctrl+C handling without an extra dependency: spawn a thread that
-    // waits for the process to receive CTRL_C via SetConsoleCtrlHandler would
-    // need the windows crate; instead we poll stdin-close as a fallback. The
-    // GUI is the primary interface; this keeps wax connect usable.
-    std::thread::spawn(move || {
-        let mut buf = String::new();
-        let _ = std::io::stdin().read_line(&mut buf);
-        set();
-    });
+static RUNNING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
+
+#[cfg(windows)]
+#[link(name = "kernel32")]
+extern "system" {
+    fn SetConsoleCtrlHandler(handler: Option<unsafe extern "system" fn(u32) -> i32>, add: i32) -> i32;
+}
+
+#[cfg(windows)]
+unsafe extern "system" fn console_interrupt(event: u32) -> i32 {
+    // CTRL_C_EVENT / CTRL_BREAK_EVENT only. Close/logoff/shutdown have short
+    // OS deadlines and are not advertised as graceful cleanup paths.
+    if event > 1 { return 0; }
+    RUNNING.store(false, std::sync::atomic::Ordering::Release);
+    1
+}
+
+struct ConsoleStop;
+impl ConsoleStop {
+    fn new() -> Result<Self, String> {
+        RUNNING.store(true, std::sync::atomic::Ordering::Release);
+        #[cfg(windows)]
+        if unsafe { SetConsoleCtrlHandler(Some(console_interrupt), 1) } == 0 {
+            return Err("Could not install console interrupt handling; no tunnel was started".into());
+        }
+        Ok(Self)
+    }
+    fn wait(&self) {
+        std::thread::spawn(|| {
+            let mut line = String::new();
+            let _ = std::io::stdin().read_line(&mut line);
+            RUNNING.store(false, std::sync::atomic::Ordering::Release);
+        });
+        while RUNNING.load(std::sync::atomic::Ordering::Acquire) {
+            std::thread::sleep(std::time::Duration::from_millis(250));
+        }
+    }
+}
+impl Drop for ConsoleStop {
+    fn drop(&mut self) {
+        #[cfg(windows)]
+        unsafe { SetConsoleCtrlHandler(Some(console_interrupt), 0); }
+    }
+}
+
+#[cfg(all(windows, test))]
+mod console_tests {
+    use super::*;
+    #[test]
+    fn interrupt_only_requests_existing_cleanup_for_ctrl_c_and_break() {
+        for event in [2, 5, 6, 99, 0, 1] {
+            RUNNING.store(true, std::sync::atomic::Ordering::Release);
+            assert_eq!(unsafe { console_interrupt(event) }, i32::from(event <= 1));
+            assert_eq!(RUNNING.load(std::sync::atomic::Ordering::Acquire), event > 1);
+        }
+    }
 }
 
 fn run_warp(cmd: WarpCommands) -> Result<(), String> {
@@ -265,9 +308,8 @@ fn run_warp(cmd: WarpCommands) -> Result<(), String> {
         WarpCommands::Unregister => {
             let account = wax_warp::load_account().map_err(|e| e.to_string())?.ok_or("not registered")?;
             let client = wax_warp::WarpClient::new().map_err(|e| e.to_string())?;
-            if let Err(e) = client.delete_device(&account.device_id, &account.token) {
-                eprintln!("warning: server-side delete failed ({e}); removing local registration anyway");
-            }
+            client.delete_device(&account.device_id, &account.token)
+                .map_err(|e| format!("Could not remove remote registration: {e}. Local account kept for retry"))?;
             wax_warp::delete_account().map_err(|e| e.to_string())?;
             let _ = profile::delete_profile("Cloudflare WARP");
             println!("WARP registration removed.");
