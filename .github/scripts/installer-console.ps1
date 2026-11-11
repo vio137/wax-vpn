@@ -59,7 +59,7 @@ function Invoke-ObservedInstaller([string]$Path, [string]$Phase) {
     if (-not $process.WaitForExit(120000)) { throw "NSIS $Phase exceeded 120s" }
     # NSIS uninstall can hand off to a temporary child. Keep observing after
     # the launcher exits, through cleanup and temporary-process shutdown.
-    if ($Phase -eq 'uninstall') { Start-Sleep -Seconds 5 }
+    if ($Phase.EndsWith('uninstall', [StringComparison]::OrdinalIgnoreCase)) { Start-Sleep -Seconds 5 }
     else { Start-Sleep -Milliseconds 500 }
     if ($process.ExitCode -ne 0) { throw "NSIS $Phase exit $($process.ExitCode)" }
   } finally {
