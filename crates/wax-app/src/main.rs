@@ -1516,7 +1516,8 @@ impl WaxApp {
                 }
                 let input_id = ui.make_persistent_id("split-exclusions-input");
                 let focused = ui.memory(|m| m.has_focus(input_id));
-                let invalid = wax_core::split::parse_exclusions(&self.split_edit).is_err();
+                let mut parsed_exclusions = wax_core::split::parse_exclusions(&self.split_edit);
+                let invalid = parsed_exclusions.is_err();
                 let border = if invalid {
                     theme::alpha(theme::BAD, 140)
                 } else if focused {
@@ -1545,6 +1546,9 @@ impl WaxApp {
                     egui::WidgetInfo::labeled(egui::Role::TextInput, true, "Excluded IP ranges")
                 });
                 if resp.changed() {
+                    // Input can change after the border was drawn. Keep the
+                    // validation label current on editing frames as well.
+                    parsed_exclusions = wax_core::split::parse_exclusions(&self.split_edit);
                     if let Some(pr) = self.profiles.get(sel) {
                         let name = pr.name.clone();
                         if self.split_edit.trim().is_empty() {
@@ -1557,7 +1561,8 @@ impl WaxApp {
                         self.save_settings();
                     }
                 }
-                match wax_core::split::parse_exclusions(&self.split_edit) {
+                // Reuse this frame's parse for the border and validation label.
+                match parsed_exclusions {
                     Ok(excls) if !excls.is_empty() => {
                         ui.label(
                             RichText::new(format!("{} excluded range(s)", excls.len()))
@@ -2034,4 +2039,4 @@ fn main() -> eframe::Result<()> {
         options,
         Box::new(|cc| Ok(Box::new(WaxApp::new(cc, instance)))),
     )
-            }
+    }
