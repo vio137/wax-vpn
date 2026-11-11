@@ -1,8 +1,7 @@
 //! Installer-only process cleanup, limited to the exact installed GUI path.
 use std::{
-    os::windows::{ffi::OsStrExt, process::CommandExt},
+    os::windows::ffi::OsStrExt,
     path::Path,
-    process::Command,
     time::{Duration, Instant},
 };
 use windows_sys::Win32::{
@@ -17,7 +16,8 @@ use windows_sys::Win32::{
             TH32CS_SNAPPROCESS,
         },
         Threading::{
-            OpenProcess, QueryFullProcessImageNameW, TerminateProcess, WaitForSingleObject,
+            OpenEventW, OpenProcess, QueryFullProcessImageNameW, SetEvent, TerminateProcess, WaitForSingleObject,
+            EVENT_MODIFY_STATE,
             PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SYNCHRONIZE, PROCESS_TERMINATE,
         },
     },
@@ -106,7 +106,7 @@ pub(crate) fn stop(directory: &str) -> Result<(), String> {
                         return Err("Could not verify matching app process path".into());
                     }
                 } else if same_path(&path[..length as usize], &target_path) {
-                    processes.push(process);
+                    processes.push((process, entry.th32ProcessID));
                 }
             }
         }
@@ -115,36 +115,26 @@ pub(crate) fn stop(directory: &str) -> Result<(), String> {
     if unsafe { GetLastError() } != ERROR_NO_MORE_FILES {
         return Err("Process enumeration did not complete".into());
     }
-    // Do not signal the path-independent singleton if only another copy is running.
-    if processes.is_empty() {
-        return Ok(());
-    }
-    if let Ok(mut child) = Command::new(&target)
-        .arg("--quit")
-        .creation_flags(0x08000000)
-        .spawn()
-    {
-        let until = Instant::now() + Duration::from_secs(5);
-        while Instant::now() < until {
-            if child.try_wait().map_err(|e| e.to_string())?.is_some() {
-                break;
-            }
-            std::thread::sleep(Duration::from_millis(25));
-        }
-        if child.try_wait().map_err(|e| e.to_string())?.is_none() {
-            let _ = child.kill();
-            let _ = child.wait();
+    // A PID-scoped graceful signal cannot quit another installation. Older
+    // versions have no such event; use the exact-handle fallback for them.
+    for (process, pid) in &processes {
+        if unsafe { WaitForSingleObject(process.0, 0) } == WAIT_OBJECT_0 { continue; }
+        let name: Vec<u16> = format!(r"Local\waXVPN.Quit.{pid}").encode_utf16().chain(Some(0)).collect();
+        let event = unsafe { OpenEventW(EVENT_MODIFY_STATE, 0, name.as_ptr()) };
+        if event != 0 {
+            let event = Handle(event);
+            unsafe { SetEvent(event.0); }
         }
     }
     let until = Instant::now() + Duration::from_secs(5);
     while Instant::now() < until
         && processes
             .iter()
-            .any(|p| unsafe { WaitForSingleObject(p.0, 0) } != WAIT_OBJECT_0)
+            .any(|(p, _)| unsafe { WaitForSingleObject(p.0, 0) } != WAIT_OBJECT_0)
     {
         std::thread::sleep(Duration::from_millis(25));
     }
-    for process in processes {
+    for (process, _) in processes {
         if unsafe { WaitForSingleObject(process.0, 0) } == WAIT_OBJECT_0 {
             continue;
         }
