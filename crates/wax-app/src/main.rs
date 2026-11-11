@@ -1474,7 +1474,10 @@ impl WaxApp {
                         .unwrap_or_default();
                 }
                 ui.add_space(10.0);
-                theme::section_heading(ui, "Split tunneling", "CIDRs excluded from the tunnel for the selected profile. Applies on next connect.");
+                theme::section_heading(ui, "Split tunneling", "Applies to the named profile on next connect.");
+                ui.add(egui::Label::new(RichText::new("Enter CIDR ranges separated by commas or spaces.")
+                    .size(11.5).color(theme::SUB)).wrap());
+                ui.add_space(4.0);
                 if let Some(profile) = self.profiles.get(sel) {
                     ui.add(egui::Label::new(RichText::new(split_profile_label(&profile.name))
                         .size(11.5).color(theme::SUB)).wrap());
