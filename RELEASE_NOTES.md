@@ -1,21 +1,19 @@
-# waX VPN v0.1.37
+# waX VPN v0.1.38
 
-Unsigned Windows x64 profile-library clarity checkpoint. Windows may show an unknown-publisher warning. The official WireGuardNT driver is independently signed by its vendor. No kill switch: traffic can use the normal connection if the tunnel drops.
+Unsigned Windows x64 selected-profile clarity checkpoint. Windows may show an unknown-publisher warning. The official WireGuardNT driver is independently signed by its vendor. No kill switch: traffic can use the normal connection if the tunnel drops.
 
 ## Changes
 
-- Profiles now shows the loaded-profile count beside Reload profiles. After a failed reload, the retained count is labeled Previous list. Loading, selection, import, storage and connection policy are unchanged.
-- Formatter fixtures cover zero, one and many profiles for current and retained lists. Empty/plural wording is formatter-fixture proof only, not a separately captured UI state.
+- Split tunneling now names the profile being edited above the exclusion input. The context line wraps. Parsing, settings, routes and connection policy are unchanged.
+- Formatter fixtures preserve ordinary, Unicode and long profile names. Unicode/long-name preservation is formatter-fixture proof only, not actual glyph or wrapping screenshot proof.
 
 ## Verification
 
-Product source fa11466717dde45c92e4fd9f3a0ac4d9e8b9917a passed push 42986624357 and full preview 42987951097. All 42 app, 40 core, 6 WARP, 4 diagnostics and 1 tunnel tests passed. Actual normal and partial-warning Profiles pixels show 1 profile loaded. Failed reload shows Previous list: 1 profile, retained list and disabled Connect/Delete controls. Count, warning and buttons are readable without overlap at 880x600. All 14 normal, warning, BOM and installed screenshots were inspected.
+Product source 342787b29a1f21f60a6e513d2a5037669b1861d0 passed push 42991925012 and full preview 42993266597. All 43 app, 40 core, 6 WARP, 4 diagnostics and 1 tunnel tests passed. Normal, partial-warning and failed-reload Profiles pixels show Editing profile: demo above the exclusions field, readable without overlap at 880x600. Import shifts down within the existing scroll area. All 14 normal, warning, BOM and installed screenshots were inspected.
 
-Raw full-preview verify-results and installer diagnostics were read. Handshake and tunnel-side ping, DNS and IPv4 MTU 1380, split exclusions, adapter-loss recovery after 4 seconds, pending-retry disable across 48 samples/12 seconds, manual reconnect, original main HWND/PID plus Connect rail restoration, graceful quit/adapter removal, profile/settings warnings and BOM-backed startup passed. No console windows observed in 434 samples at about 100 ms; shorter windows could be missed. Crash evidence is a clean 3-second pre-cleanup snapshot. Fresh-runner install/quit/uninstall passed. Installed quit stages were probe 1 ms, absence 1 ms and legacy removal 4063 ms, descriptive only.
+Raw full-preview verify-results and installer diagnostics were read. Handshake and tunnel-side ping, DNS and IPv4 MTU 1380, split exclusions, adapter-loss recovery after 5 seconds, pending-retry disable across 48 samples/12 seconds, manual reconnect, original main HWND/PID plus Connect rail restoration, graceful quit/adapter removal, profile/settings warnings and BOM-backed startup passed. No console windows observed in 440 samples at about 100 ms; shorter windows could be missed. Crash evidence is a clean 3-second pre-cleanup snapshot. Fresh-runner install/quit/uninstall passed. Installed quit stages were probe 1 ms, absence 4 ms and legacy removal 4576 ms, descriptive only.
 
-Exact v0.1.37 run 42989763965 at 65e3ebb556bb02a8ee2f5802e2e5f69ae3b0e965 passed build, demo-tunnel/GUI verification, fresh-runner install/quit/uninstall and publish. Raw verify-results and installer diagnostics were read. The same scoped checks passed, including adapter-loss recovery after 5 seconds, pending-retry disable across 48 samples/12 seconds, original main HWND/PID plus Connect rail restoration, graceful quit/adapter removal and warning/BOM cases. No console windows observed in 442 samples at about 100 ms; shorter windows could be missed. All 14 exact-release screenshots were inspected, including current and previous-list profile counts at 880x600. Empty/plural wording remains formatter-fixture proof only. Installed quit stages were probe 1 ms, absence 2 ms and legacy cleanup 4180 ms, descriptive only.
-
-Freshly downloaded unsigned installer: 10,959,142 bytes. SHA256 15c17c5909cda9c3c1a8ab244b1bb862043d746996ca55c8b57e774440dd8e9d matches the freshly downloaded SHA256SUMS-v0.1.37.txt.
+Exact v0.1.38 stable gate and fresh installer checksum are pending. No exact-release result is claimed here.
 
 Test-only cancellation ownership and one-shot Windows Notifications/Snapshot fixtures remain groundwork only. Their successful contract/bridge checks do not prove production observation, continuous monitoring, quit acknowledgement, OS cancellation-failure safety or actual physical-network roaming. No such feature is wired into the app.
 
