@@ -199,3 +199,160 @@ mod tests {
     }
 
 }
+
+// Test-only cancellation ownership contract. No Windows adapter or quit wiring.
+#[cfg(test)]
+mod cancellation_owner {
+    use std::sync::{mpsc, Arc, Mutex};
+
+    trait Operations: Send + 'static {
+        fn register(&mut self) -> Result<(), ()>;
+        // Caller-supplied comparison, not an OS snapshot read.
+        fn read_changed(&mut self) -> Result<bool, ()>;
+        fn cancel(&mut self) -> Result<(), ()>;
+    }
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    enum Outcome { Complete, Stopped, Unavailable }
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    struct Ack { lifetime: u64, outcome: Outcome }
+    struct State { stopped: bool }
+    struct Owner {
+        lifetime: u64,
+        state: Arc<Mutex<State>>,
+        start: Option<mpsc::Sender<()>>,
+        changes: mpsc::Receiver<u64>,
+        acknowledgements: mpsc::Receiver<Ack>,
+    }
+    impl Owner {
+        fn new(lifetime: u64, mut operations: impl Operations) -> Self {
+            let state=Arc::new(Mutex::new(State { stopped: false }));
+            let worker_state=state.clone();
+            let (start_tx,start_rx)=mpsc::channel();
+            let (change_tx,changes)=mpsc::channel();
+            let (ack_tx,acknowledgements)=mpsc::channel();
+            std::thread::spawn(move || {
+                let started=start_rx.recv().is_ok();
+                let stopped=worker_state.lock().unwrap().stopped;
+                let outcome=if !started || stopped { Outcome::Stopped }
+                else if operations.register().is_err() { Outcome::Unavailable }
+                else {
+                    let read=if worker_state.lock().unwrap().stopped { Ok(false) }
+                        else { operations.read_changed() };
+                    // Always cancel an acquired registration, even after read
+                    // failure or stop. An adapter must retain uncertain callback
+                    // context itself if this reports failure.
+                    let cancelled=operations.cancel();
+                    let state=worker_state.lock().unwrap();
+                    if cancelled.is_err() || read.is_err() { Outcome::Unavailable }
+                    else if state.stopped { Outcome::Stopped }
+                    else {
+                        if read==Ok(true) { let _=change_tx.send(lifetime); }
+                        Outcome::Complete
+                    }
+                };
+                // Acknowledgement follows the cancellation attempt. It never
+                // claims that a failed cancellation freed the callback context.
+                let _=ack_tx.send(Ack { lifetime, outcome });
+            });
+            Self { lifetime,state,start:Some(start_tx),changes,acknowledgements }
+        }
+        fn start(&mut self) -> bool {
+            // A lifetime can start once only, including after cancellation error.
+            self.start.take().is_some_and(|tx| tx.send(()).is_ok())
+        }
+        fn stop(&mut self) {
+            self.state.lock().unwrap().stopped=true;
+            // Wake a worker that has not started, without registering anything.
+            self.start.take();
+        }
+        fn take_changed(&self, current_lifetime: u64) -> bool {
+            let state=self.state.lock().unwrap();
+            let event=self.changes.try_recv().ok();
+            !state.stopped && current_lifetime==self.lifetime && event==Some(self.lifetime)
+        }
+        fn wait_ack(&self) -> Ack { self.acknowledgements.recv().unwrap() }
+    }
+    impl Drop for Owner { fn drop(&mut self) { self.stop(); } }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        struct Fake {
+            registered: Arc<AtomicUsize>, cancelled: Arc<AtomicUsize>,
+            entered: mpsc::Sender<()>, release: mpsc::Receiver<()>,
+            registration: Result<(), ()>, read: Result<bool, ()>, cancellation: Result<(), ()>,
+        }
+        impl Operations for Fake {
+            fn register(&mut self) -> Result<(), ()> {
+                self.registered.fetch_add(1,Ordering::SeqCst); self.registration
+            }
+            fn read_changed(&mut self) -> Result<bool, ()> {
+                self.entered.send(()).unwrap(); self.release.recv().unwrap(); self.read
+            }
+            fn cancel(&mut self) -> Result<(), ()> {
+                self.cancelled.fetch_add(1,Ordering::SeqCst); self.cancellation
+            }
+        }
+        fn fixture(lifetime: u64, registration: Result<(), ()>, read: Result<bool, ()>, cancellation: Result<(), ()>)
+            -> (Owner,mpsc::Receiver<()>,mpsc::Sender<()>,Arc<AtomicUsize>,Arc<AtomicUsize>) {
+            let registered=Arc::new(AtomicUsize::new(0)); let cancelled=Arc::new(AtomicUsize::new(0));
+            let (entered_tx,entered)=mpsc::channel(); let (release,release_rx)=mpsc::channel();
+            let owner=Owner::new(lifetime,Fake { registered:registered.clone(),cancelled:cancelled.clone(),
+                entered:entered_tx,release:release_rx,registration,read,cancellation });
+            (owner,entered,release,registered,cancelled)
+        }
+        #[test]
+        fn owner_stop_before_start_never_registers_and_acknowledges() {
+            let (mut owner,_,_,registered,cancelled)=fixture(1,Ok(()),Ok(true),Ok(()));
+            owner.stop(); owner.stop(); assert!(!owner.start());
+            assert_eq!(owner.wait_ack(),Ack { lifetime:1,outcome:Outcome::Stopped });
+            assert_eq!(registered.load(Ordering::SeqCst),0); assert_eq!(cancelled.load(Ordering::SeqCst),0);
+            assert!(!owner.take_changed(1));
+        }
+        #[test]
+        fn owner_stop_during_supplied_read_discards_result_then_cancels_and_acks() {
+            let (mut owner,entered,release,registered,cancelled)=fixture(2,Ok(()),Ok(true),Ok(()));
+            assert!(owner.start()); entered.recv().unwrap(); owner.stop(); owner.stop();
+            assert!(!owner.take_changed(2)); assert!(owner.acknowledgements.try_recv().is_err());
+            release.send(()).unwrap();
+            assert_eq!(owner.wait_ack(),Ack { lifetime:2,outcome:Outcome::Stopped });
+            assert_eq!(registered.load(Ordering::SeqCst),1); assert_eq!(cancelled.load(Ordering::SeqCst),1);
+            assert!(!owner.take_changed(2)); assert!(!owner.start());
+        }
+        #[test]
+        fn owner_success_and_read_failure_cancel_exactly_once() {
+            for (read,outcome) in [(Ok(true),Outcome::Complete),(Err(()),Outcome::Unavailable)] {
+                let (mut owner,entered,release,registered,cancelled)=fixture(3,Ok(()),read,Ok(()));
+                assert!(owner.start()); entered.recv().unwrap(); release.send(()).unwrap();
+                assert_eq!(owner.wait_ack(),Ack { lifetime:3,outcome });
+                assert_eq!(owner.take_changed(3),read==Ok(true)); assert!(!owner.take_changed(3));
+                owner.stop(); owner.stop(); assert!(!owner.start());
+                assert_eq!(registered.load(Ordering::SeqCst),1); assert_eq!(cancelled.load(Ordering::SeqCst),1);
+            }
+        }
+        #[test]
+        fn owner_replacement_rejects_old_lifetime_and_stop_filters_queued_result() {
+            let (mut owner,entered,release,_,cancelled)=fixture(4,Ok(()),Ok(true),Ok(()));
+            assert!(owner.start()); entered.recv().unwrap(); release.send(()).unwrap();
+            assert_eq!(owner.wait_ack().outcome,Outcome::Complete);
+            assert!(!owner.take_changed(5)); assert_eq!(cancelled.load(Ordering::SeqCst),1);
+            let (mut next,entered,release,_,_)=fixture(5,Ok(()),Ok(true),Ok(()));
+            assert!(next.start()); entered.recv().unwrap(); release.send(()).unwrap();
+            assert_eq!(next.wait_ack().outcome,Outcome::Complete); next.stop();
+            assert!(!next.take_changed(5));
+        }
+        #[test]
+        fn owner_registration_and_cancel_failure_never_publish_or_restart() {
+            for registration in [Ok(()),Err(())] {
+                let (mut owner,entered,release,registered,cancelled)=fixture(6,registration,Ok(true),Err(()));
+                assert!(owner.start());
+                if registration.is_ok() { entered.recv().unwrap(); release.send(()).unwrap(); }
+                assert_eq!(owner.wait_ack(),Ack { lifetime:6,outcome:Outcome::Unavailable });
+                assert!(!owner.take_changed(6)); assert!(!owner.start());
+                assert_eq!(registered.load(Ordering::SeqCst),1);
+                assert_eq!(cancelled.load(Ordering::SeqCst),usize::from(registration.is_ok()));
+            }
+        }
+    }
+}
