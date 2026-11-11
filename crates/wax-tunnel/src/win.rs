@@ -10,7 +10,7 @@ use wax_core::Profile;
 
 use crate::{ConnectOptions, TunnelError, TunnelStats, ADAPTER_NAME, ADAPTER_POOL};
 
-const LEGACY_FIREWALL_RULE_PREFIX: &str = "waX VPN KillSwitch";
+
 
 /// Locate wireguard.dll shipped side-by-side with the app.
 fn dll_candidates() -> Vec<PathBuf> {
@@ -60,11 +60,31 @@ fn run(cmd: &str, args: &[&str]) -> Result<(), TunnelError> {
     }
 }
 
-fn powershell(script: &str) -> Result<(), TunnelError> {
-    run("powershell", &["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script])
+
+
+/// Read-modify-write only this tunnel interface's MTU. Preserve every other field.
+fn set_mtu(adapter: &str, ipv6: bool, mtu: u32) -> Result<(), TunnelError> {
+    use windows_sys::Win32::NetworkManagement::{IpHelper::{ConvertInterfaceAliasToLuid, GetIpInterfaceEntry, SetIpInterfaceEntry, MIB_IPINTERFACE_ROW}, Ndis::NET_LUID_LH};
+    use windows_sys::Win32::Networking::WinSock::{AF_INET, AF_INET6};
+    let alias: Vec<u16> = adapter.encode_utf16().chain(Some(0)).collect();
+    let mut luid: NET_LUID_LH = unsafe { std::mem::zeroed() };
+    let result = unsafe { ConvertInterfaceAliasToLuid(alias.as_ptr(), &mut luid) };
+    if result != 0 { return Err(TunnelError::Message(format!("Could not find tunnel interface for MTU: {result}"))); }
+    let mut row: MIB_IPINTERFACE_ROW = unsafe { std::mem::zeroed() };
+    row.Family = if ipv6 { AF_INET6 } else { AF_INET };
+    row.InterfaceLuid = luid;
+    let result = unsafe { GetIpInterfaceEntry(&mut row) };
+    if result != 0 { return Err(TunnelError::Message(format!("Could not read tunnel MTU: {result}"))); }
+    row.NlMtu = mtu;
+    // SetIpInterfaceEntry requires SitePrefixLength to be zero for IPv4.
+    if !ipv6 { row.SitePrefixLength = 0; }
+    let result = unsafe { SetIpInterfaceEntry(&mut row) };
+    if result != 0 { return Err(TunnelError::Message(format!("Could not apply tunnel MTU: {result}"))); }
+    Ok(())
 }
 
 fn set_dns(adapter: &str, dns: &[std::net::IpAddr]) -> Result<(), TunnelError> {
+    if let Some(result) = crate::native_dns::apply(adapter, dns, false) { return result; }
     let v4: Vec<String> = dns.iter().filter(|d| d.is_ipv4()).map(|d| d.to_string()).collect();
     let v6: Vec<String> = dns.iter().filter(|d| d.is_ipv6()).map(|d| d.to_string()).collect();
     if let Some(first) = v4.first() {
@@ -117,6 +137,10 @@ fn reset_dns_progress(adapter: &str, progress: &impl Fn(&'static str)) -> Result
         return Ok(());
     }
     progress("cleanup: adapter confirmed present");
+    if let Some(result) = crate::native_dns::apply(adapter, &[], true) {
+        progress("cleanup: native DNS reset returned");
+        return result;
+    }
     let mut problems = Vec::new();
     progress("cleanup: IPv4 DNS reset starting");
     if let Err(e) = run("netsh", &["interface", "ipv4", "set", "dnsservers", &format!("name={adapter}"), "dhcp"]) {
@@ -134,9 +158,7 @@ fn reset_dns_progress(adapter: &str, progress: &impl Fn(&'static str)) -> Result
 }
 
 fn cleanup_legacy_firewall_rules() -> Result<(), TunnelError> {
-    powershell(&format!(
-        "Remove-NetFirewallRule -DisplayName '{LEGACY_FIREWALL_RULE_PREFIX}*' -ErrorAction SilentlyContinue"
-    ))
+    crate::native_firewall::cleanup()
 }
 
 /// A live tunnel. Dropping without calling `shutdown` still closes the
@@ -232,7 +254,7 @@ impl Tunnel {
             for family in ["IPv4", "IPv6"] {
                 let present = cfg.interface.addresses.iter().any(|a| a.addr().is_ipv4() == (family == "IPv4"));
                 if present {
-                    powershell(&format!("$ErrorActionPreference='Stop'; Set-NetIPInterface -InterfaceAlias '{ADAPTER_NAME}' -AddressFamily {family} -NlMtuBytes {mtu}"))?;
+                    set_mtu(ADAPTER_NAME, family == "IPv6", mtu as u32)?;
                 }
             }
         }
@@ -361,3 +383,37 @@ mod native_interface_tests {
         assert!(!adapter_present("waX-test-absent-57e8b069").expect("native absence"));
     }
 }
+
+#[cfg(test)]
+mod native_runner_tests {
+    use super::*;
+    #[test]
+    #[ignore = "isolated elevated Windows runner only, with bundled WireGuardNT path"]
+    fn native_runner_dns_reset_and_mtu_roundtrip() {
+        assert_eq!(std::env::var("GITHUB_ACTIONS").as_deref(), Ok("true"));
+        assert!(crate::is_elevated(), "elevated runner token");
+        let dll = std::env::var("WAX_TEST_DRIVER").expect("explicit test driver path");
+        let driver = unsafe { wireguard_nt::load_from_path(&dll) }.expect("bundled driver");
+        let name = format!("waX-native-test-{}", std::process::id());
+        let adapter = Adapter::create(&driver, &name, &name, None).expect("test-only adapter");
+        // Use the same dedicated name in both wrapper arguments, as production does.
+        // The test never brings the adapter up, sets a peer, or creates routes.
+        for ipv6 in [false, true] {
+            set_mtu(&name, ipv6, 1380).expect("native MTU write");
+            use windows_sys::Win32::{NetworkManagement::IpHelper::{GetIpInterfaceEntry, MIB_IPINTERFACE_ROW}, Networking::WinSock::{AF_INET,AF_INET6}};
+            let mut row: MIB_IPINTERFACE_ROW = unsafe { std::mem::zeroed() };
+            row.Family = if ipv6 { AF_INET6 } else { AF_INET };
+            row.InterfaceLuid.Value = adapter.get_luid();
+            assert_eq!(unsafe { GetIpInterfaceEntry(&mut row) }, 0);
+            assert_eq!(row.NlMtu, 1380);
+        }
+        let servers = ["1.1.1.1", "8.8.8.8", "2606:4700:4700::1111"].map(|s| s.parse().unwrap());
+        crate::native_dns::apply(&name, &servers, false).expect("modern runner API").expect("DNS write");
+        crate::native_dns::assert_configured(&name, false, "1.1.1.1,8.8.8.8");
+        crate::native_dns::assert_configured(&name, true, "2606:4700:4700::1111");
+        reset_dns(&name).expect("native reset");
+        crate::native_dns::assert_configured(&name, false, "");
+        crate::native_dns::assert_configured(&name, true, "");
+        drop(adapter);
+    }
+            }
