@@ -30,7 +30,7 @@ opt-in Cloudflare WARP client, reimplemented in Rust. Registration only happens
 when you explicitly accept Cloudflare's Terms of Service in the app or pass
 `--accept-tos` to the CLI. waX VPN is not affiliated with Cloudflare.
 
-The released v0.1.44 has no update checker or telemetry uploader. Tunnel traffic
+The released v1.0.0 has no update checker or telemetry uploader. Tunnel traffic
 and DNS lookups can happen in the background while connected; WARP API calls
 happen only when you request WARP actions. Local diagnostics are not uploaded.
 Optional public-IP, HTTPS latency and manual quick-speed measurements are off
@@ -152,8 +152,8 @@ Verified release checks (exact run and sample counts are in the release notes):
 - Adapter-loss recovery, manual reconnect, close-to-tray with the tunnel up,
   graceful quit with adapter removal.
 - Silent NSIS fresh install, same-version upgrade and uninstall: no new
-  visible `ConsoleWindowClass` windows in 150, 364 and 329 samples at a
-  requested 10ms interval in v0.1.42. Shorter flashes or other console-host
+  visible `ConsoleWindowClass` windows in 545, 658 and 330 samples at a
+  requested 10ms interval in v1.0.0. Shorter flashes or other console-host
   classes may be missed; interactive installation remains unverified.
   Installed-GUI launch and profile/settings warning paths passed.
 
