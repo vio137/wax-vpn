@@ -30,7 +30,7 @@ opt-in Cloudflare WARP client, reimplemented in Rust. Registration only happens
 when you explicitly accept Cloudflare's Terms of Service in the app or pass
 `--accept-tos` to the CLI. waX VPN is not affiliated with Cloudflare.
 
-The released v1.0.2 has no update checker or telemetry uploader. Tunnel traffic
+The released v1.0.3 has no update checker or telemetry uploader. Tunnel traffic
 and DNS lookups can happen in the background while connected; WARP API calls
 happen only when you request WARP actions. Local diagnostics are not uploaded.
 Optional public-IP, HTTPS latency and manual quick-speed measurements are off
@@ -50,10 +50,10 @@ warning; the bundled WireGuardNT driver is independently signed by its vendor.
 
 ## Startup compatibility
 
-v1.0.2 removes the Rust executables' VC++ redistributable dependency by linking
+The Rust executables avoid a VC++ redistributable dependency by linking
 the C runtime statically and checking packaged PE imports. It is a native app,
 not a .NET app. Windows system libraries are still required; no bare-image compatibility claim
-is made. The next v1.0.3 candidate defaults to CPU software rendering (Windows GDI),
+is made. Released v1.0.3 defaults to CPU software rendering (Windows GDI),
 with GPU rendering available through `--accelerated-graphics`. Windows 10/11 x64
 is required. No separate VC++/.NET/WebView2 installation or first-run driver
 download is required. The bundled WireGuardNT DLL installs its signed kernel
@@ -64,7 +64,8 @@ those shell dependencies is a separate follow-up, not part of v1.0.3.
 The CPU path passed launch, accessible tab input, close-to-tray, no-tray fallback,
 same-window restore and quit on a Windows Server 2025 hosted runner with Hyper-V
 Video. That runner has runtimes installed and is not a clean Windows 10/11 image.
-The reported consumer PC crash remains unverified.
+The reported consumer PC crash remains unverified. Stable v1.0.3 evidence:
+https://github.com/vio137/wax-vpn/actions/runs/43083908145
 
 If startup fails, check `%APPDATA%\wax-vpn\startup.log`. Fixed startup markers
 are local and bounded; no profile/account/settings values are written. A Rust
@@ -72,7 +73,7 @@ panic or returned graphics setup error shows a dialog. Native driver faults
 can bypass it. The Start-menu Safe graphics shortcut uses OpenGL instead of
 wgpu, but also needs a compatible driver. Quit any existing instance first.
 The reported v1.0.0 crash has not been reproduced on the user's other PC, so
-v1.0.2 is a dependency/diagnostic mitigation rather than a confirmed fix there.
+v1.0.3 is a compatibility mitigation rather than a confirmed fix there.
 
 ## Screenshots
 
