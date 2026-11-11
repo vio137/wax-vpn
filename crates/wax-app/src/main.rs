@@ -745,6 +745,10 @@ fn fmt_duration(d: Duration) -> String {
     }
 }
 
+fn split_profile_label(name: &str) -> String {
+    format!("Editing profile: {name}")
+}
+
 // Count only the loaded in-memory list, never all files on disk. A failed
 // reload keeps that list visible, so label it as previous rather than current.
 fn loaded_profiles_label(count: usize, readable: bool) -> String {
@@ -774,6 +778,14 @@ mod repaint_tests {
         assert_eq!(profile_notice(0), None);
         assert_eq!(profile_notice(2).as_deref(), Some("2 profile file(s) could not be read or parsed and were skipped. Files were not changed."));
     }
+    #[test]
+    fn split_profile_context_preserves_the_profile_name() {
+        assert_eq!(split_profile_label("Home"), "Editing profile: Home");
+        assert_eq!(split_profile_label("Office - 東京"), "Editing profile: Office - 東京");
+        let name = "long profile name ".repeat(20);
+        assert_eq!(split_profile_label(&name), format!("Editing profile: {name}"));
+    }
+
     #[test]
     fn loaded_profile_count_distinguishes_current_and_retained_lists() {
         assert_eq!(loaded_profiles_label(0,true),"0 profiles loaded");
@@ -1463,6 +1475,11 @@ impl WaxApp {
                 }
                 ui.add_space(10.0);
                 theme::section_heading(ui, "Split tunneling", "CIDRs excluded from the tunnel for the selected profile. Applies on next connect.");
+                if let Some(profile) = self.profiles.get(sel) {
+                    ui.add(egui::Label::new(RichText::new(split_profile_label(&profile.name))
+                        .size(11.5).color(theme::SUB)).wrap());
+                    ui.add_space(4.0);
+                }
                 let input_id = ui.make_persistent_id("split-exclusions-input");
                 let focused = ui.memory(|m| m.has_focus(input_id));
                 let invalid = wax_core::split::parse_exclusions(&self.split_edit).is_err();
