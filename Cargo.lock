@@ -4684,7 +4684,7 @@ dependencies = [
 
 [[package]]
 name = "wax-app"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "eframe",
  "egui",
@@ -4705,7 +4705,7 @@ dependencies = [
 
 [[package]]
 name = "wax-cli"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "clap",
  "serde_json",
@@ -4718,7 +4718,7 @@ dependencies = [
 
 [[package]]
 name = "wax-core"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "base64",
  "dirs",
@@ -4732,7 +4732,7 @@ dependencies = [
 
 [[package]]
 name = "wax-diagnostics"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "serde_json",
  "wax-tunnel",
@@ -4740,7 +4740,7 @@ dependencies = [
 
 [[package]]
 name = "wax-tunnel"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "ipnet",
  "log",
@@ -4752,7 +4752,7 @@ dependencies = [
 
 [[package]]
 name = "wax-warp"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "ipnet",
  "reqwest",
