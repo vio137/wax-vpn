@@ -71,6 +71,7 @@ enum AppEvent {
 
 pub struct WaxApp {
     diagnostics_report: Option<String>,
+    diagnostics_generated_at: Option<Instant>,
     diagnostics_busy: bool,
     autostart_notice: Option<String>,
     settings_notice: Option<&'static str>,
@@ -168,6 +169,7 @@ impl WaxApp {
         let warp_registered = matches!(wax_warp::load_account(), Ok(Some(_)));
         let mut app = Self {
             diagnostics_report: None,
+            diagnostics_generated_at: None,
             diagnostics_busy: false,
             autostart_notice: None,
             settings_notice,
@@ -575,6 +577,7 @@ impl WaxApp {
                 }
                 AppEvent::DiagnosticsReady(report) => {
                     self.diagnostics_report = Some(report);
+                    self.diagnostics_generated_at = Some(Instant::now());
                     self.diagnostics_busy = false;
                 }
                 AppEvent::Stats(generation, s) => {
@@ -1751,12 +1754,20 @@ impl WaxApp {
                 }
                 if let Some(report) = &self.diagnostics_report {
                     if ui.button("Copy report").clicked() { ui.ctx().copy_text(report.clone()); }
-                    if ui.button("Clear").clicked() { self.diagnostics_report = None; }
+                    if ui.button("Clear").clicked() {
+                        self.diagnostics_report = None;
+                        self.diagnostics_generated_at = None;
+                    }
                 }
             });
             if let Some(report) = &self.diagnostics_report {
                 ui.add_space(8.0);
-                ui.label(RichText::new("Snapshot, not a live monitor. Review before sharing. Internet reachability is not tested.").size(10.5).color(theme::MUTE));
+                if let Some(generated) = self.diagnostics_generated_at {
+                    ui.add(egui::Label::new(RichText::new(format!(
+                        "Report age: {}. Generate a new report to refresh.", fmt_duration(generated.elapsed())
+                    )).size(11.5).color(theme::SUB)).wrap());
+                }
+                ui.add(egui::Label::new(RichText::new("Snapshot, not a live monitor. Review before sharing. Internet reachability is not tested.").size(10.5).color(theme::MUTE)).wrap());
                 egui::ScrollArea::vertical().id_salt("diagnostics-report").max_height(200.0).show(ui, |ui| {
                     let mut text = report.as_str();
                     ui.add(egui::TextEdit::multiline(&mut text).font(egui::TextStyle::Monospace).desired_width(f32::INFINITY));
