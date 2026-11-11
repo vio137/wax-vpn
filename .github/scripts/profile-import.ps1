@@ -130,7 +130,11 @@ Endpoint = 127.0.0.1:51820
  $about=ImportProofFind $window 'About'
  $about.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
  Start-Sleep -Milliseconds 350
- if (-not (ImportProofFind $window 'Keyboard shortcuts')) { throw 'Keyboard reference missing' }
+ $shortcuts=ImportProofFind $window 'Keyboard shortcuts'
+ if (-not $shortcuts) { throw 'Keyboard reference missing' }
+ $shortcuts.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+ Start-Sleep -Milliseconds 350
+ if (-not (ImportProofFind $window 'Find a profile')) { throw 'Keyboard reference did not expand' }
  ImportProofCapture $window 'profile-import-keyboard-reference.png'
  'PASS quick picker accessible open and select, persisted selection without connection, About keyboard reference' | Out-File verify-results.txt -Append -Encoding utf8
 
