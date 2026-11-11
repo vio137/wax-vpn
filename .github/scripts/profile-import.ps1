@@ -36,16 +36,17 @@ function ImportProofOpen($window,$pidValue) {
  $button=ImportProofFind $window 'Choose .conf file'
  if (-not $button) { throw 'Choose .conf file control missing' }
  $r=$button.Current.BoundingRectangle
- Write-Host "Picker button bounds=$r offscreen=$($button.Current.IsOffscreen)"
+ Write-Host "Picker button bounds=$r offscreen=$($button.Current.IsOffscreen) enabled=$($button.Current.IsEnabled) window=$($window.Current.BoundingRectangle)"
  ImportProofCapture $window 'profile-import-before-picker.png'
- [ImportProofNative]::SetCursorPos([int]($r.X+$r.Width/2),[int]($r.Y+$r.Height/2)) | Out-Null
- [ImportProofNative]::mouse_event(2,0,0,0,[UIntPtr]::Zero)
- Start-Sleep -Milliseconds 100
- [ImportProofNative]::mouse_event(4,0,0,0,[UIntPtr]::Zero)
+ # The chooser now starts asynchronously, so Invoke cannot block this test
+ # behind its modal loop. Use the actual accessible action, not cursor state
+ # left behind by native modal cancellation.
+ $button.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
  for ($i=0;$i -lt 40;$i++) { Start-Sleep -Milliseconds 125; $d=ImportProofDialog $pidValue;if ($d) { return $d } }
  ImportProofCapture $window 'profile-import-open-failed.png'
  $nodes=$window.FindAll([System.Windows.Automation.TreeScope]::Descendants,[System.Windows.Automation.Condition]::TrueCondition)
  $nodes | ForEach-Object { "$($_.Current.ControlType.ProgrammaticName) $($_.Current.Name) offscreen=$($_.Current.IsOffscreen) bounds=$($_.Current.BoundingRectangle)" } | Out-File profile-import-uia.txt
+ Get-Content profile-import-uia.txt | Write-Host
  throw 'Native file picker did not appear'
 }
 $exe=Join-Path $PWD 'bin/wax-vpn.exe'
