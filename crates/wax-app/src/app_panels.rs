@@ -24,14 +24,14 @@ impl WaxApp {
         std::process::exit(0);
     }
 
-    fn tab_connect(&mut self, ui: &mut egui::Ui) {
-        let rect = ui.max_rect();
+    fn tab_connect(&mut self, outer_ui: &mut egui::Ui) {
+        let rect = outer_ui.max_rect();
         let col_w = 480.0_f32.min(rect.width());
         let col = egui::Rect::from_min_size(
             egui::pos2(rect.center().x - col_w / 2.0, rect.top() + 12.0),
             egui::vec2(col_w, rect.height() - 12.0),
         );
-        let mut content = ui.new_child(egui::UiBuilder::new().max_rect(col).layout(Layout::top_down(Align::Min)));
+        let mut content = outer_ui.new_child(egui::UiBuilder::new().max_rect(col).layout(Layout::top_down(Align::Min)));
         let ui = &mut content;
         let (word, color, detail) = match &self.state {
             ConnState::Disconnected => ("Disconnected", theme::SUB, "Connect through your selected WireGuard profile."),
@@ -96,7 +96,9 @@ impl WaxApp {
             theme::card_frame().show(ui, |ui| {
                 ui.set_max_width(300.0);
                 ui.set_min_width(280.0);
-                for i in 0..self.profiles.len() {
+                let mut order: Vec<_> = (0..self.profiles.len()).collect();
+                order.sort_by_key(|&i| self.settings.profile_rank(&self.profiles[i].name));
+                for i in order {
                     let (name, ep) = {
                         let p = &self.profiles[i];
                         (
@@ -221,6 +223,24 @@ impl WaxApp {
             }
         } else { "Traffic can use the normal connection when the tunnel is off.".into() };
         ui.add(egui::Label::new(RichText::new(evidence).size(12.0).color(theme::SUB)).wrap());
+        ui.add_space(10.0);
+        egui::CollapsingHeader::new("Connection details").id_salt("connection-details").show(ui, |ui| {
+            let owned = self.active_profile.as_ref();
+            let configured = self.selected.and_then(|i| self.profiles.get(i));
+            if let Some(p) = if connected { owned } else { configured } {
+                ui.label(RichText::new(if connected { "Active session configuration" } else { "Selected profile configuration" }).size(11.0).color(theme::SUB));
+                let addresses = p.config.interface.addresses.iter().map(ToString::to_string).collect::<Vec<_>>().join(", ");
+                let dns = p.config.interface.dns.iter().map(ToString::to_string).collect::<Vec<_>>().join(", ");
+                ui.label(format!("Addresses: {addresses}"));
+                ui.label(format!("DNS: {}", if dns.is_empty() { "Not set in profile" } else { &dns }));
+                let routes = p.config.peers.iter().map(|p| p.allowed_ips.len()).sum::<usize>();
+                ui.label(format!("Peer route entries: {routes}"));
+                ui.label(RichText::new("Configuration is not a live routing or DNS test. No private keys are shown.").size(10.5).color(theme::MUTE));
+            } else {
+                ui.label("Active configuration is not known to this app instance.");
+            }
+            ui.label(RichText::new(if connected { "Session counters cover this observed connection, not device-wide traffic." } else { "Connect to start live session counters." }).size(10.5).color(theme::MUTE));
+        });
             if let Some(issue) = &self.cleanup_issue {
                 ui.horizontal(|ui| {
                     ui.label(RichText::new(issue).size(10.5).color(theme::WARN));
@@ -244,12 +264,15 @@ impl WaxApp {
                 });
             }
 
+        outer_ui.advance_cursor_after_rect(content.min_rect());
     }
 
     fn tab_profiles(&mut self, ui: &mut egui::Ui) {
         theme::section_heading(ui, "Profiles", "Drop a .conf file to add a profile. Existing profiles are kept; duplicate names get a number.");
         let mut connect_idx: Option<usize> = None;
         let mut delete_idx: Option<usize> = None;
+        let mut pin_name: Option<String> = None;
+        let mut selection_changed = false;
         let can_manage = matches!(self.state, ConnState::Disconnected | ConnState::Failed(_));
         ui.horizontal_wrapped(|ui| {
             if ui.add_enabled(can_manage, egui::Button::new("Reload profiles")).clicked() {
@@ -259,13 +282,25 @@ impl WaxApp {
                 .size(11.5).color(theme::MUTE));
         });
         ui.add_space(8.0);
+        ui.horizontal(|ui| {
+            ui.add(egui::TextEdit::singleline(&mut self.profile_search).hint_text("Find a profile or endpoint").desired_width(260.0));
+            if !self.profile_search.is_empty() && ui.small_button("Clear").clicked() { self.profile_search.clear(); }
+        });
+        ui.add_space(8.0);
         let can_manage = can_manage && self.profiles_readable;
         if !matches!(self.state, ConnState::Disconnected | ConnState::Failed(_)) {
             ui.label(RichText::new("Disconnect before switching or deleting profiles").size(11.0).color(theme::MUTE));
             ui.add_space(8.0);
         }
         egui::ScrollArea::vertical().max_height(250.0).show(ui, |ui| {
-            for (i, p) in self.profiles.iter().enumerate() {
+            let query = self.profile_search.trim().to_lowercase();
+            let mut order: Vec<_> = (0..self.profiles.len()).collect();
+            order.sort_by_key(|&i| self.settings.profile_rank(&self.profiles[i].name));
+            let mut shown = 0;
+            for i in order {
+                let p = &self.profiles[i];
+                if !query.is_empty() && !p.name.to_lowercase().contains(&query) && !p.config.peers.iter().any(|p| p.endpoint.as_deref().unwrap_or("").to_lowercase().contains(&query)) { continue; }
+                shown += 1;
                 let selected = self.selected == Some(i);
                 let ep = p
                     .config
@@ -314,7 +349,7 @@ impl WaxApp {
                         .layout(Layout::left_to_right(Align::Center)),
                 );
                 // Reserve action space before laying out potentially long text.
-                let text_width = (row_ui.available_width() - 280.0).max(80.0);
+                let text_width = (row_ui.available_width() - 340.0).max(80.0);
                 row_ui.allocate_ui_with_layout(
                     egui::vec2(text_width, 48.0),
                     Layout::top_down(Align::Min),
@@ -325,16 +360,19 @@ impl WaxApp {
                                 .color(if selected { theme::TEXT } else { theme::SUB })
                                 .strong(),
                         ).truncate()).on_hover_text(&p.name);
-                        let detail = format!("{ep}  ·  {addr}");
+                        let tag = if self.settings.pinned_profiles.contains(&p.name) { "Pinned · " } else if self.settings.recent_profiles.contains(&p.name) { "Recent · " } else { "" };
+                        let detail = format!("{tag}{ep}  ·  {addr}");
                         ui.add(egui::Label::new(
                             RichText::new(&detail)
                                 .size(10.5)
                                 .color(theme::MUTE)
                                 .monospace(),
-                        ).truncate()).on_hover_text(detail);
+                        ).truncate()).on_hover_text(format!("{detail}\nRecent: the app started a tunnel with this profile. Internet access was not verified."));
                     },
                 );
                 row_ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    let pinned = self.settings.pinned_profiles.contains(&p.name);
+                    if ui.small_button(if pinned { "Unpin" } else { "Pin" }).on_hover_text("Keep this profile at the top. Saved only on this device.").clicked() { pin_name = Some(p.name.clone()); }
                     let now = ui.input(|inp| inp.time);
                     let armed = matches!(self.confirm_delete, Some((idx, t0)) if idx == i && now - t0 < 3.0);
                     if ui.add_enabled_ui(can_manage, |ui| {
@@ -372,9 +410,13 @@ impl WaxApp {
                         self.selected = Some(i);
                         self.split_edit_for = None;
                         self.confirm_delete = None;
+                        selection_changed = true;
                     }
                 });
                 theme::hairline(ui);
+            }
+            if shown == 0 && !self.profiles.is_empty() {
+                ui.label(RichText::new("No matching profiles").color(theme::SUB));
             }
             if self.profiles.is_empty() && self.profiles_readable {
                 theme::card_frame().show(ui, |ui| {
@@ -387,12 +429,22 @@ impl WaxApp {
                 });
             }
         });
+        if let Some(name) = pin_name {
+            if !self.settings.pinned_profiles.remove(&name) { self.settings.pinned_profiles.insert(name); }
+            self.save_settings();
+        }
+        if selection_changed {
+            self.settings.last_profile = self.selected.and_then(|i| self.profiles.get(i)).map(|p| p.name.clone());
+            self.save_settings();
+        }
         if let Some(i) = delete_idx {
             if let Some(p) = self.profiles.get(i) {
                 let name = p.name.clone();
                 match profile::delete_profile(&name) {
                     Ok(()) => {
                         self.settings.split_exclusions.remove(&name);
+                        self.settings.pinned_profiles.remove(&name);
+                        self.settings.recent_profiles.retain(|n| n != &name);
                         if self.settings.last_profile.as_deref() == Some(name.as_str()) {
                             self.settings.last_profile = None;
                         }
