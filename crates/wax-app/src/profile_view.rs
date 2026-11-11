@@ -4,6 +4,7 @@ use crate::{settings::Settings, Profile};
 pub struct ProfileView {
     rows: Vec<(usize, Vec<String>)>,
     query: String,
+    raw_query: String,
     filtered: Vec<usize>,
     valid: bool,
 }
@@ -12,7 +13,12 @@ impl ProfileView {
         self.valid = false;
     }
     pub fn indices(&mut self, profiles: &[Profile], settings: &Settings, query: &str) -> &[usize] {
-        let query = query.trim().to_lowercase();
+        let query_changed = self.raw_query != query;
+        if query_changed {
+            self.raw_query.clear();
+            self.raw_query.push_str(query);
+            self.query = query.trim().to_lowercase();
+        }
         let rebuild = !self.valid;
         if rebuild {
             self.rows = profiles
@@ -34,16 +40,15 @@ impl ProfileView {
                 .sort_by_key(|(i, _)| settings.profile_rank(&profiles[*i].name));
             self.valid = true;
         }
-        if rebuild || self.query != query {
+        if rebuild || query_changed {
             self.filtered = self
                 .rows
                 .iter()
                 .filter(|(_, text)| {
-                    query.is_empty() || text.iter().any(|term| term.contains(&query))
+                    self.query.is_empty() || text.iter().any(|term| term.contains(&self.query))
                 })
                 .map(|(i, _)| *i)
                 .collect();
-            self.query = query;
         }
         &self.filtered
     }
@@ -72,6 +77,72 @@ mod tests {
             name: name.into(),
             config,
         }
+    }
+    #[test]
+    fn cached_filter_matches_direct_search_across_query_changes() {
+        let mut profiles = vec![
+            profile("München Büro", "primary.invalid:123"),
+            profile("Travel", "travel.invalid:456"),
+        ];
+        let mut second = profiles[0].config.peers[0].clone();
+        second.endpoint = Some("backup.invalid:789".into());
+        profiles[0].config.peers.push(second);
+        let settings = Settings::default();
+        let mut view = ProfileView::default();
+        for query in [
+            "",
+            "MÜNCHEN",
+            " BÜRO ",
+            "backup.invalid",
+            "primary.invalid",
+            "invalid:123 backup",
+            "travel",
+            "absent",
+            "",
+            "travel",
+        ] {
+            let normalized = query.trim().to_lowercase();
+            let expected: Vec<_> = profiles
+                .iter()
+                .enumerate()
+                .filter(|(_, p)| {
+                    normalized.is_empty()
+                        || p.name.to_lowercase().contains(&normalized)
+                        || p.config.peers.iter().any(|peer| {
+                            peer.endpoint
+                                .as_deref()
+                                .unwrap_or("")
+                                .to_lowercase()
+                                .contains(&normalized)
+                        })
+                })
+                .map(|(i, _)| i)
+                .collect();
+            assert_eq!(
+                view.indices(&profiles, &settings, query),
+                expected.as_slice()
+            );
+        }
+    }
+    #[test]
+    fn unchanged_query_reuses_terms_and_filtered_storage() {
+        let profiles = vec![profile("Office", "office.invalid:123")];
+        let settings = Settings::default();
+        let mut view = ProfileView::default();
+        assert_eq!(view.indices(&profiles, &settings, " OFFICE "), &[0]);
+        let query_ptr = view.query.as_ptr();
+        let terms_ptr = view.rows.as_ptr();
+        let filtered_ptr = view.filtered.as_ptr();
+        for _ in 0..20 {
+            assert_eq!(view.indices(&profiles, &settings, " OFFICE "), &[0]);
+            assert_eq!(view.query.as_ptr(), query_ptr);
+            assert_eq!(view.rows.as_ptr(), terms_ptr);
+            assert_eq!(view.filtered.as_ptr(), filtered_ptr);
+        }
+        assert_eq!(view.indices(&profiles, &settings, "office"), &[0]);
+        view.invalidate();
+        assert_eq!(view.indices(&profiles, &settings, "office"), &[0]);
+        assert_eq!(view.indices(&profiles, &settings, ""), &[0]);
     }
     #[test]
     fn cache_rebuilds_order_and_matches_names_and_endpoints() {
