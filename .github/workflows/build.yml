@@ -1042,12 +1042,27 @@ jobs:
                 $window = [System.Windows.Automation.AutomationElement]::RootElement.FindFirst([System.Windows.Automation.TreeScope]::Children,$condition)
                 if (-not $window -or $window.Current.IsOffscreen) { throw "Startup $mode window missing" }
                 $rail = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty,'Profiles')
-                if (-not $window.FindFirst([System.Windows.Automation.TreeScope]::Descendants,$rail)) { throw "Startup $mode rail missing" }
                 $r = $window.Current.BoundingRectangle
                 $image = New-Object Drawing.Bitmap([int]$r.Width,[int]$r.Height)
                 $g = [Drawing.Graphics]::FromImage($image)
                 $g.CopyFromScreen([int]$r.X,[int]$r.Y,0,0,$image.Size)
                 $image.Save((Join-Path $PWD "startup-$mode.png")); $g.Dispose(); $image.Dispose()
+                $hasRail = $window.FindFirst([System.Windows.Automation.TreeScope]::Descendants,$rail)
+                if (-not $hasRail) {
+                  $expectedError = Select-String -Path $log -SimpleMatch 'egui_glow requires opengl 2.0+' -Quiet
+                  if ($mode -ne 'safe' -or -not $expectedError -or $window.Current.Name -ne 'waX VPN startup problem') { throw "Startup $mode rail missing without expected graphics dialog" }
+                  $dialogText = $window.FindAll([System.Windows.Automation.TreeScope]::Descendants,[System.Windows.Automation.Condition]::TrueCondition)
+                  if (-not ($dialogText | Where-Object { $_.Current.Name -like 'The window or graphics system could not start.*No data was uploaded.' })) { throw 'Graphics error dialog text missing' }
+                  if (Get-NetAdapter -Name 'waX VPN' -ErrorAction SilentlyContinue) { throw 'Graphics failure created an adapter' }
+                  $okCondition = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty,'OK')
+                  $ok = $window.FindFirst([System.Windows.Automation.TreeScope]::Descendants,$okCondition)
+                  if (-not $ok) { throw 'Graphics error dialog OK button missing' }
+                  $ok.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+                  if (-not $process.WaitForExit(15000)) { throw 'Graphics error dialog dismiss did not exit' }
+                  'PASS Safe graphics unsupported-OpenGL error: visible dialog, bounded local log, no adapter, dismiss and exit' | Out-File verify-results.txt -Append -Encoding utf8
+                  'SKIP Safe graphics rendering: runner OpenGL below 2.0; rendering compatibility remains unverified' | Out-File verify-results.txt -Append -Encoding utf8
+                  continue
+                }
                 if (Get-NetAdapter -Name 'waX VPN' -ErrorAction SilentlyContinue) { throw 'Startup-only check created an adapter' }
                 if (-not (Select-String -Path $log -SimpleMatch 'ten UI frames entered' -Quiet)) { throw "Startup $mode did not reach ten UI frames" }
                 .\bin\wax-vpn.exe --quit
