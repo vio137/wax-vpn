@@ -287,7 +287,9 @@ impl WaxApp {
         ui.add_space(8.0);
         ui.horizontal(|ui| {
             let search_label = ui.label(RichText::new("Find profiles").size(12.0).color(theme::SUB));
-            ui.add(egui::TextEdit::singleline(&mut self.profile_search).hint_text("Profile or endpoint").desired_width(240.0)).labelled_by(search_label.id);
+            ui.add(egui::TextEdit::singleline(&mut self.profile_search)
+                .id(egui::Id::new("profile-search")).hint_text("Profile or endpoint").desired_width(240.0))
+                .labelled_by(search_label.id).on_hover_text("Ctrl+F to find a profile.");
             if !self.profile_search.is_empty() && ui.small_button("Clear").clicked() { self.profile_search.clear(); }
         });
         ui.add_space(8.0);
@@ -297,13 +299,10 @@ impl WaxApp {
             ui.add_space(8.0);
         }
         egui::ScrollArea::vertical().max_height(250.0).show(ui, |ui| {
-            let query = self.profile_search.trim().to_lowercase();
-            let mut order: Vec<_> = (0..self.profiles.len()).collect();
-            order.sort_by_key(|&i| self.settings.profile_rank(&self.profiles[i].name));
+            let order = self.profile_view.indices(&self.profiles, &self.settings, &self.profile_search);
             let mut shown = 0;
-            for i in order {
+            for &i in order {
                 let p = &self.profiles[i];
-                if !query.is_empty() && !p.name.to_lowercase().contains(&query) && !p.config.peers.iter().any(|p| p.endpoint.as_deref().unwrap_or("").to_lowercase().contains(&query)) { continue; }
                 shown += 1;
                 let selected = self.selected == Some(i);
                 let ep = p

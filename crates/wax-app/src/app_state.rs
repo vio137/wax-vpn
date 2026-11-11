@@ -22,6 +22,7 @@ mod single {
 mod theme;
 mod tray;
 mod settings;
+mod profile_view;
 mod measurements;
 
 use std::sync::mpsc::{channel, Receiver};
@@ -81,6 +82,7 @@ pub struct WaxApp {
     settings_notice: Option<&'static str>,
     settings: Settings,
     profiles: Vec<Profile>,
+    profile_view: profile_view::ProfileView,
     profiles_notice: Option<String>,
     profiles_readable: bool,
     selected: Option<usize>,
@@ -192,6 +194,7 @@ impl WaxApp {
             settings_notice,
             settings,
             profiles,
+            profile_view: profile_view::ProfileView::default(),
             profiles_notice,
             profiles_readable,
             selected,
@@ -258,6 +261,7 @@ impl WaxApp {
         match profile::load_profiles_report() {
             Ok(report) => {
                 self.profiles = report.profiles;
+                self.profile_view.invalidate();
                 self.profiles_notice = profile_notice(report.skipped);
                 self.profiles_readable = true;
             }
@@ -465,6 +469,7 @@ impl WaxApp {
     }
 
     fn save_settings(&mut self) {
+        self.profile_view.invalidate();
         self.settings_notice = if settings::save_checked(&self.settings).is_err() {
             Some("Settings could not be saved. Current choices may not be restored next time you open waX.")
         } else { None };

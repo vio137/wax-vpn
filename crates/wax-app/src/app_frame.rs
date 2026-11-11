@@ -56,7 +56,13 @@ impl WaxApp {
             }
         }
 
-        // Keyboard shortcuts, only when no text field owns the keyboard.
+        // Find is safe while editing: it changes the view, never a tunnel.
+        if ctx.input_mut(|i| i.consume_key(egui::Modifiers::CTRL, egui::Key::F)) {
+            self.tab = Tab::Profiles;
+            ctx.memory_mut(|m| m.request_focus(egui::Id::new("profile-search")));
+        }
+
+        // Connection shortcuts only when no text field owns the keyboard.
         if ctx.memory(|m| m.focused().is_none()) {
             let (space, esc, q, digits) = ctx.input(|i| {
                 (
