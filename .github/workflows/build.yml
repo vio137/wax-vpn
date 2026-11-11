@@ -1254,6 +1254,8 @@ jobs:
           path: |
             installer-results.txt
             installer-native-results.txt
+            installer-native-upgrade-quit.txt
+            installer-native-uninstall-quit.txt
             installed-gui.png
             installer-quit-diagnostics.txt
             installer-console-results.txt
