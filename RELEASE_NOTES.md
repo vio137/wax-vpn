@@ -1,14 +1,21 @@
-# waX VPN v1.0.1
+# waX VPN v1.0.2
 
-Unsigned Windows x64 safety patch. Windows may show an unknown-publisher warning. Website: https://waxvpn.pages.dev/.
+Unsigned Windows x64 startup compatibility and diagnostics update. Windows may show an unknown-publisher warning. Website: https://waxvpn.pages.dev/.
 
-## Changes since v1.0.0
+## Startup issue and mitigation
 
-- CLI WARP Register and Generate now reject an occupied reserved Cloudflare WARP profile path. No replacement option is included. Registration checks before creating a client or making a remote request; exclusive creation also protects against another process creating the profile after that check. On a profile-save failure after registration, the local account is retained and the error explains recovery with `wax warp generate` after keeping or moving the occupied profile. No automatic remote rollback is attempted.
-- Added exact-name, non-replacing profile creation for those CLI paths. Existing explicit save/update and additive-import behavior is unchanged. Unit fixtures check absent, occupied-file and occupied-directory paths and preserve the original bytes on a duplicate create.
-- CI verifies the unchanged official WireGuardNT1.1 archive SHA-256 before extraction or packaging, and fails closed on mismatch. A deliberate bad-archive fixture exercises rejection. Fresh download hash `dceb30a9bc4be48cce0f74160fc88a585a2c2627366e8f846fc6658f9038dace` was independently checked against [WireGuard's own pinned build recipe](https://github.com/WireGuard/wireguard-windows/blob/6ece77bc487c8aa697e3c092197621c4f3e5ccb8/build.bat). The update procedure is recorded beside the CI pin; no automatic digest updates or alternate source is used.
+A user reported that v1.0.0 opens a window and then closes. The cause on that machine has not yet been reproduced or identified. No claim is made that this build fixes that exact crash. v1.0.1 retained the same GUI startup path, but the user has not confirmed the issue on that version.
 
-Only the approved reserved-profile guard and driver archive pin are included. No UI, tunnel routing, DNS, MTU, status/recovery or measurement-request change. No live WARP calls were made. Existing profile/account update writes remain non-atomic; adapter-query uncertainty remains a separate held finding. [v1.0 review](https://github.com/vio137/wax-vpn/blob/main/docs/V1-REVIEW.md).
+- Added bounded local `%APPDATA%\wax-vpn\startup.log` markers for graphics/app creation, settings/profile loading, tray setup, first/ten UI frames, explicit quit sources and normal event-loop return. The file is capped by replacement after64KiB; it contains no profile/account/settings values. Nothing is uploaded.
+- Rust panic handling records the source location, not the panic payload, and shows a visible Windows error dialog. Returned window/graphics setup errors are logged and shown rather than disappearing silently. Native driver faults may bypass the Rust hook and still require Windows fault-module evidence.
+- A Start-menu Safe graphics shortcut (or `"waX VPN.exe" --safe-graphics`) uses OpenGL as an alternative to the normal wgpu path. This is an explicit compatibility path, not a software-rendering guarantee or automatic crash recovery. Normal renderer and tunnel behavior are unchanged. If a normal instance remains running, quit it before using Safe graphics.
+- Added runner startup checks for15s survival, visible rail, ten UI frames, no tunnel adapter and graceful quit in both normal and Safe graphics modes. Logs, screenshots, runner graphics details and matching Windows application events are retained as evidence. Runner success does not prove compatibility with every consumer GPU or non-elevated setup.
+
+## Included v1.0.1 safety changes
+
+CLI WARP Register/Generate reject occupied reserved profile paths before remote registration, and use exclusive exact-name creation to prevent replacement races. No replace option or live WARP calls. Failed profile creation retains the local registration for recovery. CI pins the unchanged official WireGuardNT1.1 archive SHA-256 before extraction, with a deliberate mismatch test. Digest `dceb30a9bc4be48cce0f74160fc88a585a2c2627366e8f846fc6658f9038dace` independently matches [the vendor build recipe](https://github.com/WireGuard/wireguard-windows/blob/6ece77bc487c8aa697e3c092197621c4f3e5ccb8/build.bat).
+
+No production tunnel routing, DNS, MTU, status/recovery or measurement-request changes. Profile/account crash-atomic writes and adapter-query uncertainty remain held follow-ups.
 
 ## Network observation and privacy limits
 
@@ -20,10 +27,6 @@ No kill switch is included. Traffic can use the normal connection after the tunn
 
 ## Validation
 
-Exact [release gate43045171268](https://github.com/vio137/wax-vpn/actions/runs/43045171268) passed build, demo/GUI, fresh-runner installer and publication at source `1b852e7a40062957f4cf8330f62036fe18e3d0a2`. Raw Windows tests: 104 passed, one manual external-service test ignored. Both new occupied-path/exclusive-creation tests passed; no Rust warning/error lines in test or release-build logs. Raw driver-download log confirmed deliberate mismatch rejection and official archive pin acceptance before extraction.
-
-Fresh public installer: 11,063,569 bytes, SHA-256 `3c019949d6807cafac778f4524a76364cec4fb5fbcdf139353a486c9f69e3ec3`, matching SHA256SUMS and the release API asset digest.
-
-Raw runtime passed CLI demo peer handshake/ping, configured MTU and DNS restoration, GUI connect/local Network graph, scoped67split routes, adapter-loss recovery in5s, observed pending retry then disable (48 adapter-absence samples over12s), explicit manual reconnect while disabled, original main HWND/PID visible rail restore, close-to-tray, graceful quit and profile/settings/BOM checks. Crash leg recorded adapter gone/DNS absent at3s before explicit cleanup. IPv6 protection test was skipped for lack of a proven baseline and no kill switch, not passed. No visible native console observed in414GUI samples about100ms or158/395/324 fresh-install/upgrade/uninstall samples requested10ms; sampling limits below apply. Exact Windows Network and installed GUI pixels inspected. The installed bottom edge remains taskbar-covered, not full-window visual proof. Local focused tests passed: 41 core tests and one CLI guard test. The Windows-only Ctrl+C callback test runs in the exact Windows gate. No WARP registration, deletion or other live WARP API call was used for this change.
+Exact v1.0.2 Windows gate is pending. Local app tests:38 passed, one manual external-service test ignored. Local compilation with both renderer features passed. Exact1.0.1 previously passed104 Windows tests and extended runtime/installer checks; those are not proof of the1.0.2 startup paths.
 
 Remaining limits: real Windows pre/post-connection public-IP observation through a production Internet tunnel; external-observer IPv6/DNS leak testing; consumer SmartScreen/interactive installer behavior; physical-network roaming; tray-menu Open/Quit in a real notification area; real active-tunnel Ctrl+C handling. Crash evidence is a three-second snapshot followed by explicit cleanup, not continuous or general crash-cleanup proof. Console sampling can miss shorter flashes and other console-host classes. Lower Network and expanded measurement settings were inspected in local native pixels, not exact Windows captures. Service availability and compatible custom endpoints are not guaranteed. The app and installer remain unsigned; the bundled vendor driver is separately signed.
