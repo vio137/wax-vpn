@@ -25,17 +25,24 @@ function ImportProofCapture($window,$path) {
 function ImportProofDialog($pidValue) {
  $root=[System.Windows.Automation.AutomationElement]::RootElement
  $c=New-Object System.Windows.Automation.AndCondition((New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ProcessIdProperty,$pidValue)),(New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty,'Import a WireGuard profile')))
- $root.FindFirst([System.Windows.Automation.TreeScope]::Children,$c)
+ $root.FindFirst([System.Windows.Automation.TreeScope]::Descendants,$c)
 }
 function ImportProofOpen($window,$pidValue) {
  $button=ImportProofFind $window 'Choose .conf file'
  if (-not $button) { throw 'Choose .conf file control missing' }
  [ImportProofNative]::SetForegroundWindow([IntPtr]$window.Current.NativeWindowHandle) | Out-Null
+ Start-Sleep -Milliseconds 300
  $r=$button.Current.BoundingRectangle
+ Write-Host "Picker button bounds=$r offscreen=$($button.Current.IsOffscreen)"
+ ImportProofCapture $window 'profile-import-before-picker.png'
  [ImportProofNative]::SetCursorPos([int]($r.X+$r.Width/2),[int]($r.Y+$r.Height/2)) | Out-Null
  [ImportProofNative]::mouse_event(2,0,0,0,[UIntPtr]::Zero)
+ Start-Sleep -Milliseconds 100
  [ImportProofNative]::mouse_event(4,0,0,0,[UIntPtr]::Zero)
  for ($i=0;$i -lt 40;$i++) { Start-Sleep -Milliseconds 125; $d=ImportProofDialog $pidValue;if ($d) { return $d } }
+ ImportProofCapture $window 'profile-import-open-failed.png'
+ $nodes=$window.FindAll([System.Windows.Automation.TreeScope]::Descendants,[System.Windows.Automation.Condition]::TrueCondition)
+ $nodes | ForEach-Object { "$($_.Current.ControlType.ProgrammaticName) $($_.Current.Name) offscreen=$($_.Current.IsOffscreen) bounds=$($_.Current.BoundingRectangle)" } | Out-File profile-import-uia.txt
  throw 'Native file picker did not appear'
 }
 $exe=Join-Path $PWD 'bin/wax-vpn.exe'
