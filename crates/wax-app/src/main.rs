@@ -745,6 +745,14 @@ fn fmt_duration(d: Duration) -> String {
     }
 }
 
+// Count only the loaded in-memory list, never all files on disk. A failed
+// reload keeps that list visible, so label it as previous rather than current.
+fn loaded_profiles_label(count: usize, readable: bool) -> String {
+    let noun=if count==1 { "profile" } else { "profiles" };
+    if readable { format!("{count} {noun} loaded") }
+    else { format!("Previous list: {count} {noun}") }
+}
+
 /// Periodic polling only, not a frame-rate or CPU-use guarantee. Hidden mode
 /// still polls tray and cross-instance signals within a one-second interval.
 fn repaint_delay(hidden: bool, reduced_motion: bool, disconnected: bool) -> Duration {
@@ -765,6 +773,15 @@ mod repaint_tests {
     fn profile_notice_is_count_only_and_absent_for_complete_loads() {
         assert_eq!(profile_notice(0), None);
         assert_eq!(profile_notice(2).as_deref(), Some("2 profile file(s) could not be read or parsed and were skipped. Files were not changed."));
+    }
+    #[test]
+    fn loaded_profile_count_distinguishes_current_and_retained_lists() {
+        assert_eq!(loaded_profiles_label(0,true),"0 profiles loaded");
+        assert_eq!(loaded_profiles_label(1,true),"1 profile loaded");
+        assert_eq!(loaded_profiles_label(12,true),"12 profiles loaded");
+        assert_eq!(loaded_profiles_label(0,false),"Previous list: 0 profiles");
+        assert_eq!(loaded_profiles_label(1,false),"Previous list: 1 profile");
+        assert_eq!(loaded_profiles_label(12,false),"Previous list: 12 profiles");
     }
     #[test]
     fn periodic_repaint_policy_keeps_active_ui_responsive_and_hidden_polling_bounded() {
@@ -1271,9 +1288,13 @@ impl WaxApp {
         let mut connect_idx: Option<usize> = None;
         let mut delete_idx: Option<usize> = None;
         let can_manage = matches!(self.state, ConnState::Disconnected | ConnState::Failed(_));
-        if ui.add_enabled(can_manage, egui::Button::new("Reload profiles")).clicked() {
-            self.reload_profiles();
-        }
+        ui.horizontal_wrapped(|ui| {
+            if ui.add_enabled(can_manage, egui::Button::new("Reload profiles")).clicked() {
+                self.reload_profiles();
+            }
+            ui.label(RichText::new(loaded_profiles_label(self.profiles.len(), self.profiles_readable))
+                .size(11.5).color(theme::MUTE));
+        });
         ui.add_space(8.0);
         let can_manage = can_manage && self.profiles_readable;
         if !matches!(self.state, ConnState::Disconnected | ConnState::Failed(_)) {
