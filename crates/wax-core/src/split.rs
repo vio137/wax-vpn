@@ -85,7 +85,7 @@ pub fn parse_exclusions(text: &str) -> Result<Vec<IpNet>, CoreError> {
         }
         let net: IpNet = part
             .parse()
-            .map_err(|_| CoreError::Parse(format!("invalid CIDR '{part}'")))?;
+            .map_err(|_| CoreError::Parse("invalid exclusion; expected an IPv4 or IPv6 CIDR prefix".into()))?;
         out.push(net);
     }
     Ok(out)
@@ -167,4 +167,26 @@ mod tests {
         assert!(parse_exclusions("not-a-cidr").is_err());
         assert!(parse_exclusions("").unwrap().is_empty());
     }
+
+    #[test]
+    fn exclusion_errors_use_fixed_guidance_without_echoing_tokens() {
+        let sentinel = "PRIVATE_EXCLUSION_SENTINEL_d9a1";
+        for text in [sentinel.to_string(), format!("10.0.0.0/8,{sentinel}"), format!("2001:db8::/32\n\t{sentinel}  "), format!("{sentinel}/999")] {
+            let err = parse_exclusions(&text).unwrap_err();
+            assert_eq!(err.to_string(), "config parse error: invalid exclusion; expected an IPv4 or IPv6 CIDR prefix");
+            assert!(!format!("{err:?}").contains(sentinel));
+        }
+        let expected = vec!["10.0.0.0/8".parse::<IpNet>().unwrap(), "2001:db8::/32".parse::<IpNet>().unwrap(), "192.168.0.0/16".parse::<IpNet>().unwrap()];
+        for separator in [",", " ", "\n", "\t", ", \n\t,"] {
+            let text = ["10.0.0.0/8", "2001:db8::/32", "192.168.0.0/16"].join(separator);
+            assert_eq!(parse_exclusions(&text).unwrap(), expected);
+        }
+        for empty in ["", ",", " , \n\t,, "] {
+            assert!(parse_exclusions(empty).unwrap().is_empty());
+        }
+        // Duplicate and non-network-aligned values keep their current order.
+        let duplicates = "10.1.2.3/8,10.1.2.3/8,2001:db8::1/32";
+        assert_eq!(parse_exclusions(duplicates).unwrap(), vec!["10.1.2.3/8".parse::<IpNet>().unwrap(), "10.1.2.3/8".parse::<IpNet>().unwrap(), "2001:db8::1/32".parse::<IpNet>().unwrap()]);
+    }
+
 }
