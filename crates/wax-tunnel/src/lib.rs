@@ -2,7 +2,13 @@
 //!
 //! On Windows this drives the official WireGuardNT kernel driver
 //! (wireguard.dll, loaded side-by-side) through the `wireguard-nt` crate.
-//! DNS is configured with netsh. Traffic is not blocked if the tunnel drops.
+//! DNS uses Windows APIs, with netsh only when the OS lacks the DNS API.
+//! Traffic is not blocked if the tunnel drops.
+
+#[cfg(windows)]
+mod native_dns;
+#[cfg(windows)]
+mod native_firewall;
 
 use std::time::SystemTime;
 
@@ -46,16 +52,18 @@ pub enum TunnelError {
 /// True when the current process holds administrator rights.
 #[cfg(windows)]
 pub fn is_elevated() -> bool {
-    use std::os::windows::process::CommandExt;
-    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-    std::process::Command::new("net")
-        .args(["session"])
-        .creation_flags(CREATE_NO_WINDOW)
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false)
+    use windows_sys::Win32::Security::{CheckTokenMembership, CreateWellKnownSid, WinBuiltinAdministratorsSid};
+    // A filtered UAC token is not an enabled Administrators member.
+    // Query the effective token, not the Server service used by `net session`.
+    let mut sid = [0u64; 9];
+    let mut bytes = std::mem::size_of_val(&sid) as u32;
+    let mut member = 0;
+    unsafe {
+        if CreateWellKnownSid(WinBuiltinAdministratorsSid, std::ptr::null_mut(), sid.as_mut_ptr().cast(), &mut bytes) == 0 {
+            return false;
+        }
+        CheckTokenMembership(0, sid.as_mut_ptr().cast(), &mut member) != 0 && member != 0
+    }
 }
 
 /// True when the current process holds administrator rights.
