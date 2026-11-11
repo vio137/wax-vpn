@@ -1,14 +1,13 @@
-# waX VPN v1.0.7
+# waX VPN v1.0.8
 
-Import a local WireGuard .conf file using the native Windows file picker.
-Cancelling leaves profiles alone. Repeated imports get separate names and
-keep the original profile and selected source file unchanged. Reads are bounded
-to 1 MiB; UTF-8 files with or without a BOM are supported. The picker works off
-the render thread and only one picker can be open at a time.
+The Connect-page profile picker has separate name and endpoint columns, shorter
+single-line text with full details on hover, keyboard focus borders and an
+accessible Switch profile action. Choosing a profile saves that choice without
+starting a connection. The existing pin and recent-use order is reused.
 
-The first-run Connect page now offers Import profile and opens Profiles.
-A connected externally owned session still offers Disconnect. Empty connection
-details explain where to add a profile. No tunnel or firewall behavior changed.
+About includes a collapsible keyboard shortcut reference. Profile search keeps
+its normalized query until the typed text changes. No measured performance
+gain is claimed. No tunnel, DNS or firewall behavior changed.
 
 ## Compatibility and limits
 
@@ -33,26 +32,12 @@ sampling can miss a shorter flash.
 
 ## Release verification
 
-Exact stable workflow: https://github.com/vio137/wax-vpn/actions/runs/43113539426
-Source: `4a42fbc67bfb7ac0486ac2146e553d8c202b01a8`.
+Preview build, runtime and fresh-installer gates passed:
+https://github.com/vio137/wax-vpn/actions/runs/43117231739
+Source: `d8881de92c5c9fcf4892bcf9ddf6d3f9667c0fac`.
 
-All four stable jobs passed. Actual Windows evidence passed first-run Import
-navigation, native picker cancellation, two chosen-file imports, duplicate
-preservation, unchanged source-file hash and no tunnel adapter. Installed,
-first-run and duplicate-result pixels were inspected.
-
-Existing GUI demo connection, tunnel-address ping, DNS apply/reset, IPv4 MTU,
-67 split routes, bounded recovery, pending-retry disable, manual reconnect,
-close-to-tray, original-window restore, graceful quit, settings and startup
-checks passed, subject to the limits above. Fresh install, upgrade, uninstall
-and all three exact-path native process-scope checks passed. PE dependency
-audits passed for all three binaries. Console sampling found no new visible
-native console; shorter flashes can still be missed.
-
-The published installer was downloaded and matched its checksum file:
-
-- File: `waX-VPN-Setup-v1.0.7-x64.exe`
-- Size: 11,692,119 bytes
-- SHA256: `7572d2085c0544a9e65362e89befbe80152ce9fa9f81452d58ec739d20d4c9c0`
-
-No speed improvement is claimed.
+Actual Windows evidence passed quick-picker selection and persistence without
+a connection, plus keyboard help expanded through its visible click action.
+Picker and expanded-help pixels were inspected. UIA ExpandCollapse support is
+not verified. Existing native-file import and runtime checks passed as well.
+Exact stable evidence and installer checksum will be recorded after its gate.
