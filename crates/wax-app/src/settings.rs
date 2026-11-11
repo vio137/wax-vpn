@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
+    pub network: crate::measurements::Config,
     pub autostart: bool,
     pub auto_reconnect: bool,
     pub reduced_motion: bool,
@@ -16,6 +17,7 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
+            network: crate::measurements::Config::default(),
             autostart: false,
             auto_reconnect: true,
             reduced_motion: false,
