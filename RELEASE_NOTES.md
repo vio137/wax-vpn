@@ -33,6 +33,24 @@ sampling can miss a shorter flash.
 
 ## Release verification
 
-Candidate only. Local 42 app tests passed, one existing test ignored. Build
-and workflow lint passed; keyboard search and empty-results pixels inspected.
-Windows runtime and exact stable installer gates are pending.
+Stable workflow: https://github.com/vio137/wax-vpn/actions/runs/43103697052
+Source: `32cad53a3b97cdc5794c2a01d1140c9a6be92eb3`.
+
+The exact stable gate passed Ctrl+F opening Profiles with accessible keyboard
+focus, pin/unpin persistence, name/endpoint search filtering and restoration,
+GUI demo connection, tunnel-address ping, DNS apply/reset, IPv4 MTU, 67 split
+routes, bounded recovery, pending-retry disable, manual reconnect, close-to-tray,
+original-window restore and graceful quit. Actual connected, Profiles and
+installed GUI pixels were inspected. The limits above still apply.
+
+Fresh install, upgrade, uninstall, PID-scoped graceful running-GUI stops and
+bounded exact-path native termination passed. Unrelated same-name processes
+survived. Packaged PE import audits passed for all three binaries. No new
+visible native console appeared in sampled installer/GUI checks; shorter
+flashes can still be missed.
+
+The published installer was downloaded and matched its checksum file:
+
+- File: `waX-VPN-Setup-v1.0.6-x64.exe`
+- Size: 11,677,072 bytes
+- SHA256: `4620478437781489446a2def474a608bb36c894456f8f313602d5fa04cb7bd5b`
