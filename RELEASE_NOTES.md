@@ -1,50 +1,43 @@
-# waX VPN v1.0.3
+# waX VPN v1.0.4
 
-CPU software rendering is the startup default. It presents through Windows GDI
-rather than initializing Direct3D, Vulkan or OpenGL. GPU rendering remains opt-in
-with `--accelerated-graphics` or the Accelerated graphics Start-menu shortcut.
-The previous OpenGL Safe graphics option remains available but still needs a
-compatible driver. Windows 10/11 x64 is required; the installer rejects older OSes.
+Tunnel setup now uses native Windows APIs for administrator detection, MTU,
+DNS settings and cleanup of old waX VPN KillSwitch rules. This removes the
+PowerShell/NetTCPIP/NetSecurity and net session dependencies. No kill switch
+is created. Normal traffic can resume when the tunnel drops.
 
-The installer includes WireGuardNT and its vendor-signed kernel driver. Rust
-executables use a static C runtime. No separate VC++ runtime, .NET installer,
-WebView2, external wgcf or first-run driver download is needed. The app still
-needs Windows system components, administrator consent for tunnel changes, a
-valid profile, network access and a policy that permits the signed driver.
-Current tunnel setup uses Windows PowerShell/netsh and an admin probe through
-`net session`; replacing those is a separate candidate. Windows PowerShell uses
-Windows-provided .NET Framework. This is not a claim of zero OS dependencies.
+DNS uses SetInterfaceDnsSettings when the OS provides it. netsh is retained
+only on older Windows builds without that native DNS API. That API-absent
+fallback has not been runtime-tested. Windows 10/11 x64 support is unchanged.
+Installer/uninstaller taskkill use remains in this release; its replacement
+is a separate later candidate. Windows system APIs, administrator consent,
+networking, a valid profile and permission to load the bundled signed driver
+are still required. This is not a zero-OS-dependency claim.
+
+CPU software rendering through GDI remains the default. GPU rendering stays
+opt-in with --accelerated-graphics; OpenGL Safe graphics still needs a
+compatible driver. The app is unsigned, so Windows can show a publisher warning.
 
 ## Evidence and limits
 
-Stable CPU-default release: 1.0.3, source
-d585ddef4e7b713572c241087656629274b3b406:
-https://github.com/vio137/wax-vpn/actions/runs/43083908145
+Pre-release gate, exact native source 4b0e77c116e02e218dbe3c93759b686f606b9f27:
+https://github.com/vio137/wax-vpn/actions/runs/43087900944
+The stable workflow reruns every required gate before publication.
 
-Published installer SHA-256:
-`e1d96b742f31eb1444414bf0b7d5683a6c6932b298e987a8c784edcfb599bf08`
-(11,622,942 bytes). The downloaded installer matches the published checksum.
+- Windows workspace tests passed. Isolated native API tests passed IPv4/IPv6
+  MTU readback, per-family DNS set/readback/reset/readback, and removal of a
+  disabled legacy rule while preserving an unrelated disabled rule.
+- Demo peer handshake and tunnel-address ping, DNS apply/reset, IPv4 MTU1380,
+  split routes, bounded reconnect, disabling pending recovery and manual
+  reconnect passed. No claim of general Internet reachability is made.
+- CPU launch/input/connect, close-to-tray, original HWND/PID restore, quit,
+  warning states, NSIS install/upgrade/uninstall and packaged native/static-CRT
+  direct/delay import audits passed.
 
-- Passed native static-CRT direct/delay import audits for GUI, CLI and driver.
-  No separate VC/managed runtime or external shader compiler imports found.
-  Optional GPU modes retain OS graphics DLL imports. Dynamic OS/driver loads
-  are not fully established by an import table.
-- Passed hosted-runner NSIS install, installed CPU UI launch, upgrade and
-  uninstall. User data is intentionally retained.
-- Passed demo peer handshake/peer ping, DNS application/reset, IPv4 MTU,
-  split routes, bounded recovery, disabling pending recovery and manual reconnect.
-- Passed UI-driven connect, close-to-tray, original HWND restore, graceful quit,
-  warning states, and 15-second/ten-frame CPU startup.
-- Separate focused CPU gate passed forced no-tray fallback and same-window restore:
-  https://github.com/vio137/wax-vpn/actions/runs/43080861499
-
-The host was Windows Server 2025 with Hyper-V Video and preinstalled runtimes,
-not a clean Windows 10/11 image. The crash on the reported consumer PC has not
-been reproduced or confirmed fixed. No flawless fresh-install claim is made.
-Peer ping does not prove Internet reachability. No IPv6 baseline or leak test was
-established. Real notification-area menu clicks remain manual-only. OpenGL Safe
-graphics rendering and dialog dismissal were skipped on the unsupported host.
-Console sampling can miss short-lived windows. No kill switch is present; normal
-traffic can resume when the tunnel drops. No live WARP signup was performed.
-
-The app remains unsigned, so Windows can show an unknown-publisher warning.
+The host was Windows Server2025 with Hyper-V Video and preinstalled runtimes,
+not a clean Windows10/11 image. The reported consumer-PC crash has not been
+reproduced or confirmed fixed. No flawless fresh-install claim is made.
+Isolated IPv6 DNS/MTU checks do not establish IPv6 tunnel traffic or leak
+behavior. No IPv6 baseline/leak test was established. Real tray-menu clicks
+remain manual-only. OpenGL rendering/dialog dismissal were skipped on the
+unsupported host. Console sampling can miss short-lived windows. No live
+WARP signup was performed.
