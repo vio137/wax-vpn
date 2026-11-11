@@ -1117,15 +1117,15 @@ impl WaxApp {
                     .config
                     .peers
                     .first()
-                    .and_then(|peer| peer.endpoint.clone())
-                    .unwrap_or_else(|| "no endpoint".to_string());
-                (p.name.clone(), ep)
+                    .and_then(|peer| peer.endpoint.as_deref())
+                    .unwrap_or("no endpoint");
+                (p.name.as_str(), ep)
             })
-            .unwrap_or_else(|| ("No profile selected".to_string(), "Import a WireGuard .conf profile".to_string()));
+            .unwrap_or(("No profile selected", "Import a WireGuard .conf profile"));
         let can_switch = matches!(self.state, ConnState::Disconnected | ConnState::Failed(_))
             && self.profiles.len() > 1;
         let name_resp = ui.add(
-            egui::Label::new(RichText::new(&pname).font(theme::semi(16.0)).color(theme::SUB)).truncate()
+            egui::Label::new(RichText::new(pname).font(theme::semi(16.0)).color(theme::SUB)).truncate()
                 .sense(if can_switch { egui::Sense::click() } else { egui::Sense::hover() }),
         );
         if name_resp.hovered() && can_switch {
@@ -1134,7 +1134,7 @@ impl WaxApp {
         if name_resp.clicked() && can_switch {
             self.picker_open = !self.picker_open;
         }
-        ui.add(egui::Label::new(RichText::new(&pendpoint).size(13.0).color(theme::SUB).monospace()).truncate()).on_hover_text(&pendpoint);
+        ui.add(egui::Label::new(RichText::new(pendpoint).size(13.0).color(theme::SUB).monospace()).truncate()).on_hover_text(pendpoint);
         let (hint_rect, _) = ui.allocate_exact_size(egui::vec2(col_w, 16.0), egui::Sense::hover());
         if can_switch {
             let mut hint_ui = ui.new_child(egui::UiBuilder::new().max_rect(hint_rect).layout(Layout::top_down(Align::Min)));
