@@ -10,6 +10,9 @@ pub struct Settings {
     pub auto_reconnect: bool,
     pub reduced_motion: bool,
     pub last_profile: Option<String>,
+    pub pinned_profiles: std::collections::BTreeSet<String>,
+    /// Recent successful adapter connections, newest first. Local only.
+    pub recent_profiles: Vec<String>,
     /// Per-profile split-tunnel exclusions (profile name -> raw CIDR list).
     pub split_exclusions: std::collections::BTreeMap<String, String>,
 }
@@ -22,8 +25,21 @@ impl Default for Settings {
             auto_reconnect: true,
             reduced_motion: false,
             last_profile: None,
+            pinned_profiles: std::collections::BTreeSet::new(),
+            recent_profiles: Vec::new(),
             split_exclusions: std::collections::BTreeMap::new(),
         }
+    }
+}
+
+impl Settings {
+    pub fn record_connection(&mut self, name: &str) {
+        self.recent_profiles.retain(|n| n != name);
+        self.recent_profiles.insert(0, name.to_owned());
+        self.recent_profiles.truncate(8);
+    }
+    pub fn profile_rank(&self, name: &str) -> (bool, usize) {
+        (!self.pinned_profiles.contains(name), self.recent_profiles.iter().position(|n| n == name).unwrap_or(usize::MAX))
     }
 }
 
@@ -91,6 +107,20 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("wax-settings-{}-{stamp}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         dir
+    }
+    #[test]
+    fn profile_history_is_unique_bounded_and_pins_sort_first() {
+        let mut s: Settings = serde_json::from_str(r#"{"last_profile":"old"}"#).unwrap();
+        assert!(s.pinned_profiles.is_empty()); assert!(s.recent_profiles.is_empty());
+        for i in 0..12 { s.record_connection(&format!("p{i}")); }
+        s.record_connection("p8");
+        assert_eq!(s.recent_profiles.len(), 8); assert_eq!(s.recent_profiles[0], "p8");
+        assert_eq!(s.recent_profiles.iter().filter(|n| *n == "p8").count(), 1);
+        s.pinned_profiles.insert("older".into());
+        assert!(s.profile_rank("older") < s.profile_rank("p8"));
+        let restored: Settings = serde_json::from_str(&serde_json::to_string(&s).unwrap()).unwrap();
+        assert_eq!(restored.recent_profiles, s.recent_profiles);
+        assert_eq!(restored.pinned_profiles, s.pinned_profiles);
     }
     #[test]
     fn settings_roundtrip_preserves_disabled_recovery_and_exclusions() {
