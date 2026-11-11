@@ -111,6 +111,29 @@ Endpoint = 127.0.0.1:51820
  if (Get-NetAdapter -Name 'waX VPN' -ErrorAction SilentlyContinue) { throw 'Local import proof created a tunnel adapter' }
  ImportProofCapture $window 'profile-import-result.png'
  'PASS first-run Import action, native picker cancel, chosen-file import, duplicate preservation, unchanged source and no adapter' | Out-File verify-results.txt -Append -Encoding utf8
+ $connect=ImportProofFind $window 'Connect'
+ $connect.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+ Start-Sleep -Milliseconds 350
+ $switch=ImportProofFind $window 'Switch profile'
+ if (-not $switch) { throw 'Accessible quick profile switch action missing' }
+ $switch.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+ Start-Sleep -Milliseconds 350
+ ImportProofCapture $window 'profile-import-quick-picker.png'
+ $choice=ImportProofFind $window 'Chosen profile'
+ if (-not $choice) { throw 'Quick picker original profile row missing' }
+ $choice.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+ Start-Sleep -Milliseconds 350
+ $saved=Get-Content (Join-Path $dir 'settings.json') -Raw | ConvertFrom-Json
+ if ($saved.last_profile -ne 'Chosen profile') { throw 'Quick picker selection was not saved' }
+ if (Get-NetAdapter -Name 'waX VPN' -ErrorAction SilentlyContinue) { throw 'Quick picker selection connected unexpectedly' }
+ ImportProofCapture $window 'profile-import-quick-selected.png'
+ $about=ImportProofFind $window 'About'
+ $about.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+ Start-Sleep -Milliseconds 350
+ if (-not (ImportProofFind $window 'Keyboard shortcuts')) { throw 'Keyboard reference missing' }
+ ImportProofCapture $window 'profile-import-keyboard-reference.png'
+ 'PASS quick picker accessible open and select, persisted selection without connection, About keyboard reference' | Out-File verify-results.txt -Append -Encoding utf8
+
 } finally {
  if ($p) {
   $dialog=ImportProofDialog $p.Id
