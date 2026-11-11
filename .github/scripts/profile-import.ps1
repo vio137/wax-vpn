@@ -121,7 +121,8 @@ Endpoint = 127.0.0.1:51820
  ImportProofCapture $window 'profile-import-quick-picker.png'
  $choice=ImportProofFind $window 'Chosen profile'
  if (-not $choice) { throw 'Quick picker original profile row missing' }
- $choice.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+ # egui selected buttons expose UIA TogglePattern to report their state.
+ $choice.GetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern).Toggle()
  Start-Sleep -Milliseconds 350
  $saved=Get-Content (Join-Path $dir 'settings.json') -Raw | ConvertFrom-Json
  if ($saved.last_profile -ne 'Chosen profile') { throw 'Quick picker selection was not saved' }
@@ -132,7 +133,7 @@ Endpoint = 127.0.0.1:51820
  Start-Sleep -Milliseconds 350
  $shortcuts=ImportProofFind $window 'Keyboard shortcuts'
  if (-not $shortcuts) { throw 'Keyboard reference missing' }
- $shortcuts.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+ $shortcuts.GetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern).Expand()
  Start-Sleep -Milliseconds 350
  if (-not (ImportProofFind $window 'Find a profile')) { throw 'Keyboard reference did not expand' }
  ImportProofCapture $window 'profile-import-keyboard-reference.png'
