@@ -1057,7 +1057,9 @@ jobs:
                   $okCondition = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty,'OK')
                   $ok = $window.FindFirst([System.Windows.Automation.TreeScope]::Descendants,$okCondition)
                   if (-not $ok) { throw 'Graphics error dialog OK button missing' }
-                  $ok.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+                  # Native MessageBox UIA can expose OK without InvokePattern on hosted runners.
+                  Add-Type 'using System; using System.Runtime.InteropServices; public static class StartupDialogNative { [DllImport("user32.dll", EntryPoint="SendMessageW")] public static extern IntPtr SendMessage(IntPtr h, uint m, IntPtr w, IntPtr l); }'
+                  [StartupDialogNative]::SendMessage([IntPtr]$window.Current.NativeWindowHandle,0x111,[IntPtr]1,[IntPtr]::Zero) | Out-Null
                   if (-not $process.WaitForExit(15000)) { throw 'Graphics error dialog dismiss did not exit' }
                   'PASS Safe graphics unsupported-OpenGL error: visible dialog, bounded local log, no adapter, dismiss and exit' | Out-File verify-results.txt -Append -Encoding utf8
                   'SKIP Safe graphics rendering: runner OpenGL below 2.0; rendering compatibility remains unverified' | Out-File verify-results.txt -Append -Encoding utf8
