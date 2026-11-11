@@ -1,0 +1,35 @@
+name: CPU compatibility gate
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/cpu-check.yml'
+      - '.github/scripts/cpu-smoke.ps1'
+permissions:
+  contents: read
+env:
+  CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS: '-C target-feature=+crt-static'
+jobs:
+  cpu:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test -p wax-app
+      - run: cargo build --release -p wax-app
+      - name: CPU launch, input, hidden restore/quit and tray fallback
+        shell: pwsh
+        run: ./.github/scripts/cpu-smoke.ps1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cpu-compatibility-evidence
+          path: |
+            cpu-*.png
+            cpu-*.log
+            cpu-results.txt
+            cpu-host.txt
