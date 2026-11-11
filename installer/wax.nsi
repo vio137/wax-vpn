@@ -80,6 +80,7 @@ Section "waX VPN" SecMain
     CreateShortcut "$SMPROGRAMS\waX VPN\waX VPN.lnk" "$INSTDIR\waX VPN.exe"
     CreateShortcut "$SMPROGRAMS\waX VPN\Uninstall waX VPN.lnk" "$INSTDIR\uninstall.exe"
     CreateShortcut "$DESKTOP\waX VPN.lnk" "$INSTDIR\waX VPN.exe"
+    CreateShortcut "$SMPROGRAMS\waX VPN\Safe graphics.lnk" "$INSTDIR\waX VPN.exe" "--safe-graphics"
 
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\waX VPN" "DisplayName" "waX VPN"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\waX VPN" "DisplayVersion" "${WAX_VERSION}"
@@ -117,6 +118,7 @@ Section "Uninstall"
 
     Delete "$SMPROGRAMS\waX VPN\waX VPN.lnk"
     Delete "$SMPROGRAMS\waX VPN\Uninstall waX VPN.lnk"
+    Delete "$SMPROGRAMS\waX VPN\Safe graphics.lnk"
     RMDir "$SMPROGRAMS\waX VPN"
     Delete "$DESKTOP\waX VPN.lnk"
 
