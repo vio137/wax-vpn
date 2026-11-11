@@ -203,7 +203,7 @@ impl WaxApp {
                 ui.scope(|ui| {
                     ui.set_opacity(fade);
                     if self.tab == Tab::Connect {
-                        self.tab_connect(ui);
+                        egui::ScrollArea::vertical().id_salt("connect-scroll").auto_shrink([false, false]).show(ui, |ui| self.tab_connect(ui));
                     } else {
                         egui::ScrollArea::vertical()
                             .id_salt(("tab-content", self.tab))
@@ -262,4 +262,4 @@ impl eframe::App for WaxApp {
 }
 impl egui_software_backend::App for WaxApp {
     fn ui(&mut self, ui: &mut egui::Ui, _backend: &mut egui_software_backend::SoftwareBackend) { self.draw_ui(ui); }
-          }
+}
