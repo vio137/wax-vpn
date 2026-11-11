@@ -32,12 +32,25 @@ sampling can miss a shorter flash.
 
 ## Release verification
 
-Preview build, runtime and fresh-installer gates passed:
-https://github.com/vio137/wax-vpn/actions/runs/43117231739
-Source: `d8881de92c5c9fcf4892bcf9ddf6d3f9667c0fac`.
+Exact stable workflow: https://github.com/vio137/wax-vpn/actions/runs/43118553949
+Source: `20c97691dd86147a79755fc6a77f6f04b0327fe1`.
 
-Actual Windows evidence passed quick-picker selection and persistence without
-a connection, plus keyboard help expanded through its visible click action.
-Picker and expanded-help pixels were inspected. UIA ExpandCollapse support is
-not verified. Existing native-file import and runtime checks passed as well.
-Exact stable evidence and installer checksum will be recorded after its gate.
+All four stable jobs passed. Actual Windows evidence passed accessible quick
+picker open/select, saved selection without a connection, and keyboard help
+expanded through a visible click. Stable picker, selected-profile, expanded-help
+and installed-app pixels were inspected. UIA ExpandCollapse support is not
+verified; the lower help rows need scrolling at the captured window size.
+
+Existing native file selection, cancellation, duplicate/source preservation,
+GUI demo connection, tunnel-address ping, DNS apply/reset, IPv4 MTU, 67 split
+routes, bounded recovery, retry disable, original-window restore and graceful
+quit checks passed. Fresh install, upgrade, uninstall, all three native process
+scope checks and all three PE dependency audits passed. Console sampling found
+no new visible native console; shorter flashes can still be missed. The limits
+above still apply.
+
+The published installer was downloaded and matched its checksum file:
+
+- File: `waX-VPN-Setup-v1.0.8-x64.exe`
+- Size: 11,693,719 bytes
+- SHA256: `3662379994c2f7f6872b29154e2f0355e6274e8c03708e894e0ad5a56fab4cb3`
