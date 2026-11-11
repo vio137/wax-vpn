@@ -1,4 +1,4 @@
-# waX VPN v1.0.3 candidate
+# waX VPN v1.0.3
 
 CPU software rendering is the startup default. It presents through Windows GDI
 rather than initializing Direct3D, Vulkan or OpenGL. GPU rendering remains opt-in
@@ -17,9 +17,13 @@ Windows-provided .NET Framework. This is not a claim of zero OS dependencies.
 
 ## Evidence and limits
 
-Final CPU-default candidate: 1.0.3-preview.439, source
-9a417f139405528cc4583f1d4e5972774fa9f278:
-https://github.com/vio137/wax-vpn/actions/runs/43082318105
+Stable CPU-default release: 1.0.3, source
+d585ddef4e7b713572c241087656629274b3b406:
+https://github.com/vio137/wax-vpn/actions/runs/43083908145
+
+Published installer SHA-256:
+`e1d96b742f31eb1444414bf0b7d5683a6c6932b298e987a8c784edcfb599bf08`
+(11,622,942 bytes). The downloaded installer matches the published checksum.
 
 - Passed native static-CRT direct/delay import audits for GUI, CLI and driver.
   No separate VC/managed runtime or external shader compiler imports found.
