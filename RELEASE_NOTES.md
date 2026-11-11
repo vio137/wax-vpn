@@ -1,25 +1,25 @@
-# waX VPN v0.1.28
+# waX VPN v0.1.29
 
-Unsigned Windows x64 defensive Debug-redaction checkpoint. Windows may show an unknown-publisher warning. The official WireGuardNT driver is independently signed by its vendor. No kill switch: traffic can use the normal connection if the tunnel drops.
+Unsigned Windows x64 unknown-token error-wording checkpoint. Windows may show an unknown-publisher warning. The official WireGuardNT driver is independently signed by its vendor. No kill switch: traffic can use the normal connection if the tunnel drops.
 
 ## Changes
 
-- InterfaceConfig and PeerConfig Debug output now replaces private keys and present preshared keys with a fixed <redacted> marker. Nested WireGuardConfig and Profile Debug output inherits the protection. Absent preshared keys remain None; public keys and nonsecret fields stay visible.
-- Defensive hardening only, with no observed production leak. No parser, serialization, profile storage, crypto, tunnel, UI or network behavior change. Serialized configs still contain the required keys as before and must be kept private.
+- Unknown section, unknown Interface key and unknown Peer key errors now give fixed expected-section/key guidance instead of repeating the unrecognized token. Line numbers remain present.
+- Defensive wording only, not a confirmed leak fix. All acceptance/rejection rules and known unsupported wg-quick directive handling are unchanged. No serialization, profile-storage, crypto, tunnel, UI or network behavior change.
 
 ## Verification
 
-Source e4ae8cf85d0754ead85cb85dea50b0b5093fca3b / full preview 42941505112 passed all required jobs. The config_debug_redacts_secret_keys_including_nested_profiles fixture passed with all 35 Windows core tests. It checks compact and pretty Debug for InterfaceConfig, PeerConfig, WireGuardConfig and Profile against raw-array and base64 secret sentinels, visible nonsecret fields, Some/None preshared-key behavior and unchanged serialization/parse round-trips. Fixture proof only, not a claim that a production leak was observed.
+Source 01c2212cf18d403d1e1ee3cd874d00635d014ff9 plus fixture follow-up f2d90ef822468c675a1e9e735737b7ca1c63eba5 / full preview 42946492976 passed all required jobs. The unknown_tokens_use_fixed_guidance_without_echoing_payloads and inline_hash_comments_parse_without_relaxing_validation fixtures passed with all 36 Windows core tests. The new fixture checks unknown sections and keys in both sections, long sentinel tokens, leading whitespace/BOM/comments, mixed-case known headers, retained line/category/guidance, no offending token/value in the error, all seven known unsupported directives and valid round-trips. Fixture proof only, not separate GUI screenshots of those imports.
 
-Exact v0.1.28 run 42943100326 at 358df1c7c56b719be18ed4ac3a9076b1e7635106 passed build, demo-tunnel/GUI verification, fresh-runner install/quit/uninstall and publish. Raw verify-results and installer diagnostics were read. Peer handshake and tunnel-side ping, DNS and IPv4 MTU 1380, split exclusions, owned adapter-loss recovery after 4 seconds, pending-retry disable across 48 samples/12 seconds, manual reconnect with recovery off, original main HWND/PID plus Connect rail restoration, graceful quit/adapter removal, profile/settings warnings and BOM-backed settings GUI startup passed. No console windows observed in 405 samples at about 100 ms; shorter windows could be missed. Crash evidence is a clean 3-second pre-cleanup snapshot. All 14 normal, warning, BOM and installed screenshots were inspected. Installed quit diagnostics show driver open/probe at 1 ms, absence confirmed 2 ms and legacy cleanup finished at 4395 ms. These timings describe this run, not a performance benchmark.
-
-Freshly downloaded unsigned installer: 10,958,731 bytes. SHA256 13d37b9b6a1c5b657b569d49b4ee41dc639085c7a47963073ab597dae0732911 matches the freshly downloaded SHA256SUMS-v0.1.28.txt.
+Full preview: peer handshake and tunnel-side ping, DNS and IPv4 MTU 1380, split exclusions, owned adapter-loss recovery after 6 seconds, pending-retry disable across 48 samples/12 seconds, manual reconnect with recovery off, original main HWND/PID plus Connect rail restoration, graceful quit/adapter removal, profile/settings warnings and BOM-backed settings GUI startup passed. No console windows observed in 420 samples at about 100 ms; shorter windows could be missed. Crash evidence is a clean 3-second pre-cleanup snapshot. All 14 normal, warning, BOM and installed screenshots were inspected. Fresh install/quit/uninstall passed; installed quit diagnostics show driver open/probe at 1 ms, absence confirmed 2 ms and legacy cleanup finished at 4272 ms. Exact v0.1.29 gate remains pending at preparation time.
 
 ## Limits and earlier failures
 
 Internet reachability is not proven by the tunnel-side ping. IPv6 protection was skipped without a proven baseline and there is no kill switch. Actual notification-area menus, real UAC accept/cancel/failure/elevated handoff, profile-directory startup failure and stale-profile manual Connect pixels remain unverified.
 
-Candidate push 42939812475 failed its CLI and GUI handshake deadlines and logged missing System.Drawing capture types. The unchanged full preview later passed. The cause remains unproven; no product or harness change was inferred from that failure.
+The first unknown-token candidate push 42944794908 failed an older test assertion that expected the unknown token to be echoed. A fixture-only follow-up changed that expectation to fixed guidance and added an explicit no-token assertion. The new fixture already passed in the first run; subsequent full results are recorded above.
+
+Earlier candidate push 42939812475 failed its CLI and GUI handshake deadlines and logged missing System.Drawing capture types. The unchanged full preview later passed. The cause remains unproven; no product or harness change was inferred from that failure.
 
 Earlier installed quit run 42866864702 exceeded the unchanged 15-second gate; its stage log was missing. A workflow-only change ensures future diagnostic logs exist without changing timeouts or assertions. Later successful runs do not diagnose that timeout. Earlier PowerShell/CLR host failures, including 0xC0000409, are not fully diagnosed. Explicit Unicode P/Invoke declarations and stage markers were corrected, and subsequent full runs passed, but causality remains unproven.
 
