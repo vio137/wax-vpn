@@ -1025,11 +1025,13 @@ jobs:
           Add-Type -AssemblyName UIAutomationTypes
           Add-Type -AssemblyName System.Drawing
           $begin = Get-Date
-          $originalAppData = $env:APPDATA
+          # dirs::config_dir uses the Windows known folder, not an APPDATA override.
+          $startupDir = Join-Path ([Environment]::GetFolderPath('ApplicationData')) 'wax-vpn'
+          $log = Join-Path $startupDir 'startup.log'
           try {
             foreach ($mode in @('normal','safe')) {
-              $env:APPDATA = Join-Path $env:RUNNER_TEMP "wax-startup-$mode"
-              New-Item -ItemType Directory -Force $env:APPDATA | Out-Null
+              New-Item -ItemType Directory -Force $startupDir | Out-Null
+              Remove-Item $log -ErrorAction SilentlyContinue
               $argsForMode = if ($mode -eq 'safe') { @('--safe-graphics') } else { @() }
               $process = if ($argsForMode.Count) { Start-Process .\bin\wax-vpn.exe -ArgumentList $argsForMode -PassThru } else { Start-Process .\bin\wax-vpn.exe -PassThru }
               try {
@@ -1047,18 +1049,16 @@ jobs:
                 $g.CopyFromScreen([int]$r.X,[int]$r.Y,0,0,$image.Size)
                 $image.Save((Join-Path $PWD "startup-$mode.png")); $g.Dispose(); $image.Dispose()
                 if (Get-NetAdapter -Name 'waX VPN' -ErrorAction SilentlyContinue) { throw 'Startup-only check created an adapter' }
-                $log = Join-Path $env:APPDATA 'wax-vpn\startup.log'
                 if (-not (Select-String -Path $log -SimpleMatch 'ten UI frames entered' -Quiet)) { throw "Startup $mode did not reach ten UI frames" }
                 .\bin\wax-vpn.exe --quit
                 if (-not $process.WaitForExit(15000)) { throw "Startup $mode graceful quit timed out" }
                 "PASS startup $mode visible rail, 15s process survival, ten UI frames, no adapter, graceful quit" | Out-File verify-results.txt -Append -Encoding utf8
               } finally {
-                Copy-Item (Join-Path $env:APPDATA 'wax-vpn\startup.log') "startup-$mode.log" -ErrorAction SilentlyContinue
+                Copy-Item $log "startup-$mode.log" -ErrorAction SilentlyContinue
                 if (-not $process.HasExited) { $process.Kill(); $process.WaitForExit() }
               }
             }
           } finally {
-            $env:APPDATA = $originalAppData
             Get-CimInstance Win32_VideoController | Select-Object Name,DriverVersion | Format-List | Out-File startup-graphics.txt
             Get-WinEvent -FilterHashtable @{LogName='Application';StartTime=$begin} -ErrorAction SilentlyContinue |
               Where-Object { $_.Id -in 1000,1001 -and $_.Message -match 'wax-vpn|waX VPN' } |
