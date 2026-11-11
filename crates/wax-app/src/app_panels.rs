@@ -79,6 +79,9 @@ impl WaxApp {
             egui::Label::new(RichText::new(pname).font(theme::semi(16.0)).color(theme::SUB)).truncate()
                 .sense(if can_switch { egui::Sense::click() } else { egui::Sense::hover() }),
         );
+        if can_switch {
+            name_resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, "Switch profile"));
+        }
         if name_resp.hovered() && can_switch {
             ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
         }
@@ -96,9 +99,9 @@ impl WaxApp {
             theme::card_frame().show(ui, |ui| {
                 ui.set_max_width(300.0);
                 ui.set_min_width(280.0);
-                let mut order: Vec<_> = (0..self.profiles.len()).collect();
-                order.sort_by_key(|&i| self.settings.profile_rank(&self.profiles[i].name));
-                for i in order {
+                let mut picked = None;
+                let order = self.profile_view.indices(&self.profiles, &self.settings, "");
+                for &i in order {
                     let (name, ep) = {
                         let p = &self.profiles[i];
                         (
@@ -112,7 +115,7 @@ impl WaxApp {
                     };
                     let sel = self.selected == Some(i);
                     let (r, resp) = ui.allocate_exact_size(
-                        egui::vec2(ui.available_width(), 30.0),
+                        egui::vec2(ui.available_width(), 32.0),
                         egui::Sense::click(),
                     );
                     let h = ui.ctx().animate_bool_responsive(resp.id.with("hov"), resp.hovered());
@@ -125,28 +128,32 @@ impl WaxApp {
                             egui::StrokeKind::Inside,
                         );
                     }
-                    ui.painter().text(
-                        r.left_center() + egui::vec2(10.0, 0.0),
-                        egui::Align2::LEFT_CENTER,
-                        &name,
-                        egui::FontId::proportional(13.0),
-                        if sel { theme::ACCENT } else { theme::SUB },
-                    );
-                    ui.painter().text(
-                        r.right_center() + egui::vec2(-10.0, 0.0),
-                        egui::Align2::RIGHT_CENTER,
-                        &ep,
-                        egui::FontId::monospace(10.5),
-                        theme::MUTE,
-                    );
-                    if resp.clicked() {
-                        self.selected = Some(i);
-                        self.confirm_delete = None;
-                        self.settings.last_profile = Some(name.to_owned());
-                        self.save_settings();
-                        self.picker_open = false;
-                        self.status_line = "Ready".into();
+                    let name_width = (r.width() * 0.52).max(96.0);
+                    let name_rect = egui::Rect::from_min_max(r.min, egui::pos2(r.left() + name_width, r.bottom()));
+                    let endpoint_rect = egui::Rect::from_min_max(egui::pos2(r.left() + name_width + 8.0, r.top()), r.max);
+                    for (text, rect, font, color, right) in [
+                        (name, name_rect.shrink2(egui::vec2(10.0, 0.0)), egui::FontId::proportional(13.0), if sel { theme::ACCENT } else { theme::SUB }, false),
+                        (ep, endpoint_rect.shrink2(egui::vec2(8.0, 0.0)), egui::FontId::monospace(10.5), theme::MUTE, true),
+                    ] {
+                        let mut job = egui::text::LayoutJob::simple(text.to_owned(), font, color, rect.width());
+                        job.wrap.max_rows = 1;
+                        job.wrap.break_anywhere = true;
+                        let galley = ui.painter().layout_job(job);
+                        let x = if right { rect.right() - galley.size().x } else { rect.left() };
+                        ui.painter().galley(egui::pos2(x, rect.center().y - galley.size().y / 2.0), galley, color);
                     }
+                    resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, true, sel, name));
+                    if resp.has_focus() { ui.painter().rect_stroke(r, egui::CornerRadius::same(8), egui::Stroke::new(1.0, theme::ACCENT), egui::StrokeKind::Inside); }
+                    resp.clone().on_hover_text(format!("{name}\n{ep}"));
+                    if resp.clicked() { picked = Some(i); }
+                }
+                if let Some(i) = picked {
+                    self.selected = Some(i);
+                    self.confirm_delete = None;
+                    self.settings.last_profile = Some(self.profiles[i].name.clone());
+                    self.save_settings();
+                    self.picker_open = false;
+                    self.status_line = "Ready".into();
                 }
             });
         }
@@ -828,6 +835,26 @@ impl WaxApp {
                     ui.add(egui::TextEdit::multiline(&mut text).font(egui::TextStyle::Monospace).desired_width(f32::INFINITY));
                 });
             }
+        });
+        ui.add_space(10.0);
+        egui::CollapsingHeader::new("Keyboard shortcuts").id_salt("keyboard-shortcuts").show(ui, |ui| {
+            egui::Grid::new("keyboard-shortcut-grid").num_columns(2).spacing([24.0, 8.0]).show(ui, |ui| {
+                for (key, action) in [
+                    ("Ctrl+F", "Find a profile"),
+                    ("Ctrl+1 / Ctrl+2", "Connect / Profiles"),
+                    ("Ctrl+3 / Ctrl+4", "Features / WARP"),
+                    ("Ctrl+5 / Ctrl+6", "About / Network"),
+                    ("Space", "Connect, disconnect or cancel a pending retry"),
+                    ("Escape", "Close the profile picker"),
+                    ("Ctrl+Q", "Quit and disconnect"),
+                ] {
+                    ui.label(RichText::new(key).monospace().size(12.0).color(theme::TEXT));
+                    ui.add(egui::Label::new(RichText::new(action).size(12.0).color(theme::SUB)).wrap());
+                    ui.end_row();
+                }
+            });
+            ui.add_space(8.0);
+            ui.add(egui::Label::new(RichText::new("Except Find, shortcuts pause while a text field has focus. Buttons work with Tab and Enter.").size(11.0).color(theme::MUTE)).wrap());
         });
         ui.add_space(10.0);
         theme::card_frame().show(ui, |ui| {
