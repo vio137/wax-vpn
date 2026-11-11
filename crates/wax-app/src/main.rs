@@ -1480,7 +1480,7 @@ impl WaxApp {
                 ui.add_space(4.0);
                 if let Some(profile) = self.profiles.get(sel) {
                     ui.add(egui::Label::new(RichText::new(split_profile_label(&profile.name))
-                        .size(11.5).color(theme::SUB)).wrap());
+                        .size(12.0).color(theme::TEXT)).wrap());
                     ui.add_space(4.0);
                 }
                 let input_id = ui.make_persistent_id("split-exclusions-input");
