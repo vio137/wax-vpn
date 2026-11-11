@@ -83,6 +83,26 @@ jobs:
         shell: pwsh
         run: |
           Invoke-WebRequest -Uri "https://download.wireguard.com/wireguard-nt/wireguard-nt-1.1.zip" -OutFile wgnt.zip
+          # Pin independently checked against the vendor's own build recipe:
+          # https://github.com/WireGuard/wireguard-windows/blob/6ece77bc487c8aa697e3c092197621c4f3e5ccb8/build.bat
+          # Update URL and digest together only after a fresh official download
+          # matches a separately retrieved vendor build pin. Never auto-accept changes.
+          function Assert-WireGuardArchive([string] $Path) {
+            $expected = 'dceb30a9bc4be48cce0f74160fc88a585a2c2627366e8f846fc6658f9038dace'
+            if ((Get-FileHash -LiteralPath $Path -Algorithm SHA256 -ErrorAction Stop).Hash -ne $expected) {
+              throw 'WireGuardNT SHA-256 mismatch; refusing to extract or package'
+            }
+          }
+          Set-Content -LiteralPath wgnt-bad.zip -Value 'invalid archive' -NoNewline
+          try {
+            Assert-WireGuardArchive 'wgnt-bad.zip'
+            throw 'Invalid archive was accepted'
+          } catch {
+            if ($_.Exception.Message -ne 'WireGuardNT SHA-256 mismatch; refusing to extract or package') { throw }
+            Write-Host 'PASS WireGuardNT hash mismatch rejected before extraction'
+          } finally { Remove-Item -LiteralPath wgnt-bad.zip -Force }
+          Assert-WireGuardArchive 'wgnt.zip'
+          Write-Host 'PASS official WireGuardNT archive matches pinned SHA-256'
           Expand-Archive wgnt.zip -DestinationPath vendor\wireguard-nt -Force
           Get-ChildItem -Recurse vendor\wireguard-nt | Format-Table FullName
 
