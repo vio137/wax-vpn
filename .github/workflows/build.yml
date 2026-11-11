@@ -334,6 +334,10 @@ jobs:
         shell: powershell
         run: |
           Write-Host "UIA harness: PowerShell $($PSVersionTable.PSVersion) CLR $($PSVersionTable.CLRVersion)"
+          # Opt-in UI preview only: disconnected, so no automatic external checks.
+          $uiCfgDir = Join-Path $env:APPDATA 'wax-vpn'
+          New-Item -ItemType Directory -Force -Path $uiCfgDir | Out-Null
+          Set-Content -Path (Join-Path $uiCfgDir 'settings.json') -Value '{"network":{"public_ip":true,"throughput":true,"latency":true,"speed_test":true}}'
           $p = Start-Process -FilePath "$PWD\bin\wax-vpn.exe" -PassThru
           Add-Type -AssemblyName System.Windows.Forms
           Add-Type -AssemblyName System.Drawing
