@@ -650,11 +650,12 @@ mod tests {
             ("PersistentKeepalive = 25", "PersistentKeepalive = # empty", "bad PersistentKeepalive"),
             ("PersistentKeepalive = 25", "PersistentKeepalive = 25 ; not an inline comment", "bad PersistentKeepalive"),
             ("MTU = 1280", "PostUp = do-not-echo-private-value # note", "unsupported wg-quick directive PostUp"),
-            ("MTU = 1280", "UnknownSetting = do-not-echo-private-value # note", "unknown Interface key UnknownSetting"),
+            ("MTU = 1280", "UnknownSetting = do-not-echo-private-value # note", "unknown Interface key; expected PrivateKey, Address, DNS, MTU or ListenPort"),
         ] {
             let error = WireGuardConfig::parse(&plain.replace(old, new)).unwrap_err().to_string();
             assert!(error.contains(expected), "{error}");
             assert!(!error.contains("do-not-echo-private-value"));
+            assert!(!error.contains("UnknownSetting"));
         }
     }
 
