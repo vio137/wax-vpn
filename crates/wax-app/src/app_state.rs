@@ -107,6 +107,7 @@ pub struct WaxApp {
     connection_epoch: Arc<AtomicU64>,
     active_profile: Option<Profile>,
     picker_open: bool,
+    profile_search: String,
     open_network_settings: bool,
     split_edit: String,
     split_edit_for: Option<usize>,
@@ -217,6 +218,7 @@ impl WaxApp {
             connection_epoch: Arc::new(AtomicU64::new(0)),
             active_profile: None,
             picker_open: false,
+            profile_search: String::new(),
             open_network_settings: false,
             split_edit: String::new(),
             split_edit_for: None,
@@ -569,6 +571,7 @@ impl WaxApp {
                     self.status_line = "Tunnel is up".to_string();
                     if let Some(profile) = &self.active_profile {
                         self.settings.last_profile = Some(profile.name.clone());
+                        self.settings.record_connection(&profile.name);
                         self.save_settings();
                     }
                     self.spawn_stats_loop();
@@ -842,4 +845,4 @@ mod repaint_tests {
             assert_eq!(repaint_delay(false, transitioning), Duration::from_millis(if transitioning { 33 } else { 250 }));
         }
     }
-            }
+                }
