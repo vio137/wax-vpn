@@ -30,11 +30,15 @@ opt-in Cloudflare WARP client, reimplemented in Rust. Registration only happens
 when you explicitly accept Cloudflare's Terms of Service in the app or pass
 `--accept-tos` to the CLI. waX VPN is not affiliated with Cloudflare.
 
-The released v0.1.42 has no update checker or telemetry uploader. Tunnel traffic
+The released v0.1.43 has no update checker or telemetry uploader. Tunnel traffic
 and DNS lookups can happen in the background while connected; WARP API calls
 happen only when you request WARP actions. Local diagnostics are not uploaded.
-Optional public-IP, latency and manual speed measurements are in development;
-those checks contact the configured service and disclose your public IP to it.
+Optional public-IP, HTTPS latency and manual quick-speed measurements are off
+by default. Those checks contact the configured service (Cloudflare by default)
+and disclose your public IP to it. The local adapter-counter graph is on by
+default and makes no extra network requests. These are current-route
+observations, not leak tests; results stay in memory and are not uploaded as
+analytics or included in diagnostics.
 
 ## Download
 
@@ -102,6 +106,13 @@ it was taken from.
 - **Local diagnostics.** About &gt; Generate local report builds an
   allowlisted snapshot only when you click it; nothing is uploaded.
   `wax diagnostics` prints the same allowlisted JSON to your shell.
+- **Opt-in network observations.** Network shows original/public route IP,
+  local received/sent throughput and HTTPS latency graphs, plus a manual
+  8 MB download / 2 MB upload quick test. Features &gt; Network measurements
+  has separate toggles, editable HTTPS service settings and a latency interval.
+  Automatic latency checks run only while Network is visible and connected.
+  Quick-test results are approximate, not line capacity; split routing can
+  send another destination over a different route. See the release notes for limits.
 - **Full CLI.** `wax.exe` covers profiles, import, connect, status and WARP
   for scripting or SSH sessions.
 
@@ -113,7 +124,7 @@ it was taken from.
 | `wax-warp` | Cloudflare WARP API client (wgcf equivalent), account persistence, profile generation |
 | `wax-tunnel` | Adapter lifecycle on WireGuardNT and DNS (netsh) |
 | `wax-cli` (`wax.exe`) | CLI: profiles, import, connect/disconnect/status, WARP commands |
-| `wax-app` (`waX VPN.exe`) | Native egui GUI: navigation, profile picker, stats, settings, WARP panel, drag-and-drop import |
+| `wax-app` (`wax-vpn.exe`; installed as `waX VPN.exe`) | Native egui GUI: navigation, profile picker, stats, settings, WARP panel, drag-and-drop import |
 | `wax-diagnostics` | Allowlisted local status reports |
 
 The NSIS installer places the app and the official `wireguard.dll` together,
@@ -133,7 +144,7 @@ JavaScript ships in the app; the design was rebuilt natively. See
 Claims here are tested build by build on clean Windows runners. Raw evidence is retained in the linked GitHub Actions run artifacts;
 the release notes describe the checks and their limits.
 
-Verified for the current release:
+Verified release checks (exact run and sample counts are in the release notes):
 
 - WireGuard handshake and ping through the tunnel, DNS applied on connect and
   restored on disconnect, MTU from imported configs.
@@ -150,6 +161,8 @@ Not yet verified (honest list):
 
 - Tray-menu Open/Quit interaction (the runner session has no notification
   area; the graceful-quit path itself is verified via `wax-vpn.exe --quit`).
+- Public-IP before/after checks through a production Internet tunnel on Windows;
+  development-host checks are not proof of Windows Internet routing.
 - WARP registration against the live Cloudflare API (requires a person to
   accept the ToS first, by design).
 - Leak testing (IPv6, DNS) against an external observer; IPv6 leak protection
