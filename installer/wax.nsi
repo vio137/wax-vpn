@@ -61,13 +61,23 @@ Section "waX VPN" SecMain
     SetOutPath "$INSTDIR"
     SetShellVarContext all
 
-    ; Make sure nothing is holding the files
-    ; nsExec captures console output without creating a console window.
-    ; ExecWait is not a shell, so do not pass shell redirection here.
-    nsExec::Exec '"$SYSDIR\taskkill.exe" /F /IM "waX VPN.exe" /T'
+    ; The new bundled helper works even when upgrading an old CLI. No taskkill.
+    InitPluginsDir
+    SetOutPath "$PLUGINSDIR"
+    File /oname=wax-installer.exe "payload\wax.exe"
+    File /oname=wireguard.dll "payload\wireguard.dll"
+    nsExec::Exec '"$PLUGINSDIR\wax-installer.exe" installer-stop "$INSTDIR"'
     Pop $0
-    nsExec::Exec '"$INSTDIR\wax.exe" disconnect'
-    Pop $0
+    ${If} $0 != 0
+        IfSilent +2
+        MessageBox MB_ICONSTOP "Could not stop the installed waX VPN app. Close it, then run the installer again."
+        SetErrorLevel 1
+        Abort
+    ${EndIf}
+    IfFileExists "$INSTDIR\wax.exe" 0 +3
+        nsExec::Exec '"$PLUGINSDIR\wax-installer.exe" disconnect'
+        Pop $0
+    SetOutPath "$INSTDIR"
 
     File "payload\waX VPN.exe"
     File "payload\wax.exe"
@@ -105,10 +115,15 @@ SectionEnd
 
 Section "Uninstall"
     SetShellVarContext all
-    ; nsExec captures console output without creating a console window.
-    ; ExecWait is not a shell, so do not pass shell redirection here.
-    nsExec::Exec '"$SYSDIR\taskkill.exe" /F /IM "waX VPN.exe" /T'
+    ; This installation's CLI uses exact-path native process cleanup.
+    nsExec::Exec '"$INSTDIR\wax.exe" installer-stop "$INSTDIR"'
     Pop $0
+    ${If} $0 != 0
+        IfSilent +2
+        MessageBox MB_ICONSTOP "Could not stop the installed waX VPN app. Close it, then run uninstall again."
+        SetErrorLevel 1
+        Abort
+    ${EndIf}
     nsExec::Exec '"$INSTDIR\wax.exe" disconnect'
     Pop $0
     Sleep 1000
