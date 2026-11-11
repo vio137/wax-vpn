@@ -100,7 +100,7 @@ pub fn warp_profile(account: &WarpAccount, name: &str) -> Result<Profile, WarpEr
         let ip = v4.strip_suffix("/32").unwrap_or(v4);
         addresses.push(
             IpNet::from_str(&format!("{ip}/32"))
-                .map_err(|_| WarpError::BadResponse(format!("bad v4 address {v4}")))?,
+                .map_err(|_| WarpError::BadResponse("bad v4 address; expected an IPv4 address".into()))?,
         );
     }
     let v6 = reg.config.interface.addresses.v6.trim();
@@ -108,7 +108,7 @@ pub fn warp_profile(account: &WarpAccount, name: &str) -> Result<Profile, WarpEr
         let ip = v6.strip_suffix("/128").unwrap_or(v6);
         addresses.push(
             IpNet::from_str(&format!("{ip}/128"))
-                .map_err(|_| WarpError::BadResponse(format!("bad v6 address {v6}")))?,
+                .map_err(|_| WarpError::BadResponse("bad v6 address; expected an IPv6 address".into()))?,
         );
     }
 
@@ -187,4 +187,59 @@ mod tests {
         let read: WarpAccount = serde_json::from_str(&json).unwrap();
         assert_eq!(serde_json::to_value(&read).unwrap(), serde_json::to_value(&account).unwrap());
     }
+
+    #[test]
+    fn warp_profile_address_errors_use_fixed_guidance_without_echoing_payloads() {
+        fn fixture(v4: &str, v6: &str) -> WarpAccount {
+            WarpAccount {
+                device_id: "offline-device".into(), token: "offline-token".into(),
+                license: "offline-license".into(), private_key: keys::key_to_base64(&[1; 32]),
+                model: "offline-PC".into(), created_at: "synthetic-date".into(),
+                registration: Registration {
+                    config: crate::model::Config {
+                        interface: crate::model::ConfigInterface {
+                            addresses: crate::model::NetworkAddress { v4: v4.into(), v6: v6.into() },
+                        },
+                        peers: vec![crate::model::Peer {
+                            public_key: keys::key_to_base64(&[2; 32]),
+                            endpoint: crate::model::Endpoint { host: Some("example.invalid:2408".into()), ..Default::default() },
+                        }],
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+            }
+        }
+        let sentinel = "PRIVATE_ADDRESS_SENTINEL_84b1";
+        for (v4, v6, expected) in [
+            (sentinel, "fd01::2", "bad v4 address; expected an IPv4 address"),
+            ("172.16.0.2", sentinel, "bad v6 address; expected an IPv6 address"),
+        ] {
+            let err = warp_profile(&fixture(v4, v6), "offline").unwrap_err();
+            assert_eq!(err.to_string(), format!("unexpected response: {expected}"));
+            assert!(!format!("{err:?}").contains(sentinel));
+        }
+        for (v4, v6) in [
+            ("172.16.0.2", "fd01::2"),
+            ("172.16.0.2/32", "fd01::2/128"),
+            (" 172.16.0.2/32 ", " fd01::2/128 "),
+        ] {
+            let profile = warp_profile(&fixture(v4, v6), "offline").unwrap();
+            assert_eq!(profile.config.interface.addresses, vec!["172.16.0.2/32".parse::<IpNet>().unwrap(), "fd01::2/128".parse::<IpNet>().unwrap()]);
+            assert_eq!(profile.config.interface.private_key, [1; 32]);
+            assert_eq!(profile.config.interface.mtu, Some(1280));
+            assert_eq!(profile.config.interface.dns, vec!["1.1.1.1".parse::<std::net::IpAddr>().unwrap(), "1.0.0.1".parse::<std::net::IpAddr>().unwrap(), "2606:4700:4700::1111".parse::<std::net::IpAddr>().unwrap(), "2606:4700:4700::1001".parse::<std::net::IpAddr>().unwrap()]);
+            assert_eq!(profile.config.peers.len(), 1);
+            let peer = &profile.config.peers[0];
+            assert_eq!(peer.public_key, [2; 32]);
+            assert_eq!(peer.endpoint.as_deref(), Some("example.invalid:2408"));
+            assert_eq!(peer.allowed_ips, vec!["0.0.0.0/0".parse::<IpNet>().unwrap(), "::/0".parse::<IpNet>().unwrap()]);
+        }
+        let empty = warp_profile(&fixture("", ""), "offline").unwrap();
+        assert!(empty.config.interface.addresses.is_empty());
+        // Keep the current rejection of non-host prefixes; this is wording only.
+        assert!(warp_profile(&fixture("172.16.0.2/24", ""), "offline").is_err());
+        assert!(warp_profile(&fixture("", "fd01::2/64"), "offline").is_err());
+    }
+
 }
