@@ -1601,7 +1601,7 @@ impl WaxApp {
             ui,
             &mut self.settings.auto_reconnect,
             "Auto-reconnect",
-            "Retry the same profile after 2, 4 and 8 seconds; budget resets after 60 seconds up",
+            "Retry owned adapter loss after 2, 4 and 8 seconds; budget resets after 60 seconds up. Physical-network roaming is not supported yet.",
         ) {
             self.save_settings();
         }
