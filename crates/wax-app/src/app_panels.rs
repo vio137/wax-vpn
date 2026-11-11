@@ -280,6 +280,9 @@ impl WaxApp {
             }
             ui.label(RichText::new(loaded_profiles_label(self.profiles.len(), self.profiles_readable))
                 .size(11.5).color(theme::MUTE));
+            if !self.settings.recent_profiles.is_empty() && ui.small_button("Clear recent").on_hover_text("Clear the local recent-profile list. Profiles and pins are kept.").clicked() {
+                self.settings.recent_profiles.clear(); self.save_settings();
+            }
         });
         ui.add_space(8.0);
         ui.horizontal(|ui| {
