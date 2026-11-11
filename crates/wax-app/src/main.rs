@@ -1767,8 +1767,8 @@ impl WaxApp {
             );
             ui.add_space(6.0);
             ui.hyperlink_to(
-                RichText::new("github.com/vio137/wax-vpn").size(12.0).color(theme::ACCENT),
-                "https://github.com/vio137/wax-vpn",
+                RichText::new("waxvpn.pages.dev").size(12.0).color(theme::ACCENT),
+                "https://waxvpn.pages.dev/",
             );
             ui.add_space(6.0);
             ui.label(
