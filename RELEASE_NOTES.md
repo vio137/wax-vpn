@@ -28,12 +28,24 @@ sampling can miss a shorter flash.
 
 ## Release verification
 
-Preview build, runtime and fresh-installer checks passed:
-https://github.com/vio137/wax-vpn/actions/runs/43120948811
-Source: `2d37edb80d7d0943bab64e16fbfc6373a3616d80`.
+Exact stable workflow: https://github.com/vio137/wax-vpn/actions/runs/43122392479
+Source: `eff79ce5ed407039f03c35245169dc2bc819139e`.
 
-Actual evidence passed the 26-profile bounded picker, Connect remaining
-on-screen, scrolling and saving Office 24 without an adapter. Top-list and
-selected-profile pixels were inspected. The preview's scrolled capture showed
-a buffered row before it was fully visible; the stable gate scrolls another
-step before capturing. Stable proof and checksum are pending.
+All four stable jobs passed. Actual Windows evidence passed the 26-profile
+bounded picker, Connect remaining on-screen, scrolling to Office 24 and saved
+selection without an adapter. Stable scrolled-list pixels show Office 24 fully
+inside the list; selected-profile and installed-app pixels were inspected too.
+
+Existing native-file import, cancellation, duplicate/source preservation,
+quick selection, keyboard help, GUI demo connection, tunnel-address ping, DNS
+apply/reset, IPv4 MTU, split routes, bounded recovery, retry disable, original
+window restore and graceful quit checks passed. Fresh install, upgrade,
+uninstall, all three native process-scope checks and all three PE dependency
+audits passed, subject to the limits above. Console sampling can miss shorter
+flashes. UIA ExpandCollapse support for keyboard help is not verified.
+
+The published installer was downloaded and matched its checksum file:
+
+- File: `waX-VPN-Setup-v1.0.9-x64.exe`
+- Size: 11,695,271 bytes
+- SHA256: `aec387ec6e610c14e0163d8add8fe748093c60a54b4c08dd411959e9ffce1017`
