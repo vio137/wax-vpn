@@ -104,7 +104,7 @@ fn load_profiles_from(dir: &Path) -> Result<ProfileLoadReport, CoreError> {
             None => report.skipped += 1,
         }
     }
-    report.profiles.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    report.profiles.sort_by_cached_key(|p| p.name.to_lowercase());
     Ok(report)
 }
 
