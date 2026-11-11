@@ -354,5 +354,56 @@ mod cancellation_owner {
                 assert_eq!(cancelled.load(Ordering::SeqCst),usize::from(registration.is_ok()));
             }
         }
+        // One-shot Windows bridge only. The empty adapter moves to the worker;
+        // registration handles and private snapshots are created there and
+        // never leave it. No address or interface identity is diagnostic data.
+        #[cfg(windows)]
+        struct WindowsOnce {
+            own: u64,
+            notifications: Option<crate::network_notify::Notifications>,
+            reads: Arc<AtomicUsize>,
+        }
+        #[cfg(windows)]
+        impl Operations for WindowsOnce {
+            fn register(&mut self) -> Result<(), ()> {
+                self.notifications=Some(crate::network_notify::Notifications::register(self.own).map_err(|_| ())?);
+                Ok(())
+            }
+            fn read_changed(&mut self) -> Result<bool, ()> {
+                let baseline=crate::underlay::Snapshot::read(self.own).map_err(|_| ())?;
+                self.reads.fetch_add(1,Ordering::SeqCst);
+                let current=crate::underlay::Snapshot::read(self.own).map_err(|_| ())?;
+                self.reads.fetch_add(1,Ordering::SeqCst);
+                Ok(baseline!=current)
+            }
+            fn cancel(&mut self) -> Result<(), ()> {
+                let result=self.notifications.as_mut().ok_or(())?.shutdown().map_err(|_| ());
+                // Notifications retains uncertain callback context on failure.
+                // Its Drop owns that safeguard; acknowledgement is not proof
+                // that a failed cancellation freed registration context.
+                self.notifications.take();
+                result
+            }
+        }
+        #[cfg(windows)]
+        #[test]
+        fn windows_once_reads_then_shutdown_ack_and_zero_identity_rejection() {
+            let reads=Arc::new(AtomicUsize::new(0));
+            let mut invalid=WindowsOnce { own:0,notifications:None,reads:reads.clone() };
+            assert!(invalid.register().is_err());
+            assert!(invalid.notifications.is_none());
+            assert_eq!(reads.load(Ordering::SeqCst),0);
+            // Same nonzero sentinel as the existing notification fixture, not
+            // an assertion about adapter ownership. External runner changes
+            // may make the snapshots differ, so do not assert their equality.
+            let mut owner=Owner::new(91,WindowsOnce { own:1,notifications:None,reads:reads.clone() });
+            assert!(owner.start());
+            assert_eq!(owner.wait_ack(),Ack { lifetime:91,outcome:Outcome::Complete });
+            assert_eq!(reads.load(Ordering::SeqCst),2);
+            owner.stop();
+            assert!(!owner.take_changed(91));
+            assert!(!owner.start());
+        }
+
     }
 }
