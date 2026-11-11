@@ -2,6 +2,7 @@
 !include "MUI2.nsh"
 !include "FileFunc.nsh"
 !include "x64.nsh"
+!include "WinVer.nsh"
 
 !ifndef WAX_VERSION
 !define WAX_VERSION "0.1.0"
@@ -37,6 +38,10 @@ RequestExecutionLevel admin
 Function .onInit
     ${IfNot} ${RunningX64}
         MessageBox MB_ICONSTOP "waX VPN requires 64-bit Windows."
+        Abort
+    ${EndIf}
+    ${IfNot} ${AtLeastWin10}
+        MessageBox MB_ICONSTOP "waX VPN requires Windows 10 or later (64-bit)."
         Abort
     ${EndIf}
     SetRegView 64
