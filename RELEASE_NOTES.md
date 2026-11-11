@@ -1,19 +1,19 @@
-# waX VPN v0.1.33
+# waX VPN v0.1.34
 
-Unsigned Windows x64 split-exclusion error-wording checkpoint. Windows may show an unknown-publisher warning. The official WireGuardNT driver is independently signed by its vendor. No kill switch: traffic can use the normal connection if the tunnel drops.
+Unsigned Windows x64 Auto-reconnect guidance checkpoint. Windows may show an unknown-publisher warning. The official WireGuardNT driver is independently signed by its vendor. No kill switch: traffic can use the normal connection if the tunnel drops.
 
 ## Changes
 
-- Malformed split-exclusion entries now give fixed expected-IPv4/IPv6-CIDR guidance instead of repeating the malformed token.
-- Defensive wording only. No production credential leak was observed. Entry splitting, empty entries, CIDR acceptance, input order and route subtraction are unchanged. No UI or network behavior change.
+- Features now explains that Auto-reconnect retries owned adapter loss and does not yet support physical-network roaming. Toggle behavior, retry delays and budget policy are unchanged. This is clearer guidance, not a new recovery capability.
+- Added offline split-subtraction boundary regression coverage and a pure test-only coordinator for caller-supplied underlay snapshots. These do not change production routing or wire network notifications into recovery. Regression coverage, not a bug fix or leak proof. Physical-network roaming remains unimplemented.
 
 ## Verification
 
-Source 2059ac25069ac8ede3fb86115542efe853c37d19 / full preview 42962992616 passed all required jobs. The exclusion_errors_use_fixed_guidance_without_echoing_tokens fixture passed with all 37 core tests. Synthetic offline fixtures cover invalid-token sentinels, current valid mixed-family/separator/empty entries, duplicates, unaligned values and ordering. Fixture proof only, not a production leak reproduction.
+Source c28e451ae3b0cce0d736cdcfacfac115650053cd / full preview 42970156634 passed all required jobs. All 35 app, 40 core, 6 WARP, 4 diagnostics and 1 tunnel tests passed, including the four coordinator and three split-boundary fixtures. Features pixels at the 880x600 runner window show readable two-line guidance and an unobscured Auto-reconnect toggle. No layout or policy change was needed.
 
-Exact v0.1.33 run 42964757326 at 00b9db7c9245e4bd28cae8dd4925630b1ea348a4 passed build, demo-tunnel/GUI verification, fresh-runner install/quit/uninstall and publish. Raw verify-results and installer diagnostics were read. Peer handshake and tunnel-side ping, DNS and IPv4 MTU 1380, split exclusions, owned adapter-loss recovery after 4 seconds, pending-retry disable across 48 samples/12 seconds, manual reconnect with recovery off, original main HWND/PID plus Connect rail restoration, graceful quit/adapter removal, profile/settings warnings and BOM-backed settings GUI startup passed. No console windows observed in 356 samples at about 100 ms; shorter windows could be missed. Crash evidence is a clean 3-second pre-cleanup snapshot. All 14 normal, warning, BOM and installed screenshots were inspected. Installed quit diagnostics show driver open/probe at 0 ms, absence confirmed 2 ms and legacy cleanup finished at 4039 ms. These timings describe this run, not a performance benchmark.
+Full preview raw verify-results and installer diagnostics were read. Peer handshake and tunnel-side ping, DNS and IPv4 MTU 1380, split exclusions, owned adapter-loss recovery after 4 seconds, pending-retry disable across 48 samples/12 seconds, manual reconnect with recovery off, original main HWND/PID plus Connect rail restoration, graceful quit/adapter removal, profile/settings warnings and BOM-backed settings GUI startup passed. No console windows observed in 459 samples at about 100 ms; shorter windows could be missed. Crash evidence is a clean 3-second pre-cleanup snapshot. All 14 normal, warning, BOM and installed screenshots were inspected. Installed quit diagnostics show driver open/probe at 1 ms, absence confirmed 3 ms and legacy cleanup finished at 4521 ms. These timings describe this run, not a performance benchmark.
 
-Freshly downloaded unsigned installer: 10,958,144 bytes. SHA256 79c2912d5a6a4347743fb69f700316cf809530297229f4d5a91107a6f217fa4a matches the freshly downloaded SHA256SUMS-v0.1.33.txt.
+Exact v0.1.34 gate and freshly downloaded installer/hash checks are pending. This checkpoint is not promotion-ready until those checks and final release notes are complete.
 
 ## Limits and earlier failures
 
