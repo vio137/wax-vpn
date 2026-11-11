@@ -7,7 +7,7 @@ use ipnet::IpNet;
 
 use crate::{keys, CoreError};
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct InterfaceConfig {
     pub private_key: [u8; 32],
     pub addresses: Vec<IpNet>,
@@ -16,7 +16,7 @@ pub struct InterfaceConfig {
     pub listen_port: Option<u16>,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct PeerConfig {
     pub public_key: [u8; 32],
     pub preshared_key: Option<[u8; 32]>,
@@ -24,6 +24,31 @@ pub struct PeerConfig {
     /// Endpoint as written in the config: `host:port`, `[v6]:port` or bare host.
     pub endpoint: Option<String>,
     pub persistent_keepalive: Option<u16>,
+}
+
+// Debug output must not expose secret keys, including through nested configs.
+impl std::fmt::Debug for InterfaceConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("InterfaceConfig")
+            .field("private_key", &"<redacted>")
+            .field("addresses", &self.addresses)
+            .field("dns", &self.dns)
+            .field("mtu", &self.mtu)
+            .field("listen_port", &self.listen_port)
+            .finish()
+    }
+}
+
+impl std::fmt::Debug for PeerConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PeerConfig")
+            .field("public_key", &self.public_key)
+            .field("preshared_key", &self.preshared_key.map(|_| "<redacted>"))
+            .field("allowed_ips", &self.allowed_ips)
+            .field("endpoint", &self.endpoint)
+            .field("persistent_keepalive", &self.persistent_keepalive)
+            .finish()
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -444,6 +469,53 @@ mod tests {
         bad.endpoint = Some("never-echo.invalid".into());
         multi.peers.push(bad);
         assert!(multi.validate_import_endpoints().unwrap_err().to_string().contains("peer 2: invalid Endpoint"));
+    }
+
+    #[test]
+    fn config_debug_redacts_secret_keys_including_nested_profiles() {
+        let mut config = WireGuardConfig::parse(&sample()).unwrap();
+        config.interface.private_key = [171; 32];
+        config.peers[0].public_key = [2; 32];
+        config.peers[0].preshared_key = Some([205; 32]);
+        let profile = crate::profile::Profile { name: "debug-fixture".into(), config: config.clone() };
+        for pretty in [false, true] {
+            let outputs = if pretty {
+                vec![format!("{:#?}", config.interface), format!("{:#?}", config.peers[0]),
+                    format!("{config:#?}"), format!("{profile:#?}")]
+            } else {
+                vec![format!("{:?}", config.interface), format!("{:?}", config.peers[0]),
+                    format!("{config:?}"), format!("{profile:?}")]
+            };
+            for output in outputs {
+                assert!(output.contains("<redacted>"));
+                for secret in [[171; 32], [205; 32]] {
+                    assert!(!output.contains(&keys::key_to_base64(&secret)));
+                    assert!(!output.contains(&format!("{secret:?}")));
+                    assert!(!output.contains(&format!("{secret:#?}")));
+                }
+                // The decimal sentinel bytes are never emitted on their own either.
+                assert!(!output.contains("171"));
+                assert!(!output.contains("205"));
+            }
+        }
+        let peer_debug = format!("{:?}", config.peers[0]);
+        assert!(peer_debug.contains("preshared_key: Some(\"<redacted>\")"));
+        assert!(peer_debug.contains(&format!("public_key: {:?}", config.peers[0].public_key)));
+        assert!(peer_debug.contains("allowed_ips:"));
+        assert!(peer_debug.contains("endpoint:"));
+        assert!(peer_debug.contains("persistent_keepalive: Some(25)"));
+        let interface_debug = format!("{:?}", config.interface);
+        for field in ["addresses:", "dns:", "mtu: Some(1280)", "listen_port: None"] {
+            assert!(interface_debug.contains(field));
+        }
+        let with_psk = config.to_conf_string();
+        assert!(with_psk.contains(&keys::key_to_base64(&[205; 32])));
+        assert_eq!(WireGuardConfig::parse(&with_psk).unwrap(), config);
+        config.peers[0].preshared_key = None;
+        assert!(format!("{:?}", config.peers[0]).contains("preshared_key: None"));
+        let serialized = config.to_conf_string();
+        assert!(serialized.contains(&keys::key_to_base64(&config.interface.private_key)));
+        assert_eq!(WireGuardConfig::parse(&serialized).unwrap(), config);
     }
 
     #[test]
