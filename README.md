@@ -191,6 +191,3 @@ Design tokens and layout adapted from Meta's
 [Astryx](https://github.com/meta/astryx) design system, MIT (notice retained
 in `docs/vendor-licenses/`). Interface typeface is Inter Display by Rasmus
 Andersson, used under the SIL Open Font License 1.1.
-
-Design review also uses [unslop](https://github.com/heydamir/unslop),
-by Damir Sokolovsky (CC BY 4.0), as a review rubric, not a shipped dependency.
