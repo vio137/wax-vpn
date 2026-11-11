@@ -58,6 +58,29 @@ pub fn save_profile(profile: &Profile) -> Result<PathBuf, CoreError> {
     Ok(path)
 }
 
+/// Creates exactly this profile name and never replaces an existing path.
+/// This is separate from explicit profile updates and additive imports.
+pub fn create_profile(profile: &Profile) -> Result<PathBuf, CoreError> {
+    create_profile_in(&profiles_dir(), profile)
+}
+
+fn create_profile_in(dir: &Path, profile: &Profile) -> Result<PathBuf, CoreError> {
+    fs::create_dir_all(dir)?;
+    let path = dir.join(format!("{}.conf", sanitize_filename(&profile.name)));
+    let mut options = fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    { use std::os::unix::fs::OpenOptionsExt; options.mode(0o600); }
+    let mut file = options.open(&path)?;
+    let result = file.write_all(profile.config.to_conf_string().as_bytes()).and_then(|_| file.sync_all());
+    drop(file);
+    if let Err(error) = result {
+        let _ = fs::remove_file(&path);
+        return Err(error.into());
+    }
+    Ok(path)
+}
+
 pub fn load_profile(name: &str) -> Result<Profile, CoreError> {
     let path = profile_path(name);
     let text = fs::read_to_string(&path)?;
@@ -157,6 +180,28 @@ fn import_into(dir: &Path, name: &str, text: &str) -> Result<Profile, CoreError>
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn exact_creation_never_replaces_an_existing_profile_or_directory() {
+        let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+        let dir = std::env::temp_dir().join(format!("wax-create-{}-{stamp}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let profile = Profile { name: "Cloudflare WARP".into(), config: WireGuardConfig {
+            interface: crate::InterfaceConfig { private_key:[1;32], addresses:vec![], dns:vec![], mtu:None, listen_port:None },
+            peers: vec![],
+        }};
+        let path = create_profile_in(&dir, &profile).unwrap();
+        let original = fs::read(&path).unwrap();
+        let mut changed = profile.clone();
+        changed.config.interface.private_key = [2;32];
+        assert!(create_profile_in(&dir, &changed).is_err());
+        assert_eq!(fs::read(&path).unwrap(), original);
+        fs::remove_file(&path).unwrap();
+        fs::create_dir(&path).unwrap();
+        assert!(create_profile_in(&dir, &profile).is_err());
+        assert!(path.is_dir());
+        fs::remove_dir_all(dir).unwrap();
+    }
+
     #[test]
     fn additive_import_preserves_existing_and_canonicalizes_names() {
         let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
