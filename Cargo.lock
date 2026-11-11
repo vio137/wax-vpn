@@ -3192,7 +3192,7 @@ dependencies = ["eframe","egui","egui_software_backend","embed-resource","log","
 [[package]]
 name = "wax-cli"
 version = "1.0.4"
-dependencies = ["clap","serde_json","thiserror 2.0.21","wax-core","wax-diagnostics","wax-tunnel","wax-warp"]
+dependencies = ["clap","serde_json","thiserror 2.0.21","wax-core","wax-diagnostics","wax-tunnel","wax-warp","windows-sys 0.52.0"]
 
 [[package]]
 name = "wax-core"
