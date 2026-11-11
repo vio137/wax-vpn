@@ -63,7 +63,7 @@ enum WarpCommands {
     },
     /// Show stored WARP registration details
     Account,
-    /// Generate/update the "Cloudflare WARP" profile from the registration
+    /// Generate the "Cloudflare WARP" profile without replacing an existing file
     Generate,
     /// Delete the WARP registration (server-side and local)
     Unregister,
@@ -252,12 +252,21 @@ mod console_tests {
     }
 }
 
+fn ensure_warp_profile_available(path: &std::path::Path) -> Result<(), String> {
+    match std::fs::symlink_metadata(path) {
+        Ok(_) => Err("the reserved 'Cloudflare WARP' profile path is occupied; keep or move it before generating a new profile".into()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(format!("could not check the reserved WARP profile: {error}")),
+    }
+}
+
 fn run_warp(cmd: WarpCommands) -> Result<(), String> {
     match cmd {
         WarpCommands::Register { accept_tos, model } => {
             if !accept_tos {
                 return Err("registering creates a Cloudflare WARP account and implies accepting Cloudflare's Terms of Service (https://www.cloudflare.com/application/terms/). Re-run with --accept-tos to confirm.".into());
             }
+            ensure_warp_profile_available(&profile::profile_path("Cloudflare WARP"))?;
             if wax_warp::load_account().map_err(|e| e.to_string())?.is_some() {
                 return Err("a WARP registration already exists; run `wax warp unregister` first".into());
             }
@@ -280,7 +289,7 @@ fn run_warp(cmd: WarpCommands) -> Result<(), String> {
             wax_warp::save_account(&account).map_err(|e| e.to_string())?;
             println!("Registered. License: {}...", &account.license.chars().take(6).collect::<String>());
             let profile = wax_warp::store::warp_profile(&account, "Cloudflare WARP").map_err(|e| e.to_string())?;
-            profile::save_profile(&profile).map_err(|e| e.to_string())?;
+            profile::create_profile(&profile).map_err(|e| format!("could not create the WARP profile without replacement: {e}. Local account kept; keep or move the existing profile and retry `wax warp generate`"))?;
             println!("Saved profile 'Cloudflare WARP'. Connect with `wax connect \"Cloudflare WARP\"`.");
         }
         WarpCommands::Account => {
@@ -300,9 +309,10 @@ fn run_warp(cmd: WarpCommands) -> Result<(), String> {
             }
         }
         WarpCommands::Generate => {
+            ensure_warp_profile_available(&profile::profile_path("Cloudflare WARP"))?;
             let account = wax_warp::load_account().map_err(|e| e.to_string())?.ok_or("not registered")?;
             let profile = wax_warp::store::warp_profile(&account, "Cloudflare WARP").map_err(|e| e.to_string())?;
-            profile::save_profile(&profile).map_err(|e| e.to_string())?;
+            profile::create_profile(&profile).map_err(|e| format!("could not create the WARP profile without replacement: {e}. Local account kept; keep or move the existing profile and retry `wax warp generate`"))?;
             println!("Saved profile 'Cloudflare WARP'.");
         }
         WarpCommands::Unregister => {
@@ -327,3 +337,23 @@ fn main() {
 }
 
 fn env_logger_init() {}
+
+#[cfg(test)]
+mod warp_profile_guard_tests {
+    use super::*;
+    #[test]
+    fn occupied_reserved_path_is_rejected_without_changing_it() {
+        let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+        let dir = std::env::temp_dir().join(format!("wax-warp-guard-{}-{stamp}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("Cloudflare WARP.conf");
+        assert!(ensure_warp_profile_available(&path).is_ok());
+        std::fs::write(&path, b"keep original").unwrap();
+        assert!(ensure_warp_profile_available(&path).is_err());
+        assert_eq!(std::fs::read(&path).unwrap(), b"keep original");
+        std::fs::remove_file(&path).unwrap();
+        std::fs::create_dir(&path).unwrap();
+        assert!(ensure_warp_profile_available(&path).is_err());
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+}
