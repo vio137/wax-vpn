@@ -1217,12 +1217,18 @@ jobs:
             'PASS uninstall removed installed GUI; user data intentionally retained' | Out-File installer-results.txt -Append
             if (-not (Test-Path 'installer-quit-diagnostics.txt')) { throw 'Installed quit diagnostic log missing' }
           }
+      - name: Native installer process scope and running-app checks
+        shell: pwsh
+        run: |
+          . .github/scripts/installer-console.ps1
+          . .github/scripts/installer-native.ps1
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: installer-evidence
           path: |
             installer-results.txt
+            installer-native-results.txt
             installed-gui.png
             installer-quit-diagnostics.txt
             installer-console-results.txt
