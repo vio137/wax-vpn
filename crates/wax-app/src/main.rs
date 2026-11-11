@@ -152,6 +152,7 @@ impl WaxApp {
         cc.egui_ctx.set_fonts(fonts);
 
         let (tx, rx) = channel();
+        startup::record("fonts ready; loading settings");
         let (settings, settings_notice) = match settings::load_checked() {
             Ok(settings) => (settings, None),
             Err(()) => {
@@ -161,6 +162,7 @@ impl WaxApp {
                 (settings, Some("Saved settings could not be read and were kept unchanged. Auto-reconnect is off for this session. Check your settings file before relying on saved preferences."))
             }
         };
+        startup::record("settings handled; loading profiles");
         let (profiles, profiles_notice, profiles_readable) = match profile::load_profiles_report() {
             Ok(report) => (report.profiles, profile_notice(report.skipped), true),
             Err(_) => (Vec::new(), Some("Profiles could not be read. Files were not changed. Reload in Profiles before connecting.".into()), false),
@@ -171,6 +173,7 @@ impl WaxApp {
             .and_then(|last| profiles.iter().position(|p| &p.name == last))
             .or(if profiles.is_empty() { None } else { Some(0) });
 
+        startup::record("profiles handled; loading WARP account");
         let warp_registered = matches!(wax_warp::load_account(), Ok(Some(_)));
         let mut app = Self {
             measurements: measurements::Monitor::default(),
@@ -216,8 +219,10 @@ impl WaxApp {
             #[cfg(windows)]
             tray: tray::Tray::new(&cc.egui_ctx),
         };
+        startup::record("state and tray initialized");
         app.refresh_warp_summary();
         // Pick up a tunnel left running by an earlier instance.
+        startup::record("checking existing tunnel");
         if let Ok(Some(stats)) = Tunnel::existing_status() {
             app.state = ConnState::Connected { since: Instant::now() };
             app.stats = stats;
@@ -429,6 +434,7 @@ impl WaxApp {
     }
 
     fn close_to_background(&mut self, ctx: &egui::Context) {
+        startup::record("close-to-background requested");
         let available = self.tray_available();
         ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
         ctx.send_viewport_cmd(background_command(available));
@@ -496,6 +502,7 @@ impl WaxApp {
                 None => (false, false),
             };
             if want_quit {
+                startup::record("quit event received");
                 self.quit_app();
             }
             if want_show {
@@ -832,6 +839,10 @@ mod repaint_tests {
 
 impl eframe::App for WaxApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        static FRAME_COUNT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let startup_frame = FRAME_COUNT.fetch_add(1, Ordering::Relaxed);
+        if startup_frame == 0 { startup::record("first UI frame entered"); }
+        if startup_frame == 10 { startup::record("ten UI frames entered"); }
         let ctx = ui.ctx().clone();
         ctx.style_mut_of(egui::Theme::Dark, |style| style.animation_time = if self.settings.reduced_motion { 0.0 } else { 0.175 });
         self.handle_events(&ctx);
@@ -879,6 +890,7 @@ impl eframe::App for WaxApp {
                 t.set_connected(matches!(self.state, ConnState::Connected { .. }));
             }
             if quit {
+                startup::record("tray quit action received");
                 self.quit_app();
             }
         }
@@ -918,6 +930,7 @@ impl eframe::App for WaxApp {
             }
             #[cfg(windows)]
             if q {
+                startup::record("Ctrl+Q received");
                 self.quit_app();
             }
             #[cfg(not(windows))]
@@ -1075,6 +1088,7 @@ impl eframe::App for WaxApp {
         }
         // One periodic request: an earlier shorter delay would override this
         // policy. egui input/animation requests may still wake the UI sooner.
+        if startup_frame == 0 { startup::record("first UI frame complete"); }
         ctx.request_repaint_after(repaint_delay(
             self.hidden,
             matches!(self.state, ConnState::Connecting | ConnState::Disconnecting),
@@ -2011,7 +2025,47 @@ fn chrono_free_stamp() -> String {
     format!("{}", secs % 100_000)
 }
 
+// Local-only startup markers deliberately exclude settings, profile names,
+// account data and panic payloads. Native driver faults can bypass Rust hooks.
+mod startup {
+    use std::io::Write;
+    pub fn record(message: &str) {
+        let dir = wax_core::profile::config_dir();
+        if std::fs::create_dir_all(&dir).is_err() { return; }
+        let path = dir.join("startup.log");
+        let truncate = std::fs::metadata(&path).is_ok_and(|m| m.len() > 65536);
+        if let Ok(mut file) = std::fs::OpenOptions::new().create(true).write(true)
+            .append(!truncate).truncate(truncate).open(path) {
+            let timestamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs();
+            let _ = writeln!(file, "{timestamp} pid={} {}", std::process::id(), message);
+            let _ = file.flush();
+        }
+    }
+    pub fn alert(message: &str) {
+        #[cfg(windows)]
+        unsafe {
+            use windows_sys::Win32::UI::WindowsAndMessaging::{MessageBoxW, MB_ICONERROR, MB_OK};
+            let body = format!("{message}\n\nLocal details: %APPDATA%\\wax-vpn\\startup.log\nTry the Safe graphics shortcut if normal startup fails. No data was uploaded.");
+            let body: Vec<u16> = body.encode_utf16().chain(Some(0)).collect();
+            let title: Vec<u16> = "waX VPN startup problem".encode_utf16().chain(Some(0)).collect();
+            MessageBoxW(0, body.as_ptr(), title.as_ptr(), MB_OK | MB_ICONERROR);
+        }
+        #[cfg(not(windows))]
+        eprintln!("{message}");
+    }
+    pub fn install() {
+        record(concat!("launch version=", env!("WAX_BUILD_VERSION")));
+        std::panic::set_hook(Box::new(|info| {
+            if let Some(location) = info.location() {
+                record(&format!("rust panic at {}:{} (payload omitted)", location.file(), location.line()));
+            } else { record("rust panic (payload omitted)"); }
+            alert("The app encountered a Rust error and must close. Your saved profiles were not reset.");
+        }));
+    }
+}
+
 fn main() -> eframe::Result<()> {
+    startup::install();
     if std::env::args_os().any(|a| a == "--quit") {
         #[cfg(windows)]
         if !single::request_quit() {
@@ -2031,9 +2085,13 @@ fn main() -> eframe::Result<()> {
     };
     #[cfg(not(windows))]
     let instance: Option<single::Instance> = None;
+    startup::record("single-instance acquired; decoding icon");
     let icon = eframe::icon_data::from_png_bytes(include_bytes!("../assets/icon-256.png"))
         .expect("embedded icon must decode");
+    let safe_graphics = std::env::args_os().any(|arg| arg == "--safe-graphics");
+    startup::record(if safe_graphics { "renderer=OpenGL compatibility" } else { "renderer=wgpu" });
     let options = eframe::NativeOptions {
+        renderer: if safe_graphics { eframe::Renderer::Glow } else { eframe::Renderer::Wgpu },
         viewport: egui::ViewportBuilder::default()
             .with_title("waX VPN")
             .with_app_id("wax-vpn")
@@ -2044,9 +2102,20 @@ fn main() -> eframe::Result<()> {
             .with_decorations(false),
         ..Default::default()
     };
-    eframe::run_native(
+    let result = eframe::run_native(
         "waX VPN",
         options,
-        Box::new(|cc| Ok(Box::new(WaxApp::new(cc, instance)))),
-    )
-    }
+        Box::new(|cc| {
+            startup::record("graphics context ready; app creation starting");
+            let app = WaxApp::new(cc, instance);
+            startup::record("app creation complete");
+            Ok(Box::new(app))
+        }),
+    );
+    if let Err(error) = &result {
+        // eframe errors here describe window/graphics setup, not profile contents.
+        startup::record(&format!("window/graphics error: {}", error.to_string().chars().take(1600).collect::<String>()));
+        startup::alert("The window or graphics system could not start. Try the Safe graphics shortcut.");
+    } else { startup::record("event loop returned normally"); }
+    result
+                }
