@@ -22,6 +22,7 @@ mod single {
 mod theme;
 mod tray;
 mod settings;
+mod measurements;
 
 use std::sync::mpsc::{channel, Receiver};
 use std::sync::{Arc, Mutex};
@@ -52,10 +53,12 @@ enum Tab {
     Features,
     Warp,
     About,
+    Network,
 }
 
 
 enum AppEvent {
+    IpBefore(u64, String, Result<String, String>),
     DiagnosticsReady(String),
     Stage(u64, &'static str),
     TunnelLost(u64),
@@ -70,6 +73,7 @@ enum AppEvent {
 }
 
 pub struct WaxApp {
+    measurements: measurements::Monitor,
     diagnostics_report: Option<String>,
     diagnostics_generated_at: Option<Instant>,
     diagnostics_busy: bool,
@@ -168,6 +172,7 @@ impl WaxApp {
 
         let warp_registered = matches!(wax_warp::load_account(), Ok(Some(_)));
         let mut app = Self {
+            measurements: measurements::Monitor::default(),
             diagnostics_report: None,
             diagnostics_generated_at: None,
             diagnostics_busy: false,
@@ -299,6 +304,7 @@ impl WaxApp {
     }
 
     fn connect_manual(&mut self) {
+        self.measurements.new_intent();
         let generation = self.recovery.new_intent();
         self.connection_epoch.store(generation, Ordering::Release);
         self.active_profile = None;
@@ -356,6 +362,9 @@ impl WaxApp {
         let tunnel = self.tunnel.clone();
         let tx = self.events_tx.clone();
         let tx_stage = tx.clone();
+        let original_ip = (self.settings.network.public_ip && self.recovery.attempts() == 0)
+            .then(|| self.settings.network.ip_endpoint.clone());
+        let epoch = self.connection_epoch.clone();
         std::thread::spawn(move || {
             // Dispose of a lost owned adapter before creating its replacement.
             if let Some(old) = tunnel.lock().unwrap().take() {
@@ -364,6 +373,15 @@ impl WaxApp {
                     return;
                 }
             }
+            // Original-IP observation happens before adapter creation, never on recovery.
+            // Failure is visible but does not prevent connecting. No UI thread network I/O.
+            if epoch.load(Ordering::Acquire) != generation { return; }
+            if let Some(url) = original_ip {
+                let _ = tx.send(AppEvent::Stage(generation, "Checking public IP before tunnel"));
+                let result = measurements::public_ip(&url);
+                let _ = tx.send(AppEvent::IpBefore(generation, url, result));
+            }
+            if epoch.load(Ordering::Acquire) != generation { return; }
             match Tunnel::connect_progress(&profile, &opts, move |stage| {
                 let _ = tx_stage.send(AppEvent::Stage(generation, stage));
             }) {
@@ -494,6 +512,12 @@ impl WaxApp {
         }
         while let Ok(event) = self.events_rx.try_recv() {
             match event {
+                AppEvent::IpBefore(generation, endpoint, result) => {
+                    if generation == self.recovery.generation() && self.settings.network.public_ip
+                        && endpoint == self.settings.network.ip_endpoint {
+                        self.measurements.before = Some(result);
+                    }
+                }
                 AppEvent::TunnelLost(generation) => {
                     if generation != self.recovery.generation() || !matches!(self.state, ConnState::Connected { .. }) { continue; }
                     self.state = ConnState::Connecting;
@@ -812,6 +836,9 @@ impl eframe::App for WaxApp {
         let ctx = ui.ctx().clone();
         ctx.style_mut_of(egui::Theme::Dark, |style| style.animation_time = if self.settings.reduced_motion { 0.0 } else { 0.175 });
         self.handle_events(&ctx);
+        let phase = match self.state { ConnState::Connected { .. } => 2, ConnState::Connecting | ConnState::Disconnecting => 1, _ => 0 };
+        self.measurements.tick(&self.settings.network, self.recovery.generation(), phase,
+            self.tab == Tab::Network && !self.hidden, self.stats.rx_bytes, self.stats.tx_bytes);
 
         // Never hide an unreachable window when the tray failed to initialize.
         if ctx.input(|i| i.viewport().close_requested()) {
@@ -961,6 +988,7 @@ impl eframe::App for WaxApp {
                 let items = [
                     (Tab::Connect, "Connect"),
                     (Tab::Profiles, "Profiles"),
+                    (Tab::Network, "Network"),
                     (Tab::Features, "Features"),
                     (Tab::Warp, "WARP"),
                     (Tab::About, "About"),
@@ -977,7 +1005,7 @@ impl eframe::App for WaxApp {
         egui::CentralPanel::default()
             .frame(egui::Frame::default().fill(theme::BG).inner_margin(egui::Margin::symmetric(18, 12)))
             .show(ui, |ui| {
-                let title = match self.tab { Tab::Connect => "Connect", Tab::Profiles => "Profiles", Tab::Features => "Features", Tab::Warp => "WARP", Tab::About => "About" };
+                let title = match self.tab { Tab::Connect => "Connect", Tab::Profiles => "Profiles", Tab::Features => "Features", Tab::Warp => "WARP", Tab::About => "About", Tab::Network => "Network" };
                 ui.horizontal(|ui| {
                     ui.label(RichText::new(title).font(theme::semi(14.0)).color(theme::TEXT));
                     ui.with_layout(Layout::right_to_left(Align::Center), |ui| { ui.label(RichText::new(format!("v{VERSION}")).size(12.0).color(theme::SUB)); });
@@ -1011,6 +1039,9 @@ impl eframe::App for WaxApp {
                                 Tab::Features => self.tab_features(ui),
                                 Tab::Warp => self.tab_warp(ui),
                                 Tab::About => self.tab_about(ui),
+                                Tab::Network => self.measurements.ui(ui, &self.settings.network,
+                                    matches!(self.state, ConnState::Connected { .. } | ConnState::Disconnected | ConnState::Failed(_)),
+                                    matches!(self.state, ConnState::Connected { .. })),
                                 Tab::Connect => unreachable!(),
                             });
                     }
@@ -1659,6 +1690,8 @@ impl WaxApp {
             self.save_settings();
         }
         ui.add_space(8.0);
+        if measurements::settings_ui(ui, &mut self.settings.network) { self.save_settings(); }
+        ui.add_space(8.0);
         theme::card_frame().show(ui, |ui| {
             ui.label(
                 RichText::new(if self.is_admin {
@@ -1927,6 +1960,11 @@ fn rail_icon(p: &egui::Painter, tab: Tab, c: egui::Pos2, s: f32, col: egui::Colo
                 p.circle_filled(egui::pos2(kx, y), s * 0.2, col);
             }
         }
+        Tab::Network => {
+            p.line_segment([c + egui::vec2(-s, s), c + egui::vec2(-s, -s)], st);
+            p.line_segment([c + egui::vec2(-s, s), c + egui::vec2(s, s)], st);
+            p.add(egui::Shape::line(vec![c + egui::vec2(-s, 0.5*s), c + egui::vec2(-0.3*s, -0.3*s), c + egui::vec2(0.2*s, 0.2*s), c + egui::vec2(s, -s)], st));
+        }
         Tab::Warp => {
             let pts: Vec<egui::Pos2> = (0..40)
                 .map(|i| {
@@ -1996,4 +2034,4 @@ fn main() -> eframe::Result<()> {
         options,
         Box::new(|cc| Ok(Box::new(WaxApp::new(cc, instance)))),
     )
-                    }
+            }
