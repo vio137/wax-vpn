@@ -168,7 +168,7 @@ impl WireGuardConfig {
                     "PrivateKey" => private_key = Some(keys::key_from_base64(value).map_err(|_| err("bad PrivateKey; expected a base64-encoded 32-byte key"))?),
                     "Address" => {
                         for a in split_list(value).ok_or_else(|| err("empty Address list entry"))? {
-                            addresses.push(parse_ip_prefix(a).ok_or_else(|| err(&format!("bad address {a}")))?);
+                            addresses.push(parse_ip_prefix(a).ok_or_else(|| err("bad Address; expected an IP address or CIDR prefix"))?);
                         }
                     }
                     "DNS" => {
@@ -193,7 +193,7 @@ impl WireGuardConfig {
                         // Older waX normalized files wrote an empty line for no routes.
                         if value.is_empty() { continue; }
                         for a in split_list(value).ok_or_else(|| err("empty AllowedIPs list entry"))? {
-                            cur_allowed.push(parse_ip_prefix(a).ok_or_else(|| err(&format!("bad AllowedIP {a}")))?);
+                            cur_allowed.push(parse_ip_prefix(a).ok_or_else(|| err("bad AllowedIP; expected an IP address or CIDR prefix"))?);
                         }
                     }
                     "Endpoint" => cur_endpoint = Some(value.to_string()),
@@ -660,6 +660,32 @@ mod tests {
                 let error = WireGuardConfig::parse(&base.replace("MTU = 1280", &format!("MTU = {value}"))).unwrap_err().to_string();
                 assert!(error.contains(&format!("MTU must be at least {minimum} for this profile's address families")));
                 assert!(!error.contains("bad MTU;"));
+            }
+        }
+    }
+
+
+    #[test]
+    fn address_errors_explain_syntax_without_echoing_entries() {
+        for (key, existing, field) in [
+            ("Address", "Address = 10.0.0.2/32, fd00::2/128", "Address"),
+            ("AllowedIPs", "AllowedIPs = 0.0.0.0/0, ::/0", "AllowedIP"),
+        ] {
+            for value in ["do-not-echo-private-entry", "private.internal", "192.0.2.1/33", "2001:db8::1/129", "192.0.2.1/secret", "10.0.0.2, do-not-echo-private-entry"] {
+                let text = sample().replace(existing, &format!("{key} = {value}"));
+                let line = text.lines().position(|line| line.starts_with(&format!("{key} ="))).unwrap() + 1;
+                let error = WireGuardConfig::parse(&text).unwrap_err().to_string();
+                assert!(error.contains(&format!("line {line}: bad {field}; expected an IP address or CIDR prefix")), "{error}");
+                assert!(!error.contains(value), "{error}");
+                for entry in value.split(',').map(str::trim) { assert!(!error.contains(entry), "{error}"); }
+            }
+            for value in ["192.0.2.7", "2001:db8::7", "192.0.2.7/32", "2001:db8::7/128", "192.0.2.0/24, 2001:db8::/64"] {
+                let text = sample().replace(existing, &format!("{key} = {value}"));
+                let parsed = WireGuardConfig::parse(&text).unwrap();
+                let expected = value.split(',').map(str::trim).map(|item| parse_ip_prefix(item).unwrap()).collect::<Vec<_>>();
+                if key == "Address" { assert_eq!(parsed.interface.addresses, expected); }
+                else { assert_eq!(parsed.peers[0].allowed_ips, expected); }
+                assert_eq!(WireGuardConfig::parse(&parsed.to_conf_string()).unwrap(), parsed);
             }
         }
     }
