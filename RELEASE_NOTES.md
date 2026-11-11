@@ -40,5 +40,25 @@ sampling can miss a shorter flash.
 
 ## Release verification
 
-Pending the exact stable workflow and downloaded installer checksum. Do not
-interpret this preparation note as a released build.
+Stable workflow: https://github.com/vio137/wax-vpn/actions/runs/43100304009
+Source: `35a5f742e15be996369b8995ca66dcdf3ffdbfce`.
+
+The exact 1.0.5 installer passed fresh install, same-version upgrade, uninstall,
+running-GUI upgrade/uninstall and bounded nonresponsive-process termination.
+Unrelated same-name processes survived. Both GUI stop paths consumed the
+PID-scoped quit signal and completed cleanup. Packaged PE import audits passed
+for the GUI, CLI and WireGuardNT DLL. No new visible console window was observed
+in sampled installer checks; shorter flashes can still be missed.
+
+The exact stable runtime gate passed GUI-driven demo connection and handshake,
+tunnel-address ping, 67 split routes, DNS apply/reset, IPv4 MTU, bounded recovery,
+pending-retry disable, manual reconnect, close-to-tray, original-window restore
+and graceful quit. Profile pin/unpin persistence and accessible name/endpoint
+search checks passed. Actual connected, Profiles and installed GUI captures
+were inspected. The limits above still apply.
+
+The published installer was downloaded and checked against its checksum file:
+
+- File: `waX-VPN-Setup-v1.0.5-x64.exe`
+- Size: 11,671,530 bytes
+- SHA256: `f99f1c27895a607c9d94c669650498752623f3d2487a67324d7151cc06484d25`
