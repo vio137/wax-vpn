@@ -443,6 +443,13 @@ jobs:
             $uiaWin = [System.Windows.Automation.AutomationElement]::FromHandle($hwnd)
             $allBtns = $uiaWin.FindAll([System.Windows.Automation.TreeScope]::Descendants, (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Button)))
             Write-Host "buttons in tree: $(@($allBtns | ForEach-Object { $_.Current.Name }) -join ' | ')"
+            Add-Type -AssemblyName System.Windows.Forms
+            [WaxWin32]::SetForegroundWindow($hwnd) | Out-Null
+            [System.Windows.Forms.SendKeys]::SendWait('^f')
+            Start-Sleep -Milliseconds 500
+            $focusedSearch = [System.Windows.Automation.AutomationElement]::FocusedElement
+            if ($focusedSearch.Current.Name -ne 'Find profiles' -or -not $focusedSearch.Current.HasKeyboardFocus) { throw 'Ctrl+F did not open and focus profile search' }
+            'PASS Ctrl+F opened Profiles and focused accessible search' | Out-File verify-results.txt -Append -Encoding utf8
             $marker = @{ Profiles='Profiles'; Features='Features'; WARP='Cloudflare WARP'; Network='Network'; About='About' }
             foreach ($tab in @('Profiles','Features','WARP','Network','About')) {
               $nb = $uiaWin.FindFirst([System.Windows.Automation.TreeScope]::Descendants, (New-Object System.Windows.Automation.AndCondition((New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, $tab)), (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Button)))))
