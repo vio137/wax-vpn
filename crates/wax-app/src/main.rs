@@ -1264,7 +1264,7 @@ impl WaxApp {
     }
 
     fn tab_profiles(&mut self, ui: &mut egui::Ui) {
-        theme::section_heading(ui, "Profiles", "WireGuard configs on this device. Drop a .conf file anywhere to import.");
+        theme::section_heading(ui, "Profiles", "Drop a .conf file to add a profile. Existing profiles are kept; duplicate names get a number.");
         let mut connect_idx: Option<usize> = None;
         let mut delete_idx: Option<usize> = None;
         let can_manage = matches!(self.state, ConnState::Disconnected | ConnState::Failed(_));
