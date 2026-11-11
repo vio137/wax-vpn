@@ -1,3 +1,4 @@
+
 mod startup {
     use std::io::Write;
     pub fn record(message: &str) {
@@ -59,7 +60,7 @@ fn main() -> eframe::Result<()> {
     startup::record("single-instance acquired; decoding icon");
     let icon = eframe::icon_data::from_png_bytes(include_bytes!("../assets/icon-256.png"))
         .expect("embedded icon must decode");
-    if std::env::args_os().any(|arg| arg == "--software-graphics") {
+    if !std::env::args_os().any(|arg| arg == "--accelerated-graphics" || arg == "--safe-graphics") {
         startup::record("renderer=CPU software (GDI on Windows)");
         let mut instance = instance;
         let config = egui_software_backend::SoftwareBackendAppConfiguration::new()
@@ -109,4 +110,4 @@ fn main() -> eframe::Result<()> {
         startup::alert("The window or graphics system could not start. Try the Safe graphics shortcut.");
     } else { startup::record("event loop returned normally"); }
     result
-              }
+            }
