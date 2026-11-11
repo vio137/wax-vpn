@@ -1013,15 +1013,17 @@ jobs:
         with:
           name: wax-vpn-installer
           path: installer-download
-      - name: Install, launch installed GUI, quit and uninstall
+      - uses: actions/checkout@v4
+      - name: Install, upgrade, launch installed GUI, quit and uninstall
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           $dir = Join-Path $env:ProgramFiles 'waX VPN'
           if (Test-Path $dir) { throw 'Runner is not clean: waX installation already exists' }
           $setup = Get-ChildItem installer-download -Filter '*.exe' | Select-Object -First 1
-          $install = Start-Process $setup.FullName -ArgumentList '/S' -Wait -PassThru
-          if ($install.ExitCode -ne 0) { throw "Installer exit $($install.ExitCode)" }
+          . .github/scripts/installer-console.ps1
+          Invoke-ObservedInstaller $setup.FullName 'fresh-install'
+          Invoke-ObservedInstaller $setup.FullName 'same-version-upgrade'
           $uninstallInfo = Get-ItemProperty 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\waX VPN'
           $expectedUninstall = '"' + (Join-Path $dir 'uninstall.exe') + '"'
           Write-Host "Registry UninstallString=[$($uninstallInfo.UninstallString)] QuietUninstallString=[$($uninstallInfo.QuietUninstallString)]"
@@ -1067,7 +1069,7 @@ jobs:
               Get-CimInstance Win32_Process | Where-Object { $_.ParentProcessId -eq $p.Id } | Select-Object ProcessId,ParentProcessId,Name | Format-Table
               $p.Kill(); throw 'Installed GUI did not quit within 15 seconds'
             }
-            $uninstall = Start-Process (Join-Path $dir 'uninstall.exe') -ArgumentList '/S' -Wait -PassThru
+            Invoke-ObservedInstaller (Join-Path $dir 'uninstall.exe') 'uninstall'
             Start-Sleep -Seconds 3
             if (Test-Path $exe) { throw 'Uninstall left GUI binary behind' }
             'PASS uninstall removed installed GUI; user data intentionally retained' | Out-File installer-results.txt -Append
@@ -1081,6 +1083,7 @@ jobs:
             installer-results.txt
             installed-gui.png
             installer-quit-diagnostics.txt
+            installer-console-results.txt
 
   publish:
     needs: [build, verify, installer-smoke]
