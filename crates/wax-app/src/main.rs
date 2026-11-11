@@ -107,6 +107,7 @@ pub struct WaxApp {
     connection_epoch: Arc<AtomicU64>,
     active_profile: Option<Profile>,
     picker_open: bool,
+    open_network_settings: bool,
     split_edit: String,
     split_edit_for: Option<usize>,
     #[allow(dead_code)]
@@ -206,6 +207,7 @@ impl WaxApp {
             connection_epoch: Arc::new(AtomicU64::new(0)),
             active_profile: None,
             picker_open: false,
+            open_network_settings: false,
             split_edit: String::new(),
             split_edit_for: None,
             instance,
@@ -783,8 +785,8 @@ fn loaded_profiles_label(count: usize, readable: bool) -> String {
 
 /// Periodic polling only, not a frame-rate or CPU-use guarantee. Hidden mode
 /// still polls tray and cross-instance signals within a one-second interval.
-fn repaint_delay(hidden: bool, reduced_motion: bool, disconnected: bool) -> Duration {
-    Duration::from_millis(if hidden { 1000 } else if reduced_motion && disconnected { 250 } else { 33 })
+fn repaint_delay(hidden: bool, transitioning: bool) -> Duration {
+    Duration::from_millis(if hidden { 1000 } else if transitioning { 33 } else { 250 })
 }
 
 #[cfg(test)]
@@ -821,12 +823,9 @@ mod repaint_tests {
     }
     #[test]
     fn periodic_repaint_policy_keeps_active_ui_responsive_and_hidden_polling_bounded() {
-        for reduced in [false, true] {
-            for disconnected in [false, true] {
-                assert_eq!(repaint_delay(true, reduced, disconnected), Duration::from_millis(1000));
-                let expected = if reduced && disconnected { 250 } else { 33 };
-                assert_eq!(repaint_delay(false, reduced, disconnected), Duration::from_millis(expected));
-            }
+        for transitioning in [false, true] {
+            assert_eq!(repaint_delay(true, transitioning), Duration::from_millis(1000));
+            assert_eq!(repaint_delay(false, transitioning), Duration::from_millis(if transitioning { 33 } else { 250 }));
         }
     }
 }
@@ -897,12 +896,13 @@ impl eframe::App for WaxApp {
                         i.modifiers.ctrl && i.key_pressed(egui::Key::Num3),
                         i.modifiers.ctrl && i.key_pressed(egui::Key::Num4),
                         i.modifiers.ctrl && i.key_pressed(egui::Key::Num5),
+                        i.modifiers.ctrl && i.key_pressed(egui::Key::Num6),
                     ],
                 )
             });
             for (idx, hit) in digits.iter().enumerate() {
                 if *hit {
-                    self.tab = [Tab::Connect, Tab::Profiles, Tab::Features, Tab::Warp, Tab::About][idx];
+                    self.tab = [Tab::Connect, Tab::Profiles, Tab::Features, Tab::Warp, Tab::About, Tab::Network][idx];
                 }
             }
             if esc && self.picker_open {
@@ -1039,9 +1039,14 @@ impl eframe::App for WaxApp {
                                 Tab::Features => self.tab_features(ui),
                                 Tab::Warp => self.tab_warp(ui),
                                 Tab::About => self.tab_about(ui),
-                                Tab::Network => self.measurements.ui(ui, &self.settings.network,
-                                    matches!(self.state, ConnState::Connected { .. } | ConnState::Disconnected | ConnState::Failed(_)),
-                                    matches!(self.state, ConnState::Connected { .. })),
+                                Tab::Network => {
+                                    if self.measurements.ui(ui, &self.settings.network,
+                                        matches!(self.state, ConnState::Connected { .. } | ConnState::Disconnected | ConnState::Failed(_)),
+                                        matches!(self.state, ConnState::Connected { .. })) {
+                                        self.open_network_settings = true;
+                                        self.tab = Tab::Features;
+                                    }
+                                },
                                 Tab::Connect => unreachable!(),
                             });
                     }
@@ -1072,8 +1077,7 @@ impl eframe::App for WaxApp {
         // policy. egui input/animation requests may still wake the UI sooner.
         ctx.request_repaint_after(repaint_delay(
             self.hidden,
-            self.settings.reduced_motion,
-            matches!(self.state, ConnState::Disconnected),
+            matches!(self.state, ConnState::Connecting | ConnState::Disconnecting),
         ));
     }
 }
@@ -1301,7 +1305,7 @@ impl WaxApp {
             }
         } else { "Traffic can use the normal connection when the tunnel is off.".into() };
         ui.add(egui::Label::new(RichText::new(evidence).size(12.0).color(theme::SUB)).wrap());
-            if let Some(issue) = self.cleanup_issue.clone() {
+            if let Some(issue) = &self.cleanup_issue {
                 ui.horizontal(|ui| {
                     ui.label(RichText::new(issue).size(10.5).color(theme::WARN));
                     let can_retry = matches!(self.state, ConnState::Disconnected | ConnState::Failed(_));
@@ -1695,7 +1699,8 @@ impl WaxApp {
             self.save_settings();
         }
         ui.add_space(8.0);
-        if measurements::settings_ui(ui, &mut self.settings.network) { self.save_settings(); }
+        let open = std::mem::take(&mut self.open_network_settings);
+        if measurements::settings_ui(ui, &mut self.settings.network, open) { self.save_settings(); }
         ui.add_space(8.0);
         theme::card_frame().show(ui, |ui| {
             ui.label(
@@ -1927,6 +1932,11 @@ fn rail_button(ui: &mut egui::Ui, tab: Tab, label: &str, active: bool) -> bool {
         if active { theme::semi(14.0) } else { egui::FontId::proportional(14.0) }, color);
     if resp.has_focus() { ui.painter().rect_stroke(rect, egui::CornerRadius::same(8), egui::Stroke::new(1.0, theme::ACCENT), egui::StrokeKind::Inside); }
     if resp.hovered() { ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand); }
+    resp.clone().on_hover_text(match tab {
+        Tab::Connect => "Connect (Ctrl+1)", Tab::Profiles => "Profiles (Ctrl+2)",
+        Tab::Features => "Features (Ctrl+3)", Tab::Warp => "WARP (Ctrl+4)",
+        Tab::About => "About (Ctrl+5)", Tab::Network => "Network (Ctrl+6)",
+    });
     resp.clicked()
 }
 
