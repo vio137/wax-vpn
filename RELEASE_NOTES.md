@@ -1,19 +1,19 @@
-# waX VPN v0.1.29
+# waX VPN v0.1.30
 
-Unsigned Windows x64 unknown-token error-wording checkpoint. Windows may show an unknown-publisher warning. The official WireGuardNT driver is independently signed by its vendor. No kill switch: traffic can use the normal connection if the tunnel drops.
+Unsigned Windows x64 WARP credential Debug-redaction checkpoint. Windows may show an unknown-publisher warning. The official WireGuardNT driver is independently signed by its vendor. No kill switch: traffic can use the normal connection if the tunnel drops.
 
 ## Changes
 
-- Unknown section, unknown Interface key and unknown Peer key errors now give fixed expected-section/key guidance instead of repeating the unrecognized token. Line numbers remain present.
-- Defensive wording only, not a confirmed leak fix. All acceptance/rejection rules and known unsupported wg-quick directive handling are unchanged. No serialization, profile-storage, crypto, tunnel, UI or network behavior change.
+- Account Debug output now redacts a present license while preserving None. Registration Debug output redacts its token, including nested account license. WarpAccount Debug output redacts token, license and private key, including its nested registration.
+- Defensive hardening only. No production Debug credential leak was observed. Serialization, stored JSON, registration requests, profile generation, crypto, tunnel, UI and network behavior are unchanged. No signup or registration was performed.
 
 ## Verification
 
-Source 01c2212cf18d403d1e1ee3cd874d00635d014ff9 plus fixture follow-up f2d90ef822468c675a1e9e735737b7ca1c63eba5 / full preview 42946492976 passed all required jobs. The unknown_tokens_use_fixed_guidance_without_echoing_payloads and inline_hash_comments_parse_without_relaxing_validation fixtures passed with all 36 Windows core tests. The new fixture checks unknown sections and keys in both sections, long sentinel tokens, leading whitespace/BOM/comments, mixed-case known headers, retained line/category/guidance, no offending token/value in the error, all seven known unsupported directives and valid round-trips. Fixture proof only, not separate GUI screenshots of those imports.
+Source commits 2363d25f61e5524ec8614161057d8e4ee12d75e1 and adb5d605a02c615ef54c329c0321d4a48b516f2a / full preview 42949842839 passed all required jobs. The account_and_registration_debug_redact_nested_credentials and stored_account_debug_redacts_credentials_without_changing_json fixtures passed with all 3 WARP tests. Synthetic offline fixtures cover compact and pretty Account, Registration, Envelope<Registration> and WarpAccount output, absent secret sentinels, redaction markers, None and visible non-secret fields, plus JSON value retention and round-trips. Fixture proof only, not a production leak reproduction.
 
-Exact v0.1.29 run 42947907711 at 8ba657cd35b1b1a88c710146ea27b8d00aca0825 passed build, demo-tunnel/GUI verification, fresh-runner install/quit/uninstall and publish. Raw verify-results and installer diagnostics were read. Peer handshake and tunnel-side ping, DNS and IPv4 MTU 1380, split exclusions, owned adapter-loss recovery after 5 seconds, pending-retry disable across 48 samples/12 seconds, manual reconnect with recovery off, original main HWND/PID plus Connect rail restoration, graceful quit/adapter removal, profile/settings warnings and BOM-backed settings GUI startup passed. No console windows observed in 441 samples at about 100 ms; shorter windows could be missed. Crash evidence is a clean 3-second pre-cleanup snapshot. All 14 normal, warning, BOM and installed screenshots were inspected. Installed quit diagnostics show driver open/probe at 1 ms, absence confirmed 3 ms and legacy cleanup finished at 4548 ms. These timings describe this run, not a performance benchmark.
+Full preview raw verify-results and installer diagnostics were read. Peer handshake and tunnel-side ping, DNS and IPv4 MTU 1380, split exclusions, owned adapter-loss recovery after 5 seconds, pending-retry disable across 48 samples/12 seconds, manual reconnect with recovery off, original main HWND/PID plus Connect rail restoration, graceful quit/adapter removal, profile/settings warnings and BOM-backed settings GUI startup passed. No console windows observed in 433 samples at about 100 ms; shorter windows could be missed. Crash evidence is a clean 3-second pre-cleanup snapshot. All 14 normal, warning, BOM and installed screenshots were inspected. Installed quit diagnostics show driver open/probe at 1 ms, absence confirmed 2 ms and legacy cleanup finished at 4295 ms. These timings describe this run, not a performance benchmark.
 
-Freshly downloaded unsigned installer: 10,958,662 bytes. SHA256 70ab1589f878e87dfa4dee759d590d9b00910ec453628d10482e699efbafd534 matches the freshly downloaded SHA256SUMS-v0.1.29.txt.
+Exact v0.1.30 gate and freshly downloaded installer checksum will be recorded after verification.
 
 ## Limits and earlier failures
 
