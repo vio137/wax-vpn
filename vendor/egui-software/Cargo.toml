@@ -1,0 +1,27 @@
+[package]
+name = "egui_software_backend"
+version = "0.0.3-wax.1"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+description = "Pinned egui software renderer, adapted to egui 0.37 for waX VPN"
+[lib]
+path = "lib.rs"
+[dependencies]
+egui = { version = "=0.37.0", default-features = false }
+ahash = { version = "0.8", default-features = false, features = ["no-rng"] }
+strength_reduce = "=0.2.4"
+constify = "=0.0.1"
+log = { version = "0.4", optional = true }
+rayon = { version = "1.11", optional = true }
+winit = { version = "=0.30.13", optional = true }
+softbuffer = { version = "=0.4.8", optional = true }
+egui-winit = { version = "=0.37.0", default-features = false, features = ["accesskit"], optional = true }
+bytemuck = { version = "1.25", optional = true }
+[features]
+default = ["std", "winit"]
+std = ["ahash/std"]
+winit = ["dep:winit", "dep:softbuffer", "dep:egui-winit", "dep:bytemuck"]
+log = ["dep:log"]
+rayon = ["dep:rayon"]
+raster_stats = ["std"]
+test_render = []
