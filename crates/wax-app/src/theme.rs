@@ -141,3 +141,51 @@ pub fn danger_button(ui: &mut egui::Ui, label: &str) -> bool {
         .min_size(Vec2::new(0.0, 26.0));
     ui.add(btn).clicked()
 }
+
+/// Avoid copying the shared egui Style for every frame when the motion setting
+/// is unchanged. Check the live style instead of caching a second preference.
+pub fn sync_motion(ctx: &egui::Context, reduced_motion: bool) {
+    let animation_time = if reduced_motion { 0.0 } else { 0.175 };
+    if ctx.style_of(egui::Theme::Dark).animation_time != animation_time {
+        ctx.style_mut_of(egui::Theme::Dark, |style| style.animation_time = animation_time);
+    }
+}
+
+#[cfg(test)]
+mod motion_tests {
+    use super::*;
+    use std::sync::Arc;
+
+    #[test]
+    fn unchanged_motion_keeps_the_shared_style_allocation() {
+        let ctx = egui::Context::default();
+        sync_motion(&ctx, false);
+        let held = ctx.style_of(egui::Theme::Dark);
+        for _ in 0..100 {
+            sync_motion(&ctx, false);
+            assert!(Arc::ptr_eq(&held, &ctx.style_of(egui::Theme::Dark)));
+        }
+        assert_eq!(held.animation_time, 0.175);
+    }
+
+    #[test]
+    fn motion_toggle_updates_without_changing_other_style_fields() {
+        let ctx = egui::Context::default();
+        sync_motion(&ctx, false);
+        let before = ctx.style_of(egui::Theme::Dark);
+        sync_motion(&ctx, true);
+        let reduced = ctx.style_of(egui::Theme::Dark);
+        assert_eq!(reduced.animation_time, 0.0);
+        assert_eq!(reduced.visuals, before.visuals);
+        assert_eq!(reduced.spacing, before.spacing);
+        assert_eq!(before.animation_time, 0.175);
+        for _ in 0..100 { sync_motion(&ctx, true); }
+        assert!(Arc::ptr_eq(&reduced, &ctx.style_of(egui::Theme::Dark)));
+        sync_motion(&ctx, false);
+        assert_eq!(ctx.style_of(egui::Theme::Dark).animation_time, 0.175);
+        // A style update by another caller must not be hidden by a stale cache.
+        ctx.style_mut_of(egui::Theme::Dark, |style| style.animation_time = 0.9);
+        sync_motion(&ctx, false);
+        assert_eq!(ctx.style_of(egui::Theme::Dark).animation_time, 0.175);
+    }
+}
