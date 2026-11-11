@@ -52,8 +52,19 @@ warning; the bundled WireGuardNT driver is independently signed by its vendor.
 
 v1.0.2 removes the Rust executables' VC++ redistributable dependency by linking
 the C runtime statically and checking packaged PE imports. It is a native app,
-not a .NET app. Windows system libraries and a compatible graphics driver are
-still required; no bare-image compatibility claim is made.
+not a .NET app. Windows system libraries are still required; no bare-image compatibility claim
+is made. The next v1.0.3 candidate defaults to CPU software rendering (Windows GDI),
+with GPU rendering available through `--accelerated-graphics`. Windows 10/11 x64
+is required. No separate VC++/.NET/WebView2 installation or first-run driver
+download is required. The bundled WireGuardNT DLL installs its signed kernel
+driver when connecting, with administrator consent. Windows PowerShell, netsh
+and Windows networking services are still used for tunnel setup; removing
+those shell dependencies is a separate follow-up, not part of v1.0.3.
+
+The CPU path passed launch, accessible tab input, close-to-tray, no-tray fallback,
+same-window restore and quit on a Windows Server 2025 hosted runner with Hyper-V
+Video. That runner has runtimes installed and is not a clean Windows 10/11 image.
+The reported consumer PC crash remains unverified.
 
 If startup fails, check `%APPDATA%\wax-vpn\startup.log`. Fixed startup markers
 are local and bounded; no profile/account/settings values are written. A Rust
