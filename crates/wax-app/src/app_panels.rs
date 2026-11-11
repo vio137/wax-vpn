@@ -101,7 +101,10 @@ impl WaxApp {
                 ui.set_min_width(280.0);
                 let mut picked = None;
                 let order = self.profile_view.indices(&self.profiles, &self.settings, "");
-                for &i in order {
+                egui::ScrollArea::vertical().id_salt("quick-profile-list")
+                    .max_height(104.0).auto_shrink([false, true])
+                    .show_rows(ui, 32.0, order.len(), |ui, rows| {
+                for &i in &order[rows] {
                     let (name, ep) = {
                         let p = &self.profiles[i];
                         (
@@ -147,6 +150,7 @@ impl WaxApp {
                     resp.clone().on_hover_text(format!("{name}\n{ep}"));
                     if resp.clicked() { picked = Some(i); }
                 }
+                });
                 if let Some(i) = picked {
                     self.selected = Some(i);
                     self.confirm_delete = None;
