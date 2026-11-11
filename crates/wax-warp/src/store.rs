@@ -13,7 +13,7 @@ use wax_core::{keys, InterfaceConfig, PeerConfig, Profile};
 use crate::model::Registration;
 use crate::WarpError;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct WarpAccount {
     pub device_id: String,
     pub token: String,
@@ -141,4 +141,50 @@ pub fn warp_profile(account: &WarpAccount, name: &str) -> Result<Profile, WarpEr
             }],
         },
     })
+}
+
+impl std::fmt::Debug for WarpAccount {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WarpAccount")
+            .field("device_id", &self.device_id)
+            .field("token", &"<redacted>")
+            .field("license", &"<redacted>")
+            .field("private_key", &"<redacted>")
+            .field("model", &self.model)
+            .field("created_at", &self.created_at)
+            .field("registration", &self.registration)
+            .finish()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn stored_account_debug_redacts_credentials_without_changing_json() {
+        let account = WarpAccount {
+            device_id: "stored-device-fixture".into(), token: "stored-token-sentinel".into(),
+            license: "stored-license-sentinel".into(), private_key: "stored-private-sentinel".into(),
+            model: "PC-fixture".into(), created_at: "synthetic-date".into(),
+            registration: Registration { token: "nested-token-sentinel".into(),
+                account: crate::model::Account { license: Some("nested-license-sentinel".into()), ..Default::default() },
+                ..Default::default() },
+        };
+        for output in [format!("{account:?}"), format!("{account:#?}")] {
+            assert!(output.contains("<redacted>"));
+            for secret in ["stored-token-sentinel", "stored-license-sentinel", "stored-private-sentinel", "nested-token-sentinel", "nested-license-sentinel"] {
+                assert!(!output.contains(secret));
+            }
+            for field in ["stored-device-fixture", "PC-fixture", "synthetic-date", "registration:"] {
+                assert!(output.contains(field));
+            }
+        }
+        let json = serde_json::to_string(&account).unwrap();
+        for secret in ["stored-token-sentinel", "stored-license-sentinel", "stored-private-sentinel", "nested-token-sentinel", "nested-license-sentinel"] {
+            assert!(json.contains(secret));
+        }
+        let read: WarpAccount = serde_json::from_str(&json).unwrap();
+        assert_eq!(serde_json::to_value(&read).unwrap(), serde_json::to_value(&account).unwrap());
+    }
 }
