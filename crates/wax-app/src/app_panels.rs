@@ -162,6 +162,8 @@ impl WaxApp {
             ConnState::Connecting => ("Connecting", false),
             ConnState::Disconnecting => ("Disconnecting", false),
         };
+        let import_action = profile_import_action(&self.state, self.selected.is_some());
+        let (action_label, can_act) = if import_action { ("Import profile", true) } else { (action_label, can_act) };
         let action_a11y = match &self.state {
             ConnState::Disconnected | ConnState::Failed(_) => self
                 .selected
@@ -180,6 +182,9 @@ impl WaxApp {
             action_a11y.as_deref().unwrap_or(action_label),
         ) {
             match self.state {
+                ConnState::Disconnected | ConnState::Failed(_) if import_action => {
+                    self.tab = Tab::Profiles;
+                }
                 ConnState::Disconnected | ConnState::Failed(_) => self.connect_manual(),
                 ConnState::Connected { .. } => self.disconnect(),
                 ConnState::Connecting if self.recovery.is_pending() => self.disconnect(),
@@ -191,7 +196,7 @@ impl WaxApp {
         let (stage_rect, _) = ui.allocate_exact_size(egui::vec2(col_w, 28.0), egui::Sense::hover());
         let mut stage_ui = ui.new_child(egui::UiBuilder::new().max_rect(stage_rect).layout(Layout::top_down(Align::Center)));
         if self.selected.is_none() {
-            stage_ui.label(RichText::new("Add a profile from Profiles to connect").size(12.0).color(theme::SUB));
+            stage_ui.label(RichText::new("Add your WireGuard configuration in Profiles to get started").size(12.0).color(theme::SUB));
         } else if !self.is_admin {
             if stage_ui.link(RichText::new("Restart as administrator to connect").size(12.0).color(theme::WARN)).clicked() { self.restart_as_admin(); }
         } else if let ConnState::Failed(msg) = &self.state {
@@ -237,7 +242,7 @@ impl WaxApp {
                 ui.label(format!("Peer route entries: {routes}"));
                 ui.label(RichText::new("Configuration is not a live routing or DNS test. No private keys are shown.").size(10.5).color(theme::MUTE));
             } else {
-                ui.label("Active configuration is not known to this app instance.");
+                ui.label(if connected { "Active configuration is not known to this app instance." } else { "Import a profile to inspect its configuration." });
             }
             ui.label(RichText::new(if connected { "Session counters cover this observed connection, not device-wide traffic." } else { "Connect to start live session counters." }).size(10.5).color(theme::MUTE));
         });
@@ -288,7 +293,7 @@ impl WaxApp {
         ui.horizontal(|ui| {
             let search_label = ui.label(RichText::new("Find profiles").size(12.0).color(theme::SUB));
             ui.add(egui::TextEdit::singleline(&mut self.profile_search)
-                .id(egui::Id::new("profile-search")).hint_text("Profile or endpoint").desired_width(240.0))
+                .id(egui::Id::unique("profile-search")).hint_text("Profile or endpoint").desired_width(240.0))
                 .labelled_by(search_label.id).on_hover_text("Ctrl+F to find a profile.");
             if !self.profile_search.is_empty() && ui.small_button("Clear").clicked() { self.profile_search.clear(); }
         });
@@ -558,6 +563,14 @@ impl WaxApp {
 
         ui.add_space(8.0);
         theme::section_heading(ui, "Import", "Paste a WireGuard config");
+        #[cfg(windows)]
+        if ui.button("Choose .conf file").on_hover_text("Read a local file and import a new profile. Existing profiles are kept.").clicked() {
+            match profile_file::choose() {
+                Ok(Some(file)) => { self.import_text(file.name, &file.text); }
+                Ok(None) => {}
+                Err(message) => { self.import_error = Some(message.into()); }
+            }
+        }
         theme::card_frame().show(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.label(RichText::new("Profile name").size(11.5).color(theme::SUB));
@@ -984,3 +997,22 @@ fn chrono_free_stamp() -> String {
 
 // Local-only startup markers deliberately exclude settings, profile names,
 // account data and panic payloads. Native driver faults can bypass Rust hooks.
+
+/// The onboarding action only opens a local view. Never replace a live-session
+/// Disconnect or an in-progress action with Import, even without selection.
+fn profile_import_action(state: &ConnState, has_selection: bool) -> bool {
+    !has_selection && matches!(state, ConnState::Disconnected | ConnState::Failed(_))
+}
+#[cfg(test)]
+mod home_action_tests {
+    use super::*;
+    #[test]
+    fn import_only_when_idle_and_no_profile_selected() {
+        assert!(profile_import_action(&ConnState::Disconnected, false));
+        assert!(profile_import_action(&ConnState::Failed("missing".into()), false));
+        assert!(!profile_import_action(&ConnState::Disconnected, true));
+        assert!(!profile_import_action(&ConnState::Connecting, false));
+        assert!(!profile_import_action(&ConnState::Disconnecting, false));
+        assert!(!profile_import_action(&ConnState::Connected { since: Instant::now() }, false));
+    }
+}

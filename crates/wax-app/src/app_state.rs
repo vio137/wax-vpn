@@ -23,6 +23,8 @@ mod theme;
 mod tray;
 mod settings;
 mod profile_view;
+#[cfg(any(windows, test))]
+mod profile_file;
 mod measurements;
 
 use std::sync::mpsc::{channel, Receiver};

@@ -1,14 +1,18 @@
-# waX VPN v1.0.6
+# waX VPN v1.0.7
 
-Ctrl+F opens Profiles and focuses its search field from any page, including
-while another text field has focus. It never changes the tunnel. The Clear
-button resets the search; Escape leaves the field using normal text-input
-behavior.
+A first-run Import profile button opens Profiles instead of leaving a disabled
+Connect button. Existing sessions retain Disconnect, even when this instance
+has no selected profile. Empty Connection details explain how to add a profile.
 
-Profile order and lowercase search terms are cached until profiles or settings
-change. Unchanged frames reuse the filtered index list without cloning it.
-Name and endpoint matches remain separate, so a query cannot match across
-the boundary between two fields. No measured speed improvement is claimed.
+Windows Profiles adds Choose .conf file, using the native Windows file picker.
+It reads only the file you select, at most 1 MiB of UTF-8 WireGuard text. UTF-8
+BOMs are accepted. Cancel leaves profiles unchanged. The existing import path
+keeps duplicate names separate instead of overwriting another profile. The
+source file is not changed. This action does not connect a tunnel. No shell,
+new web runtime or third-party file-picker library is added.
+
+The Ctrl+F control IDs use the current egui API. No networking or traffic
+policy changes are included.
 
 ## Compatibility and limits
 
@@ -33,6 +37,8 @@ sampling can miss a shorter flash.
 
 ## Release verification
 
-Candidate only. Local 42 app tests passed, one existing test ignored. Build
-and workflow lint passed; keyboard search and empty-results pixels inspected.
-Windows runtime and exact stable installer gates are pending.
+Candidate only. Local full workspace tests passed, including 44 app tests and
+one existing ignored test. The native file-picker module cross-compiled for
+Windows. First-run Import navigation pixels were inspected at 880x600 and
+760x540. Windows file-picker pixels, cancellation and duplicate-import proof
+are pending the exact candidate workflow. Nothing here is a release claim.
