@@ -3,6 +3,7 @@
 
 #![cfg(windows)]
 
+use std::cell::Cell;
 use std::sync::mpsc::{channel, Receiver};
 
 use tray_icon::menu::{Menu, MenuEvent, MenuId, MenuItem};
@@ -15,6 +16,7 @@ pub struct Tray {
     pub toggle_id: MenuId,
     pub quit_id: MenuId,
     toggle: MenuItem,
+    connected: Cell<bool>,
 }
 
 impl Tray {
@@ -51,11 +53,14 @@ impl Tray {
             toggle_id: toggle.id().clone(),
             quit_id: quit.id().clone(),
             toggle,
+            connected: Cell::new(false),
         })
     }
 
     pub fn set_connected(&self, connected: bool) {
-        let _ = self.toggle.set_text(if connected { "Disconnect" } else { "Connect" });
+        if self.connected.replace(connected) != connected {
+            let _ = self.toggle.set_text(if connected { "Disconnect" } else { "Connect" });
+        }
     }
 
     pub fn poll(&self) -> Option<MenuEvent> {
