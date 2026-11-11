@@ -1,18 +1,14 @@
 # waX VPN v1.0.7
 
-A first-run Import profile button opens Profiles instead of leaving a disabled
-Connect button. Existing sessions retain Disconnect, even when this instance
-has no selected profile. Empty Connection details explain how to add a profile.
+Import a local WireGuard .conf file using the native Windows file picker.
+Cancelling leaves profiles alone. Repeated imports get separate names and
+keep the original profile and selected source file unchanged. Reads are bounded
+to 1 MiB; UTF-8 files with or without a BOM are supported. The picker works off
+the render thread and only one picker can be open at a time.
 
-Windows Profiles adds Choose .conf file, using the native Windows file picker.
-It reads only the file you select, at most 1 MiB of UTF-8 WireGuard text. UTF-8
-BOMs are accepted. Cancel leaves profiles unchanged. The existing import path
-keeps duplicate names separate instead of overwriting another profile. The
-source file is not changed. This action does not connect a tunnel. No shell,
-new web runtime or third-party file-picker library is added.
-
-The Ctrl+F control IDs use the current egui API. No networking or traffic
-policy changes are included.
+The first-run Connect page now offers Import profile and opens Profiles.
+A connected externally owned session still offers Disconnect. Empty connection
+details explain where to add a profile. No tunnel or firewall behavior changed.
 
 ## Compatibility and limits
 
@@ -37,8 +33,15 @@ sampling can miss a shorter flash.
 
 ## Release verification
 
-Candidate only. Local full workspace tests passed, including 44 app tests and
-one existing ignored test. The native file-picker module cross-compiled for
-Windows. First-run Import navigation pixels were inspected at 880x600 and
-760x540. Windows file-picker pixels, cancellation and duplicate-import proof
-are pending the exact candidate workflow. Nothing here is a release claim.
+The preview passed build, runtime and fresh-installer gates:
+https://github.com/vio137/wax-vpn/actions/runs/43111832580
+Source: `21d7e2382e679b245c5bea8e6371960daca6dd1e`.
+
+Actual Windows evidence passed first-run Import navigation, native picker
+cancellation, two chosen-file imports, duplicate preservation, unchanged
+source-file hash and no tunnel adapter. Picker and duplicate-result pixels
+were inspected. Existing GUI connection, recovery, split-route, settings,
+startup and installer checks also passed, subject to the limits above.
+
+Exact stable verification and installer checksum will be recorded after the
+stable gate finishes. No speed improvement is claimed.
