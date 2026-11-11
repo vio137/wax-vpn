@@ -133,8 +133,16 @@ Endpoint = 127.0.0.1:51820
  Start-Sleep -Milliseconds 350
  $shortcuts=ImportProofFind $window 'Keyboard shortcuts'
  if (-not $shortcuts) { throw 'Keyboard reference missing' }
- $shortcuts.GetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern).Expand()
- Start-Sleep -Milliseconds 350
+ # egui exposes expanded state but its response listens to Click, not an
+ # Expand action. Exercise the visible disclosure with a normal mouse click.
+ $r=$shortcuts.Current.BoundingRectangle
+ [ImportProofNative]::SetForegroundWindow([IntPtr]$window.Current.NativeWindowHandle) | Out-Null
+ [ImportProofNative]::SetCursorPos([int]($r.X+$r.Width/2),[int]($r.Y+$r.Height/2)) | Out-Null
+ [ImportProofNative]::mouse_event(2,0,0,0,[UIntPtr]::Zero)
+ Start-Sleep -Milliseconds 100
+ [ImportProofNative]::mouse_event(4,0,0,0,[UIntPtr]::Zero)
+ for ($i=0;$i -lt 20;$i++) { Start-Sleep -Milliseconds 150; if (ImportProofFind $window 'Find a profile') { break } }
+ ImportProofCapture $window 'profile-import-keyboard-reference.png'
  if (-not (ImportProofFind $window 'Find a profile')) { throw 'Keyboard reference did not expand' }
  ImportProofCapture $window 'profile-import-keyboard-reference.png'
  'PASS quick picker accessible open and select, persisted selection without connection, About keyboard reference' | Out-File verify-results.txt -Append -Encoding utf8
