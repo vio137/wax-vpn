@@ -1194,4 +1194,43 @@ impl<'a> BufferRef<'a> {
     pub fn get_ref(&self, x: usize, y: usize) -> &[u8; 4] {
         &self.data[x + y * self.width]
     }
-      }
+}
+
+#[cfg(test)]
+mod wax_regressions {
+    use super::*;
+    #[test]
+    fn egui_037_multiple_texture_patches_and_free() {
+        let mut renderer = EguiSoftwareRender::new(ColorFieldOrder::Bgra);
+        let id = egui::TextureId::Managed(71);
+        let mut delta = egui::TexturesDelta::default();
+        delta.push(id, egui::epaint::ImageDelta::full(
+            egui::ColorImage::filled([2, 2], egui::Color32::WHITE), egui::TextureOptions::LINEAR));
+        delta.push(id, egui::epaint::ImageDelta::partial([1, 0],
+            egui::ColorImage::filled([1, 1], egui::Color32::RED), egui::TextureOptions::LINEAR));
+        delta.push(id, egui::epaint::ImageDelta::partial([0, 1],
+            egui::ColorImage::filled([1, 1], egui::Color32::BLUE), egui::TextureOptions::LINEAR));
+        renderer.set_textures(&delta);
+        assert_eq!(renderer.textures[&id].data, [[255,255,255,255], [0,0,255,255], [255,0,0,255], [255,255,255,255]]);
+        delta.clear(); delta.free(id); renderer.free_textures(&delta); delta.clear();
+        assert!(!renderer.textures.contains_key(&id));
+    }
+    #[test]
+    fn available_simd_blending_matches_generic_for_short_spans() {
+        use crate::color::{GenericImpl, SelectedImpl};
+        for len in 0..33 {
+            let src: Vec<_> = (0..len).map(|i| {
+                let a = ((i * 43 + 73) % 256) as u8;
+                [a / 2, a / 3, a / 4, a]
+            }).collect();
+            let dst: Vec<_> = (0..len).map(|i| [i as u8, 21, 50, 180]).collect();
+            let mut expected = dst.clone();
+            GenericImpl.egui_blend_u8_slice(&src, &mut expected);
+            for &available in crate::color::available_instrs() {
+                let mut actual = dst.clone();
+                dispatch_simd_impl!(available, |simd| simd.egui_blend_u8_slice(&src, &mut actual));
+                assert_eq!(actual, expected, "{available} len={len}");
+            }
+        }
+    }
+}
