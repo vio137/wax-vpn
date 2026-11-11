@@ -1149,12 +1149,12 @@ impl WaxApp {
                     let (name, ep) = {
                         let p = &self.profiles[i];
                         (
-                            p.name.clone(),
+                            p.name.as_str(),
                             p.config
                                 .peers
                                 .first()
-                                .and_then(|x| x.endpoint.clone())
-                                .unwrap_or_else(|| "-".into()),
+                                .and_then(|x| x.endpoint.as_deref())
+                                .unwrap_or("-"),
                         )
                     };
                     let sel = self.selected == Some(i);
@@ -1189,7 +1189,7 @@ impl WaxApp {
                     if resp.clicked() {
                         self.selected = Some(i);
                         self.confirm_delete = None;
-                        self.settings.last_profile = Some(name);
+                        self.settings.last_profile = Some(name.to_owned());
                         self.save_settings();
                         self.picker_open = false;
                         self.status_line = "Ready".into();
@@ -1320,8 +1320,8 @@ impl WaxApp {
                     .config
                     .peers
                     .first()
-                    .and_then(|peer| peer.endpoint.clone())
-                    .unwrap_or_else(|| "-".to_string());
+                    .and_then(|peer| peer.endpoint.as_deref())
+                    .unwrap_or("-");
                 let addr = p
                     .config
                     .interface
