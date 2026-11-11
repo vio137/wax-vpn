@@ -1017,12 +1017,64 @@ jobs:
             if ($had) { [IO.File]::WriteAllBytes($path,$before) } else { Remove-Item $path -ErrorAction SilentlyContinue }
           }
 
+      - name: Startup soak for normal and Safe graphics (no tunnel)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Add-Type -AssemblyName UIAutomationClient
+          Add-Type -AssemblyName UIAutomationTypes
+          Add-Type -AssemblyName System.Drawing
+          $begin = Get-Date
+          $originalAppData = $env:APPDATA
+          try {
+            foreach ($mode in @('normal','safe')) {
+              $env:APPDATA = Join-Path $env:RUNNER_TEMP "wax-startup-$mode"
+              New-Item -ItemType Directory -Force $env:APPDATA | Out-Null
+              $argsForMode = if ($mode -eq 'safe') { @('--safe-graphics') } else { @() }
+              $process = if ($argsForMode.Count) { Start-Process .\bin\wax-vpn.exe -ArgumentList $argsForMode -PassThru } else { Start-Process .\bin\wax-vpn.exe -PassThru }
+              try {
+                Start-Sleep -Seconds 15
+                $process.Refresh()
+                if ($process.HasExited) { throw "Startup $mode exited early: $($process.ExitCode)" }
+                $condition = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ProcessIdProperty,$process.Id)
+                $window = [System.Windows.Automation.AutomationElement]::RootElement.FindFirst([System.Windows.Automation.TreeScope]::Children,$condition)
+                if (-not $window -or $window.Current.IsOffscreen) { throw "Startup $mode window missing" }
+                $rail = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty,'Profiles')
+                if (-not $window.FindFirst([System.Windows.Automation.TreeScope]::Descendants,$rail)) { throw "Startup $mode rail missing" }
+                $r = $window.Current.BoundingRectangle
+                $image = New-Object Drawing.Bitmap([int]$r.Width,[int]$r.Height)
+                $g = [Drawing.Graphics]::FromImage($image)
+                $g.CopyFromScreen([int]$r.X,[int]$r.Y,0,0,$image.Size)
+                $image.Save((Join-Path $PWD "startup-$mode.png")); $g.Dispose(); $image.Dispose()
+                if (Get-NetAdapter -Name 'waX VPN' -ErrorAction SilentlyContinue) { throw 'Startup-only check created an adapter' }
+                $log = Join-Path $env:APPDATA 'wax-vpn\startup.log'
+                if (-not (Select-String -Path $log -SimpleMatch 'ten UI frames entered' -Quiet)) { throw "Startup $mode did not reach ten UI frames" }
+                .\bin\wax-vpn.exe --quit
+                if (-not $process.WaitForExit(15000)) { throw "Startup $mode graceful quit timed out" }
+                "PASS startup $mode visible rail, 15s process survival, ten UI frames, no adapter, graceful quit" | Out-File verify-results.txt -Append -Encoding utf8
+              } finally {
+                Copy-Item (Join-Path $env:APPDATA 'wax-vpn\startup.log') "startup-$mode.log" -ErrorAction SilentlyContinue
+                if (-not $process.HasExited) { $process.Kill(); $process.WaitForExit() }
+              }
+            }
+          } finally {
+            $env:APPDATA = $originalAppData
+            Get-CimInstance Win32_VideoController | Select-Object Name,DriverVersion | Format-List | Out-File startup-graphics.txt
+            Get-WinEvent -FilterHashtable @{LogName='Application';StartTime=$begin} -ErrorAction SilentlyContinue |
+              Where-Object { $_.Id -in 1000,1001 -and $_.Message -match 'wax-vpn|waX VPN' } |
+              Select-Object TimeCreated,Id,Message | Format-List | Out-File startup-windows-events.txt
+          }
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: verification-evidence
           path: |
             verify-results.txt
+            startup-*.png
+            startup-*.log
+            startup-graphics.txt
+            startup-windows-events.txt
             diagnostics.json
             gui-screenshot.png
             gui-screenshot-profiles.png
