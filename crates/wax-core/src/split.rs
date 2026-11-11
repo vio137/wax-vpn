@@ -189,4 +189,78 @@ mod tests {
         assert_eq!(parse_exclusions(duplicates).unwrap(), vec!["10.1.2.3/8".parse::<IpNet>().unwrap(), "10.1.2.3/8".parse::<IpNet>().unwrap(), "2001:db8::1/32".parse::<IpNet>().unwrap()]);
     }
 
+    // Regression coverage only: no claim about runtime IPv6 leak protection.
+    #[test]
+    fn subtraction_handles_host_exclusions_at_address_space_boundaries() {
+        for (base, excluded, opposite, count) in [
+            ("0.0.0.0/0", "0.0.0.0/32", "255.255.255.255", 32),
+            ("0.0.0.0/0", "255.255.255.255/32", "0.0.0.0", 32),
+            ("::/0", "::/128", "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff", 128),
+            ("::/0", "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff/128", "::", 128),
+        ] {
+            let base: IpNet = base.parse().unwrap();
+            let excluded: IpNet = excluded.parse().unwrap();
+            let out = apply_exclusions(&[base], &[excluded]);
+            assert_eq!(out.len(), count);
+            assert!(!out.iter().any(|n| n.contains(&excluded.addr())));
+            assert!(covers(&out, opposite));
+            for (i, net) in out.iter().enumerate() {
+                assert!(base.contains(&net.network()));
+                for other in &out[i + 1..] {
+                    assert!(!net.contains(&other.network()) && !other.contains(&net.network()));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn subtraction_equal_and_covering_exclusions_remove_host_prefixes() {
+        for (base, covering, disjoint) in [
+            ("192.0.2.255/32", "192.0.2.0/24", "192.0.3.0/24"),
+            ("2001:db8::f/128", "2001:db8::/124", "2001:db8::10/124"),
+        ] {
+            let base: IpNet = base.parse().unwrap();
+            assert!(apply_exclusions(&[base], &[base]).is_empty());
+            assert!(apply_exclusions(&[base], &[covering.parse().unwrap()]).is_empty());
+            assert_eq!(apply_exclusions(&[base], &[disjoint.parse().unwrap()]), vec![base]);
+        }
+    }
+
+    #[test]
+    fn subtraction_matches_exhaustive_small_subnet_membership() {
+        for (base, exclusions) in [
+            ("192.0.2.0/28", vec!["192.0.2.0/32", "192.0.2.4/30", "192.0.2.6/31", "192.0.2.15/32", "192.0.2.4/30", "2001:db8::/124"]),
+            ("2001:db8::/124", vec!["2001:db8::/128", "2001:db8::4/126", "2001:db8::6/127", "2001:db8::f/128", "2001:db8::4/126", "192.0.2.0/28"]),
+        ] {
+            let base: IpNet = base.parse().unwrap();
+            let exclusions: Vec<IpNet> = exclusions.into_iter().map(|n| n.parse().unwrap()).collect();
+            let out = apply_exclusions(&[base], &exclusions);
+            // Check every address in each 16-address base, plus both neighbors.
+            let (start, _, width) = bits_and_len(base);
+            for offset in -1i128..=16 {
+                let bits = (start as i128 + offset) as u128;
+                let addr = if width == 32 { IpAddr::V4(std::net::Ipv4Addr::from(bits as u32)) }
+                    else { IpAddr::V6(std::net::Ipv6Addr::from(bits)) };
+                let expected = base.contains(&addr) && !exclusions.iter().any(|n| n.contains(&addr));
+                let actual = out.iter().filter(|n| n.contains(&addr)).count();
+                assert_eq!(actual, usize::from(expected), "{base}: {addr}");
+            }
+            for (i, net) in out.iter().enumerate() {
+                assert!(base.contains(&net.network()));
+                assert!(net.prefix_len() >= base.prefix_len());
+                for other in &out[i + 1..] {
+                    assert!(!net.contains(&other.network()) && !other.contains(&net.network()));
+                }
+            }
+            let mut reversed = exclusions.clone();
+            reversed.reverse();
+            for offset in 0..16 {
+                let bits = start + offset;
+                let addr = if width == 32 { IpAddr::V4(std::net::Ipv4Addr::from(bits as u32)) }
+                    else { IpAddr::V6(std::net::Ipv6Addr::from(bits)) };
+                assert_eq!(out.iter().any(|n| n.contains(&addr)), apply_exclusions(&[base], &reversed).iter().any(|n| n.contains(&addr)));
+            }
+        }
+    }
+
 }
