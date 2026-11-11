@@ -185,8 +185,11 @@ impl<EguiApp: App, EguiAppFactory: FnMut(Context) -> EguiApp>
             .take()
             .unwrap_or(true);
 
+        // AccessKit requires the window never to have been shown at initialization.
+        let mut initial_viewport = self.config.viewport_builder.clone();
+        initial_viewport.visible = Some(false);
         let window =
-            egui_winit::create_window(&self.egui_context, elwt, &self.config.viewport_builder);
+            egui_winit::create_window(&self.egui_context, elwt, &initial_viewport);
 
         self.config.viewport_builder.resizable = Some(resizable);
 
@@ -235,6 +238,8 @@ impl<EguiApp: App, EguiAppFactory: FnMut(Context) -> EguiApp>
         let egui_app = self.retained_app.take().unwrap_or_else(|| (self.egui_app_factory)(self.egui_context.clone()));
         let fullscreen = self.config.viewport_builder.fullscreen.unwrap_or_default();
         let visible = self.config.viewport_builder.visible.unwrap_or(true);
+        // AccessKit must attach before the first show on Windows.
+        self.window.set_visible(visible);
 
         Ok(RunningEguiAppState {
             config: self.config,
@@ -1219,4 +1224,4 @@ pub fn run_app_with_software_backend<T: App>(
     }
 
     Ok(())
-      }
+}
