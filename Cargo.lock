@@ -3207,7 +3207,7 @@ dependencies = ["serde_json","wax-tunnel"]
 [[package]]
 name = "wax-tunnel"
 version = "1.0.3"
-dependencies = ["ipnet","log","thiserror 2.0.21","wax-core","windows-sys 0.52.0","wireguard-nt"]
+dependencies = ["ipnet", "log", "thiserror 2.0.21", "wax-core", "windows", "windows-sys 0.52.0", "wireguard-nt"]
 
 [[package]]
 name = "wax-warp"
