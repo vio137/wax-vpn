@@ -1147,6 +1147,10 @@ jobs:
               Select-Object TimeCreated,Id,Message | Format-List | Out-File startup-windows-events.txt
           }
 
+      - name: Local profile import and native file picker
+        shell: pwsh
+        run: . .github/scripts/profile-import.ps1
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -1176,6 +1180,7 @@ jobs:
             gui-settings-bom.png
             gui-profile-partial-warning.png
             gui-profile-reload-warning.png
+            profile-import-*.png
 
   installer-smoke:
     name: fresh-runner installer launch
