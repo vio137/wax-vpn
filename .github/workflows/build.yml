@@ -114,6 +114,15 @@ jobs:
         if: steps.staleness.outputs.skip != 'true'
         run: cargo test --workspace
 
+      - name: Native Windows API isolation checks
+        if: steps.staleness.outputs.skip != 'true'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $env:WAX_TEST_DRIVER = (Resolve-Path 'vendor/wireguard-nt/wireguard-nt/bin/amd64/wireguard.dll').Path
+          cargo test -p wax-tunnel native_runner_ -- --ignored --test-threads=1 --nocapture
+          if ($LASTEXITCODE -ne 0) { throw 'Native Windows API checks failed' }
+
       - name: Build release binaries
         if: steps.staleness.outputs.skip != 'true'
         run: cargo build --release --workspace
