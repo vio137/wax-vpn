@@ -154,7 +154,7 @@ impl WireGuardConfig {
                 section = match line {
                     name if name.eq_ignore_ascii_case("[Interface]") => { interface_header_line.get_or_insert(lineno + 1); Section::Interface },
                     name if name.eq_ignore_ascii_case("[Peer]") => { in_peer = true; peer_header_line = lineno + 1; Section::Peer }
-                    other => return Err(err(&format!("unknown section {}", other))),
+                    _ => return Err(err("unknown section; expected [Interface] or [Peer]")),
                 };
                 continue;
             }
@@ -210,7 +210,7 @@ impl WireGuardConfig {
                     "PreUp" | "PostUp" | "PreDown" | "PostDown" | "Table" | "SaveConfig" | "FwMark" => {
                         return Err(err(&format!("unsupported wg-quick directive {key}; waX VPN does not run scripts or apply this setting")));
                     }
-                    other => return Err(err(&format!("unknown Interface key {other}"))),
+                    _ => return Err(err("unknown Interface key; expected PrivateKey, Address, DNS, MTU or ListenPort")),
                 },
                 Section::Peer => match key {
                     "PublicKey" => cur_public = Some(keys::key_from_base64(value).map_err(|_| err("bad PublicKey; expected a base64-encoded 32-byte key"))?),
@@ -229,7 +229,7 @@ impl WireGuardConfig {
                             value.parse().map_err(|_| err("bad PersistentKeepalive; expected off or an integer from 0 to 65535 seconds"))?
                         })
                     }
-                    other => return Err(err(&format!("unknown Peer key {other}"))),
+                    _ => return Err(err("unknown Peer key; expected PublicKey, PresharedKey, AllowedIPs, Endpoint or PersistentKeepalive")),
                 },
                 Section::None => return Err(err("key outside of any section")),
             }
@@ -469,6 +469,38 @@ mod tests {
         bad.endpoint = Some("never-echo.invalid".into());
         multi.peers.push(bad);
         assert!(multi.validate_import_endpoints().unwrap_err().to_string().contains("peer 2: invalid Endpoint"));
+    }
+
+    #[test]
+    fn unknown_tokens_use_fixed_guidance_without_echoing_payloads() {
+        let plain = sample();
+        let sentinel = "unrecognized-private-payload-".repeat(20);
+        for prefix in ["", "\u{feff}", "# leading comment\n\n"] {
+            for (source, line, category, guidance) in [
+                (format!("  [{sentinel}]  \n{plain}"), 1, "unknown section", "expected [Interface] or [Peer]"),
+                (plain.replace("[Interface]", &format!("[iNtErFaCe]\n  {sentinel} = do-not-echo-value")), 2,
+                    "unknown Interface key", "expected PrivateKey, Address, DNS, MTU or ListenPort"),
+                (plain.replace("[Peer]", &format!("[pEeR]\n  {sentinel} = do-not-echo-value")),
+                    plain.lines().position(|line| line == "[Peer]").unwrap() + 2,
+                    "unknown Peer key", "expected PublicKey, PresharedKey, AllowedIPs, Endpoint or PersistentKeepalive"),
+            ] {
+                let error = WireGuardConfig::parse(&format!("{prefix}{source}")).unwrap_err().to_string();
+                let offset = prefix.chars().filter(|c| *c == '\n').count();
+                assert!(error.contains(&format!("line {}:", line + offset)));
+                assert!(error.contains(category));
+                assert!(error.contains(guidance));
+                assert!(!error.contains(&sentinel));
+                assert!(!error.contains("do-not-echo-value"));
+            }
+        }
+        for directive in ["PreUp", "PostUp", "PreDown", "PostDown", "Table", "SaveConfig", "FwMark"] {
+            let text = plain.replace("[Interface]", &format!("[Interface]\n{directive} = do-not-echo-value"));
+            let error = WireGuardConfig::parse(&text).unwrap_err().to_string();
+            assert!(error.contains(&format!("line 2: unsupported wg-quick directive {directive};")));
+            assert!(!error.contains("do-not-echo-value"));
+        }
+        let valid = WireGuardConfig::parse(&plain).unwrap();
+        assert_eq!(WireGuardConfig::parse(&valid.to_conf_string()).unwrap(), valid);
     }
 
     #[test]
