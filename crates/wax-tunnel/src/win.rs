@@ -395,7 +395,8 @@ mod native_runner_tests {
         let dll = std::env::var("WAX_TEST_DRIVER").expect("explicit test driver path");
         let driver = unsafe { wireguard_nt::load_from_path(&dll) }.expect("bundled driver");
         let name = format!("waX-native-test-{}", std::process::id());
-        let adapter = Adapter::create(&driver, "waX Native Tests", &name, None).expect("test-only adapter");
+        let adapter = Adapter::create(&driver, &name, &name, None).expect("test-only adapter");
+        // Use the same dedicated name in both wrapper arguments, as production does.
         // The test never brings the adapter up, sets a peer, or creates routes.
         for ipv6 in [false, true] {
             set_mtu(&name, ipv6, 1380).expect("native MTU write");
