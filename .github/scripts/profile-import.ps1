@@ -170,7 +170,12 @@ Endpoint = 127.0.0.1:51820
   [ImportProofNative]::mouse_event(0x800,0,0,4294967056,[UIntPtr]::Zero)
   Start-Sleep -Milliseconds 150
  }
- ImportProofCapture $window 'profile-import-long-picker-scrolled.png'
+ # show_rows keeps a buffered row in UIA before every pixel is visible.
+ # Move another wheel step so the final row is fully inside the viewport.
+ [ImportProofNative]::mouse_event(0x800,0,0,4294967056,[UIntPtr]::Zero)
+ Start-Sleep -Milliseconds 250
+ $last=ImportProofFind $window 'Office 24'
+ ImportProofCapture $window 'profile-import-long-picker-scrolled.png' 
  if (-not $last -or $last.Current.IsOffscreen) { throw 'Long picker could not scroll to final profile' }
  $last.GetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern).Toggle()
  Start-Sleep -Milliseconds 350
