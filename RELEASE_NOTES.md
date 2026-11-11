@@ -1,31 +1,28 @@
-# waX VPN v0.1.42
+# waX VPN v0.1.43
 
-Unsigned Windows x64 performance and installer checkpoint. Windows may show an unknown-publisher warning. The official WireGuardNT driver is independently signed by its vendor. Website: https://waxvpn.pages.dev/
+Unsigned Windows x64 network-observation checkpoint. Windows may show an unknown-publisher warning. The bundled official WireGuardNT driver is independently signed by its vendor. Website: https://waxvpn.pages.dev/.
 
-## Changes
+## Network page
 
-- Installer and uninstaller run taskkill and CLI cleanup without opening console windows, using NSIS's no-console execution plugin. Cleanup order is unchanged.
-- Connect borrows selected-profile name and endpoint text instead of cloning it on every repaint. Tray menu text is updated on connection-state changes rather than every repaint. No system-level speedup or memory-saving claim is made.
-- The app About link and installer branding use https://waxvpn.pages.dev/. The Windows installed-app entry includes the same website.
+- Public IP before and after connection. When enabled, a bounded lookup runs before initial tunnel creation and once after connection; refresh is manual. A failed lookup does not prevent connection. An already-running tunnel has no original-IP baseline. Only one address family and the configured service's route are observed: split routing or other destinations can use another route.
+- Live received/sent throughput graph from local adapter counters. Up to 60 one-second samples, with session reset handling. This makes no extra network requests.
+- HTTPS response-latency graph. When enabled, automatic probes run only while the Network page is visible and connected, every 10-300 seconds (30 by default); manual testing is available while connected or disconnected. Timing includes DNS, TCP and TLS where needed, not ICMP ping. The graph shows the latest 60 successful observations, not a continuous outage timeline.
+- Manual quick speed test: one 8 MB download and 2 MB upload against a compatible HTTPS service. Approximate single-request speed, not line capacity, and may affect other traffic. No automatic speed tests.
 
-## Verification
+Features > Network measurements has separate toggles and editable IP/latency endpoints, speed-service origin and latency interval. Public IP, latency and speed tests are off by default; the local throughput graph is on. Cloudflare is the default service. Optional external checks disclose your public IP to that service, as stated in the UI. No signup or API key is needed; custom endpoints must use HTTPS without embedded credentials. Redirects are not followed. IP values and results stay in memory, are not logged or persisted, and are excluded from local diagnostics. No analytics/result-upload API is called. Requests are bounded, run off the UI thread and old results are discarded after route/settings changes. An in-flight request can finish after a toggle is disabled, within its timeout.
 
-Full non-publishing run 43018319942 at cabca929545e46c0814f69be24b7e5d7befa0df6 passed Windows build, GUI/demo tunnel verification and fresh-runner installation. Raw runtime and installer evidence were read and all 14 normal, warning, BOM and installed screenshots inspected.
+These are observations on the current OS route, not proof that all traffic uses the tunnel and not leak tests. No kill switch is included; traffic can use the normal connection after the tunnel drops. IPv6 leak protection is not claimed. Physical-network roaming is not supported.
 
-Silent NSIS fresh install, same-version upgrade and uninstall had no new visible ConsoleWindowClass windows observed in 180, 395 and 329 samples respectively, at a requested 10ms interval. Shorter flashes and other console-host classes can be missed. Interactive installer pages and consumer Windows SmartScreen remain unverified. Installed GUI launch, graceful quit and uninstall passed.
+## Code and documentation
 
-Peer handshake, tunnel-side ping, DNS, imported IPv4 MTU 1380, split exclusions, adapter-loss recovery, pending-retry disable across 48 samples/12 seconds, explicit reconnect with automatic recovery off, original main HWND/PID plus visible Connect rail restoration, quit/adapter removal, settings/profile warnings and BOM-backed startup passed. No console windows were observed during GUI connection in 463 samples at about 100ms; shorter windows could be missed. Crash evidence is a 3-second pre-cleanup snapshot followed by explicit cleanup, not a general crash-cleanup guarantee.
+- Profile picker/list display strings are borrowed rather than cloned on each repaint; owned selection names are created only when saved. No measured speedup claim.
+- README rebuilt with a banner, real historical screenshots and scoped feature/verification information. Its image assets are hosted at https://waxvpn.pages.dev/ and rendered through GitHub's image proxy. Desktop and 390px mobile layout checked; historical screenshot versions are captioned.
+- Existing no-console installer cleanup and application helper behavior retained.
 
-Exact v0.1.42 run 43020463650 at d5969977a36f0bde9fada1b01f0a8c95dcf276de passed all four build, GUI/demo verification, installer and publication jobs. Raw build output confirms 43 app, 40 core, 6 WARP, 4 diagnostics and 1 tunnel tests passed. Exact raw runtime evidence passed the checks above, including recovery after 4 seconds, disable across 48 samples/12 seconds and manual reconnect. GUI console observation had no windows in 365 samples at about 100ms; shorter windows could be missed. All 14 exact-release screenshots were inspected, including the pages.dev About link and readable selected/empty profile states at 880x600.
+## Validation
 
-Exact silent NSIS fresh install, same-version upgrade and uninstall had no new visible ConsoleWindowClass windows in 150, 364 and 329 samples respectively, at a requested 10ms interval, with the same sampling limits. Installed GUI launch, graceful quit and uninstall passed.
+Exact v0.1.43 release validation is pending. Before exact dispatch, Windows preview run 43024676008 passed build, installer and demo/GUI verification. Its raw evidence passed GUI connect, connected Network counter-panel visibility, scoped split routing, adapter-loss recovery, original main HWND/PID plus visible Connect rail, close-to-tray and graceful quit. The actual Windows Network screenshots were inspected at 880x600. Optional external checks were disabled in the demo-tunnel run; that is not a Windows public-Internet IP-change or speed-test result.
 
-Fresh released installer: 10,963,400 bytes. SHA256 1feee1a6e93140a010c44b89885cc888df51d7dcbf20bca0454d38843426487d matches the released SHA256SUMS file and asset digest.
+Exact-source local tests: 38 passed, one manual external-service test ignored by default. That manual test was separately run and passed IP parsing, HTTPS latency and the bounded download/upload request path against Cloudflare from the development host. Actual local GUI latency and speed buttons were exercised and their results inspected, not promoted as VPN benchmarks. Tests cover opt-in defaults, HTTPS URL restrictions, IP parsing, units, bounded histories, session reset, settings compatibility and stale-result rejection.
 
-An earlier full run 43016948262 failed because checkout ran after artifact download and removed the installer input before installation. This was a test setup error; checkout was moved first. No product behavior or test assertion was weakened.
-
-## Limits
-
-No kill switch: traffic can use the normal connection when the tunnel drops. A tunnel-side ping does not prove Internet reachability. IPv6 protection was skipped without a proven baseline. No external leak-test claim, physical-network roaming proof, actual notification-area menu interaction, real UAC handoff proof, deterministic in-flight cancellation proof or continuous production network-observation claim.
-
-WireGuardNT remains the shipping backend. No new product network service, signup, WARP registration, copied Cloudflare implementation/assets/credentials/keys or spending is part of this release.
+Remaining limits: real Windows pre/post-connection public-IP observation through a production Internet tunnel; external-observer IPv6/DNS leak testing; consumer SmartScreen/interactive installer behavior; physical-network roaming; tray-menu Open/Quit interaction in a real notification area. Existing crash evidence is a three-second snapshot followed by explicit cleanup, not continuous or general crash-cleanup proof. Console sampling can miss shorter flashes and other console-host classes. Service availability and compatible custom-endpoint behavior are not guaranteed.
