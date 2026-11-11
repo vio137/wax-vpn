@@ -459,6 +459,31 @@ jobs:
               $g2.CopyFromScreen($r.Left, $r.Top, 0, 0, (New-Object System.Drawing.Size $w, $h))
               $bmp2.Save("gui-screenshot-$($tab.ToLower()).png")
               $g2.Dispose(); $bmp2.Dispose()
+              if ($tab -eq 'Profiles') {
+                $pin = $uiaWin.FindFirst([System.Windows.Automation.TreeScope]::Descendants, (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, 'Pin')))
+                if (-not $pin) { throw 'Profile pin control missing' }
+                $pin.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+                Start-Sleep -Milliseconds 350
+                $saved = Get-Content (Join-Path $uiCfgDir 'settings.json') -Raw | ConvertFrom-Json
+                if ($saved.pinned_profiles -notcontains 'demo') { throw 'Profile pin did not persist' }
+                $search = $uiaWin.FindFirst([System.Windows.Automation.TreeScope]::Descendants, (New-Object System.Windows.Automation.AndCondition((New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, 'Find profiles')), (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Edit)))))
+                if (-not $search) { throw 'Accessible profile search missing' }
+                $value = $search.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern)
+                $value.SetValue('__wax_no_matching_profile__')
+                Start-Sleep -Milliseconds 350
+                $empty = $uiaWin.FindFirst([System.Windows.Automation.TreeScope]::Descendants, (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, 'No matching profiles')))
+                if (-not $empty) { throw 'Profile search did not filter rows' }
+                $value.SetValue('demo')
+                Start-Sleep -Milliseconds 350
+                $unpin = $uiaWin.FindFirst([System.Windows.Automation.TreeScope]::Descendants, (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, 'Unpin')))
+                if (-not $unpin) { throw 'Profile search did not restore matching row' }
+                $unpin.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+                Start-Sleep -Milliseconds 350
+                $saved = Get-Content (Join-Path $uiCfgDir 'settings.json') -Raw | ConvertFrom-Json
+                if ($saved.pinned_profiles -contains 'demo') { throw 'Profile unpin did not persist' }
+                $value.SetValue('')
+                'PASS profile pin/unpin persisted and accessible search filtered/restored rows' | Out-File verify-results.txt -Append -Encoding utf8
+              }
               if ($tab -eq 'About') {
                 $generate = $uiaWin.FindFirst([System.Windows.Automation.TreeScope]::Descendants, (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, 'Generate local report')))
                 if (-not $generate) { throw 'Local diagnostics button missing' }
