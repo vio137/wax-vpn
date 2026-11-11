@@ -5,7 +5,7 @@ edition = "2024"
 license = "MIT OR Apache-2.0"
 description = "Pinned egui software renderer, adapted to egui 0.37 for waX VPN"
 [lib]
-path = "lib.rs"
+path = "src/lib.rs"
 [dependencies]
 egui = { version = "=0.37.0", default-features = false }
 ahash = { version = "0.8", default-features = false, features = ["no-rng"] }
