@@ -21,8 +21,14 @@ pub struct WarpClient {
 fn decode_result<T: serde::de::DeserializeOwned>(resp: reqwest::blocking::Response) -> Result<T, WarpError> {
     let status = resp.status();
     let body = resp.text().map_err(|e| WarpError::Http(e.to_string()))?;
-    let value: serde_json::Value = serde_json::from_str(&body).map_err(|e| {
-        WarpError::BadResponse(format!("HTTP {status}, body is not JSON: {e}"))
+    decode_body(status, &body)
+}
+
+// Pure decoding keeps malformed-body fixtures offline. Error details must not
+// echo a response body or a value rejected by serde.
+fn decode_body<T: serde::de::DeserializeOwned>(status: reqwest::StatusCode, body: &str) -> Result<T, WarpError> {
+    let value: serde_json::Value = serde_json::from_str(body).map_err(|_| {
+        WarpError::BadResponse(format!("HTTP {status}, expected a JSON response"))
     })?;
     // Failure: HTTP error status, or an explicit `"success": false` envelope.
     let envelope_failed = value.get("success").and_then(|v| v.as_bool()) == Some(false);
@@ -49,7 +55,13 @@ fn decode_result<T: serde::de::DeserializeOwned>(resp: reqwest::blocking::Respon
         value
     };
     serde_json::from_value(payload)
-        .map_err(|e| WarpError::BadResponse(format!("HTTP {status}, unexpected shape: {e}")))
+        .map_err(|_| WarpError::BadResponse(format!("HTTP {status}, expected the requested response shape")))
+}
+
+// The body is still read on failed deletion, but is deliberately not included
+// in the error. Accepting it here lets synthetic fixtures guard that boundary.
+fn deletion_error(status: reqwest::StatusCode, _body: &str) -> WarpError {
+    WarpError::Http(format!("HTTP {status}, device deletion failed"))
 }
 
 impl WarpClient {
@@ -157,7 +169,7 @@ impl WarpClient {
         } else {
             let status = resp.status();
             let body = resp.text().unwrap_or_default();
-            Err(WarpError::Http(format!("status {status}: {body}")))
+            Err(deletion_error(status, &body))
         }
     }
 }
@@ -173,4 +185,53 @@ mod tests {
         assert_eq!(r.id, "abc");
         assert_eq!(r.config.peers.len(), 1);
     }
+
+    #[test]
+    fn malformed_response_errors_use_fixed_guidance_without_echoing_payloads() {
+        let sentinel = "PRIVATE_RESPONSE_SENTINEL_7f3c";
+        for status in [reqwest::StatusCode::OK, reqwest::StatusCode::BAD_GATEWAY] {
+            for body in [format!("not-json-{sentinel}"), format!("{{\"unfinished\":\"{sentinel}")] {
+                let err = decode_body::<Registration>(status, &body).unwrap_err();
+                let message = err.to_string();
+                assert_eq!(message, format!("unexpected response: HTTP {status}, expected a JSON response"));
+                assert!(!message.contains(sentinel));
+                assert!(!format!("{err:?}").contains(sentinel));
+            }
+        }
+        for body in [format!("\"{sentinel}\""), format!("{{\"success\":true,\"result\":\"{sentinel}\"}}")] {
+            let err = decode_body::<Registration>(reqwest::StatusCode::OK, &body).unwrap_err();
+            assert_eq!(err.to_string(), "unexpected response: HTTP 200 OK, expected the requested response shape");
+            assert!(!format!("{err:?}").contains(sentinel));
+        }
+        for status in [reqwest::StatusCode::BAD_REQUEST, reqwest::StatusCode::UNAUTHORIZED, reqwest::StatusCode::INTERNAL_SERVER_ERROR] {
+            let err = deletion_error(status, &format!("{{\"token\":\"{sentinel}\"}}"));
+            assert_eq!(err.to_string(), format!("http error: HTTP {status}, device deletion failed"));
+            assert!(!format!("{err:?}").contains(sentinel));
+        }
+    }
+
+    #[test]
+    fn fixed_response_guidance_preserves_direct_envelope_and_api_rules() {
+        let direct = r#"{"id":"device","token":"synthetic-token","account":{"license":"synthetic-license"}}"#;
+        for body in [direct.to_string(), format!("{{\"success\":true,\"result\":{direct}}}")] {
+            let registration: Registration = decode_body(reqwest::StatusCode::OK, &body).unwrap();
+            assert_eq!(registration.id, "device");
+            assert_eq!(registration.token, "synthetic-token");
+            assert_eq!(registration.account.license.as_deref(), Some("synthetic-license"));
+        }
+        for (status, body, code, expected) in [
+            (reqwest::StatusCode::OK, r#"{"success":false,"errors":[{"code":123,"message":"specific API failure"}]}"#, 123, "specific API failure"),
+            (reqwest::StatusCode::FORBIDDEN, r#"{"errors":[{"code":456,"message":"permission denied"}]}"#, 456, "permission denied"),
+            (reqwest::StatusCode::BAD_GATEWAY, r#"{}"#, 502, "HTTP 502 Bad Gateway"),
+        ] {
+            match decode_body::<Registration>(status, body).unwrap_err() {
+                WarpError::Api { code: actual_code, message } => {
+                    assert_eq!(actual_code, code);
+                    assert_eq!(message, expected);
+                }
+                other => panic!("expected structured API error, got {other:?}"),
+            }
+        }
+    }
+
 }
