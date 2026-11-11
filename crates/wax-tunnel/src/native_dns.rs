@@ -108,9 +108,7 @@ mod tests {
 
 #[cfg(test)]
 pub(crate) fn assert_configured(adapter: &str, ipv6: bool, expected: &str) {
-    use windows_sys::Win32::NetworkManagement::IpHelper::{
-        FreeInterfaceDnsSettings, GetInterfaceDnsSettings,
-    };
+    use windows_sys::Win32::NetworkManagement::IpHelper::GetInterfaceDnsSettings;
     let mut luid: NET_LUID_LH = unsafe { std::mem::zeroed() };
     let mut guid = windows_sys::core::GUID::from_u128(0);
     assert_eq!(
@@ -133,11 +131,20 @@ pub(crate) fn assert_configured(adapter: &str, ipv6: bool, expected: &str) {
             String::from_utf16_lossy(std::slice::from_raw_parts(settings.NameServer, length))
         }
     };
-    assert_eq!(unsafe { FreeInterfaceDnsSettings(&mut settings) }, 0);
+    // windows-sys 0.52 incorrectly declares this VOID API as WIN32_ERROR.
+    // Use the documented signature; there is no return value to assert.
+    #[link(name = "iphlpapi")]
+    extern "system" {
+        #[link_name = "FreeInterfaceDnsSettings"]
+        fn free_dns_settings(settings: *mut DNS_INTERFACE_SETTINGS);
+    }
+    unsafe {
+        free_dns_settings(&mut settings);
+    }
     let normalized = actual
         .split(|c: char| c == ',' || c.is_whitespace())
         .filter(|s| !s.is_empty())
         .collect::<Vec<_>>()
         .join(",");
     assert_eq!(normalized, expected, "DNS family ipv6={ipv6}");
-          }
+}
