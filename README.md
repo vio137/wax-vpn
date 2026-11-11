@@ -1,80 +1,174 @@
-# waX VPN
+<p align="center">
+  <a href="https://waxvpn.pages.dev/">
+    <img src="https://waxvpn.pages.dev/readme-banner.svg" alt="waX VPN - a WireGuard VPN client for Windows, written in Rust" width="100%">
+  </a>
+</p>
 
-A WireGuard VPN client for Windows, written in Rust - with Cloudflare WARP
-(wgcf-equivalent) support built in, strictly opt-in.
+<p align="center">
+  <a href="https://github.com/vio137/wax-vpn/releases"><img alt="Latest release" src="https://img.shields.io/github/v/release/vio137/wax-vpn"></a>
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-2f81f7"></a>
+  <a href="https://waxvpn.pages.dev/"><img alt="Website: waxvpn.pages.dev" src="https://img.shields.io/badge/site-waxvpn.pages.dev-2f81f7"></a>
+</p>
 
-**Status: early preview.** The workspace compiles, core logic is unit-tested,
-and the CI pipeline produces a real installer. Actual on-machine tunnel
-behavior is being verified build by build - see "Verified vs. planned" below.
-Nothing here is claimed to work until it has been tested.
+<p align="center">
+  <strong><a href="https://waxvpn.pages.dev/">Website</a></strong> ·
+  <strong><a href="https://github.com/vio137/wax-vpn/releases">Download</a></strong> ·
+  <strong><a href="#how-it-works">How it works</a></strong> ·
+  <strong><a href="#verified-vs-not-yet-verified">Test status</a></strong>
+</p>
+
+---
+
+waX VPN puts a real WireGuard tunnel behind a native Rust interface. It drives
+the official WireGuardNT kernel driver, the same signed `wireguard.dll` that
+powers WireGuard for Windows, through the MIT-licensed
+[`wireguard-nt`](https://crates.io/crates/wireguard-nt) bindings. No browser
+proxy, no userspace tunnel pretending to be a VPN.
+
+The functionality of [wgcf](https://github.com/ViRb3/wgcf) is built in as an
+opt-in Cloudflare WARP client, reimplemented in Rust. Registration only happens
+when you explicitly accept Cloudflare's Terms of Service in the app or pass
+`--accept-tos` to the CLI. waX VPN is not affiliated with Cloudflare.
+
+The released v0.1.42 has no update checker or telemetry uploader. Tunnel traffic
+and DNS lookups can happen in the background while connected; WARP API calls
+happen only when you request WARP actions. Local diagnostics are not uploaded.
+Optional public-IP, latency and manual speed measurements are in development;
+those checks contact the configured service and disclose your public IP to it.
 
 ## Download
 
-Grab the latest installer from
+Grab the latest `x64.exe` installer from
 [Releases](https://github.com/vio137/wax-vpn/releases) and check its SHA256
-against the attached `SHA256SUMS` file.
+against the attached `SHA256SUMS` file. The installer needs administrator
+rights. It is unsigned for now, so Windows will show an unknown-publisher
+warning; the bundled WireGuardNT driver is independently signed by its vendor.
 
-## What it is
+## Screenshots
 
-- **Real system VPN.** waX VPN drives the official WireGuardNT kernel driver
-  (the same `wireguard.dll` that powers WireGuard for Windows, downloaded
-  from [download.wireguard.com](https://download.wireguard.com/wireguard-nt/))
-  through the MIT-licensed [`wireguard-nt`](https://crates.io/crates/wireguard-nt)
-  Rust bindings. No browser proxy, no userspace tunnel pretending to be a VPN.
-- **Rust first.** UI (egui), tunnel management, profile handling and the WARP
-  client are all Rust. The only non-Rust components are the official signed
-  WireGuardNT driver itself and standard OS facilities (netsh, Windows
-  Firewall).
-- **WARP built in, opt-in.** The functionality of
-  [wgcf](https://github.com/ViRb3/wgcf) - register, account details, device
-  management, profile generation - is reimplemented in Rust (`wax-warp`).
-  Registration only ever happens when you explicitly accept Cloudflare's
-  Terms of Service in the app or pass `--accept-tos` to the CLI. waX VPN is
-  **not affiliated with Cloudflare**.
+Real captures from the CI verification gate, not mockups. Each shows the build
+it was taken from.
 
-## Components
+<table>
+  <tr>
+    <td><img src="https://waxvpn.pages.dev/connected.svg" alt="Connected, tunnel up with session counters"></td>
+    <td><img src="https://waxvpn.pages.dev/disconnected.svg" alt="Disconnected home screen"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Connected, with session counters (v0.1.15)</sub></td>
+    <td align="center"><sub>First screen, ready to connect (v0.1.10)</sub></td>
+  </tr>
+  <tr>
+    <td><img src="https://waxvpn.pages.dev/profiles.svg" alt="Profiles page with split tunneling and import"></td>
+    <td><img src="https://waxvpn.pages.dev/features.svg" alt="Features page with startup and reconnect options"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Profiles, split tunneling and import (v0.1.15)</sub></td>
+    <td align="center"><sub>Startup and reconnect options (v0.1.15)</sub></td>
+  </tr>
+  <tr>
+    <td><img src="https://waxvpn.pages.dev/warp.svg" alt="Cloudflare WARP registration page"></td>
+    <td><img src="https://waxvpn.pages.dev/about.svg" alt="About page with local diagnostics"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Opt-in WARP registration (v0.1.15)</sub></td>
+    <td align="center"><sub>About and local diagnostics (v0.1.15)</sub></td>
+  </tr>
+</table>
+
+## Features
+
+- **Real system VPN.** The adapter runs on the official WireGuardNT driver,
+  downloaded from
+  [download.wireguard.com](https://download.wireguard.com/wireguard-nt/).
+  Closing the window sends the app to the tray with the tunnel still up.
+- **Rust everywhere.** UI (egui), tunnel management, profile handling and the
+  WARP client are all Rust. The only non-Rust parts are the signed WireGuardNT
+  driver itself and standard OS facilities (netsh, Windows Firewall). No
+  embedded browser or WebView anywhere.
+- **Profiles without ceremony.** Drop a `.conf` anywhere in the window or
+  paste it in. Split tunneling per profile through CIDR exclusions. Import is
+  strict on purpose: configs with wg-quick scripts (`PreUp`, `PostUp`,
+  `Table`, `SaveConfig`, `FwMark`) are rejected with an explanation instead of
+  being run.
+- **Cloudflare WARP, opt-in.** The full wgcf flow (register, account details,
+  device management, profile generation) reimplemented in Rust. A WARP profile
+  connects like any other profile afterwards.
+- **Reconnect and recovery.** Auto-reconnect retries the same profile after 2,
+  4 and 8 seconds. If the adapter disappears underneath the tunnel, the app
+  recovers it. A CI crash check recorded adapter/DNS state three seconds after killing
+  the tunnel owner, then ran explicit cleanup. This is a snapshot, not a
+  continuous or general crash-cleanup guarantee.
+- **Local diagnostics.** About &gt; Generate local report builds an
+  allowlisted snapshot only when you click it; nothing is uploaded.
+  `wax diagnostics` prints the same allowlisted JSON to your shell.
+- **Full CLI.** `wax.exe` covers profiles, import, connect, status and WARP
+  for scripting or SSH sessions.
+
+## How it works
 
 | Crate | Purpose |
 | --- | --- |
-| `wax-core` | Keys (audited `x25519-dalek`), wg-quick `.conf` parsing/serialization, profile storage |
+| `wax-core` | Keys (audited `x25519-dalek`), wg-quick `.conf` parsing, profile storage |
 | `wax-warp` | Cloudflare WARP API client (wgcf equivalent), account persistence, profile generation |
 | `wax-tunnel` | Adapter lifecycle on WireGuardNT and DNS (netsh) |
-| `wax-cli` (`wax.exe`) | Full CLI: profiles, import, connect/disconnect/status, WARP commands |
-| `wax-app` (`waX VPN.exe`) | native egui GUI: Astryx-informed text navigation, profile picker, stats, settings, WARP panel, drag-and-drop import |
+| `wax-cli` (`wax.exe`) | CLI: profiles, import, connect/disconnect/status, WARP commands |
+| `wax-app` (`waX VPN.exe`) | Native egui GUI: navigation, profile picker, stats, settings, WARP panel, drag-and-drop import |
+| `wax-diagnostics` | Allowlisted local status reports |
 
-## Verified vs. planned
+The NSIS installer places the app and the official `wireguard.dll` together,
+registers the icon and uninstaller, and runs adapter/DNS cleanup on
+uninstall. The silent CI install/upgrade/uninstall checks passed. Connect applies DNS for the tunnel; disconnect restores
+what was there before.
 
-Verified (automated):
-- Unit tests: key generation round-trips, `.conf` parse/serialize round-trip,
-  split-tunnel CIDR subtraction.
-- CI: full workspace builds on Windows; installer produced; artifact SHA256 published.
+The interface is a native Rust/egui adaptation of Meta's
+[Astryx](https://github.com/meta/astryx) design system (MIT): neutral
+surfaces, one primary action per region, stable slots for status and counters
+so nothing jumps when state changes, and a reduced-motion option. No React or
+JavaScript ships in the app; the design was rebuilt natively. See
+`docs/ASTRYX-REDESIGN.md` for the mapping.
 
-Verified in CI on Windows runners (see `verify-results.txt` in each build's
-verification-evidence artifact):
-- Profile import, tunnel connect with a live handshake, ping through the tunnel.
-- GUI-driven connect (UI Automation clicks the app's Connect button), and
-  close-to-tray with the process and tunnel adapter still up.
-- Tunnel DNS applied on connect and restored on disconnect; no firewall
-  leftovers after disconnect.
-- Crash recovery: adapter and DNS are reclaimed by Windows when the owner dies.
+## Verified vs. not yet verified
 
-No kill switch is included. If the tunnel drops, traffic can use the normal connection. IPv6 leak protection is not claimed.
+Claims here are tested build by build on clean Windows runners. Raw evidence is retained in the linked GitHub Actions run artifacts;
+the release notes describe the checks and their limits.
+
+Verified for the current release:
+
+- WireGuard handshake and ping through the tunnel, DNS applied on connect and
+  restored on disconnect, MTU from imported configs.
+- Scoped split routing: excluded CIDRs bypass the tunnel, the rest stays in.
+- Adapter-loss recovery, manual reconnect, close-to-tray with the tunnel up,
+  graceful quit with adapter removal.
+- Silent NSIS fresh install, same-version upgrade and uninstall: no new
+  visible `ConsoleWindowClass` windows in 150, 364 and 329 samples at a
+  requested 10ms interval in v0.1.42. Shorter flashes or other console-host
+  classes may be missed; interactive installation remains unverified.
+  Installed-GUI launch and profile/settings warning paths passed.
 
 Not yet verified (honest list):
+
 - Tray-menu Open/Quit interaction (the runner session has no notification
   area; the graceful-quit path itself is verified via `wax-vpn.exe --quit`).
 - WARP registration against the live Cloudflare API (requires a person to
-  accept the ToS first - by design).
-- Leak testing (IPv6, DNS) against an external observer.
-- Consumer Windows/SmartScreen behavior (unsigned installer).
-- General IPv6 leak protection (runner has no working baseline).
+  accept the ToS first, by design).
+- Leak testing (IPv6, DNS) against an external observer; IPv6 leak protection
+  is not claimed.
+- Consumer Windows SmartScreen behavior (unsigned installer).
 
-Scoped Windows split-routing check passed: 8.8.8.8 excluded, 1.1.1.1 retained in tunnel routes. This is not proof for every configuration.
+**No kill switch.** If the tunnel drops, traffic can use the normal
+connection.
 
-v0.1.0 also passed a separate fresh Windows runner silent NSIS install, installed GUI main-window launch, graceful quit and uninstall. User data is retained. It remains unsigned; Windows publisher/SmartScreen warnings are expected.
+## Configuration compatibility
 
-Planned: per-profile MTU/DNS overrides, speed test, installer polish (icon,
-branding), localization.
+waX VPN imports standard WireGuard keys, addresses, IP DNS servers, peer
+endpoints and AllowedIPs. DNS search domains and hostnames are rejected
+explicitly; only literal IPv4/IPv6 DNS server addresses are supported. It does
+not execute wg-quick scripts or implement wg-quick routing-table settings.
+Profiles containing `PreUp`, `PostUp`, `PreDown`, `PostDown`, `Table`,
+`SaveConfig` or `FwMark` are rejected explicitly rather than silently changing
+their behavior. Remove a directive only if you understand what it did; an
+imported profile without it can behave differently.
 
 ## Building
 
@@ -85,7 +179,7 @@ cargo build --release --workspace
 The app expects the official `wireguard.dll` next to the executable (the
 installer handles this).
 
-## License
+## License and credits
 
 waX VPN's own code is MIT (see `LICENSE`). The bundled `wireguard.dll` is the
 official prebuilt WireGuardNT binary, distributed by the WireGuard project
@@ -93,26 +187,10 @@ under the permissive license included in the installer
 (`LICENSE-wireguard-nt.txt`). WireGuard is a registered trademark of Jason A.
 Donenfeld; waX VPN is not affiliated with the WireGuard project.
 
-## Design process
+Design tokens and layout adapted from Meta's
+[Astryx](https://github.com/meta/astryx) design system, MIT (notice retained
+in `docs/vendor-licenses/`). Interface typeface is Inter Display by Rasmus
+Andersson, used under the SIL Open Font License 1.1.
 
-The current interface is a native Rust/egui adaptation of the MIT-licensed
-Astryx design system (https://github.com/meta/astryx). A separate runnable React
-reference uses Astryx0.7.11components; the Windows app does not embed React or a
-WebView. The design uses neutral semantic surfaces, a text sidebar, one primary
-action and stable state/counter slots. It replaces the previous procedural
-black-hole/starfield composition. See docs/ASTRYX-REDESIGN.md and the retained MIT
-notice. The earlier unslop review rubric by Damir Sokolovsky remains credited at
-https://github.com/heydamir/unslop (CC BY4.0).
-
-The interface typeface is Inter Display by Rasmus Andersson
-(https://rsms.me/inter/), used under the SIL Open Font License 1.1.
-
-### Configuration compatibility
-
-waX VPN imports standard WireGuard keys, addresses, IP DNS servers, peer endpoints and AllowedIPs. DNS search domains and hostnames are rejected explicitly; only literal IPv4/IPv6 DNS server addresses are supported. It does not execute wg-quick scripts or implement wg-quick routing-table settings. Profiles containing PreUp, PostUp, PreDown, PostDown, Table, SaveConfig or FwMark are rejected explicitly rather than silently changing their behavior. Remove a directive only if you understand what it did; an imported profile without it can behave differently.
-
-### Local support report
-
-About > Generate local report uses the same allowlist as `wax diagnostics`. It creates a snapshot only when clicked. Copy report writes only that report to your clipboard, and Clear removes it from the view. Nothing is uploaded.
-
-`wax diagnostics` prints a small JSON report: app version, OS/architecture, administrator state, adapter status, aggregate byte counters and handshake age, or a fixed status-query error code. It does not test Internet reachability and does not read profiles, logs, account files, keys or tokens. It makes no network requests and does not send the report anywhere. Review it before sharing. Save it yourself with shell redirection if needed.
+Design review also uses [unslop](https://github.com/heydamir/unslop),
+by Damir Sokolovsky (CC BY 4.0), as a review rubric, not a shipped dependency.
