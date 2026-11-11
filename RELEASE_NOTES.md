@@ -13,7 +13,9 @@ Product source dced2505d8a9bda67531a7f5903ae4ecf9884fb8 passed push 42976780122 
 
 Raw full-preview verify-results and installer diagnostics were read. Handshake and tunnel-side ping, DNS and IPv4 MTU 1380, split exclusions, owned adapter-loss recovery after 5 seconds, pending-retry disable across 48 samples/12 seconds, manual reconnect with recovery off, original main HWND/PID plus Connect rail restoration, graceful quit/adapter removal, profile/settings warnings and BOM-backed startup passed. No console windows observed in 458 samples at about 100 ms; shorter windows could be missed. Crash evidence is a clean 3-second pre-cleanup snapshot. Fresh-runner install/quit/uninstall passed. Installed quit stages were probe 1 ms, absence 2 ms and legacy removal 6142 ms, descriptive only.
 
-Exact v0.1.35 stable gate and fresh installer checksum are pending. Do not treat preview evidence as exact release verification.
+Exact v0.1.35 run 42979370349 at c4e39ff0dfc0691a8cb93d8ea0043db299f9cac9 passed build, demo-tunnel/GUI verification, fresh-runner install/quit/uninstall and publish. Raw verify-results and installer diagnostics were read. The same scoped checks passed, including adapter-loss recovery after 5 seconds, pending-retry disable across 48 samples/12 seconds, original HWND/PID plus Connect rail restoration, graceful quit/adapter removal and warning/BOM cases. No console windows observed in 461 samples at about 100 ms; shorter windows could be missed. All 14 exact-release screenshots were inspected, including the readable Profiles helper at 880x600. Installed quit stages were probe 1 ms, absence 3 ms and legacy cleanup 4372 ms, descriptive only.
+
+Freshly downloaded unsigned installer: 10,958,379 bytes. SHA256 3fe132b7b0286d8da8a0082138f815d31e1b46d65b9fa99cf44f1ca8997f042a matches the freshly downloaded SHA256SUMS-v0.1.35.txt.
 
 ## Limits and earlier failures
 
