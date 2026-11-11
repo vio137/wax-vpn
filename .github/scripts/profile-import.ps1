@@ -28,10 +28,13 @@ function ImportProofDialog($pidValue) {
  $root.FindFirst([System.Windows.Automation.TreeScope]::Descendants,$c)
 }
 function ImportProofOpen($window,$pidValue) {
+ [ImportProofNative]::SetForegroundWindow([IntPtr]$window.Current.NativeWindowHandle) | Out-Null
+ # Cancel closes a native modal loop before egui has redrawn its panel. Let
+ # layout settle, then reacquire the element rather than clicking old bounds.
+ Start-Sleep -Milliseconds 750
+ $window=[System.Windows.Automation.AutomationElement]::FromHandle([IntPtr]$window.Current.NativeWindowHandle)
  $button=ImportProofFind $window 'Choose .conf file'
  if (-not $button) { throw 'Choose .conf file control missing' }
- [ImportProofNative]::SetForegroundWindow([IntPtr]$window.Current.NativeWindowHandle) | Out-Null
- Start-Sleep -Milliseconds 300
  $r=$button.Current.BoundingRectangle
  Write-Host "Picker button bounds=$r offscreen=$($button.Current.IsOffscreen)"
  ImportProofCapture $window 'profile-import-before-picker.png'
