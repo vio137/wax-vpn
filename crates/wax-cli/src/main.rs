@@ -1,6 +1,9 @@
 //! wax.exe - the waX VPN command line interface.
 
 
+#[cfg(windows)]
+mod installer_stop;
+
 use clap::{Parser, Subcommand};
 
 use wax_core::{keys, profile};
@@ -15,6 +18,9 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
+    /// Stop only the GUI in this installation directory. Installer use only.
+    #[command(hide = true)]
+    InstallerStop { directory: String },
     /// Print allowlisted local diagnostics JSON, without profiles or secrets
     Diagnostics,
     /// Generate a new WireGuard keypair
@@ -99,6 +105,12 @@ fn fmt_bytes(n: u64) -> String {
 fn run() -> Result<(), String> {
     let cli = Cli::parse();
     match cli.command {
+        Commands::InstallerStop { directory } => {
+            #[cfg(windows)]
+            installer_stop::stop(&directory)?;
+            #[cfg(not(windows))]
+            { let _ = directory; return Err("Installer cleanup requires Windows".into()); }
+        }
         Commands::Keygen => {
             let private = keys::generate_private_key();
             let public = keys::public_key_from_private(&private);
@@ -356,4 +368,4 @@ mod warp_profile_guard_tests {
         assert!(ensure_warp_profile_available(&path).is_err());
         std::fs::remove_dir_all(dir).unwrap();
     }
-}
+                        }
