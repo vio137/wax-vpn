@@ -224,7 +224,7 @@ impl WaxApp {
             confirm_delete: None,
             cleanup_issue: None,
             #[cfg(windows)]
-            tray: tray::Tray::new(&ctx),
+            tray: if std::env::args_os().any(|arg| arg == "--no-tray") { None } else { tray::Tray::new(&ctx) },
         };
         startup::record("state and tray initialized");
         app.refresh_warp_summary();
@@ -842,4 +842,4 @@ mod repaint_tests {
             assert_eq!(repaint_delay(false, transitioning), Duration::from_millis(if transitioning { 33 } else { 250 }));
         }
     }
-}
+            }
