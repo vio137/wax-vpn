@@ -379,8 +379,8 @@ jobs:
             $uiaWin = [System.Windows.Automation.AutomationElement]::FromHandle($hwnd)
             $allBtns = $uiaWin.FindAll([System.Windows.Automation.TreeScope]::Descendants, (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Button)))
             Write-Host "buttons in tree: $(@($allBtns | ForEach-Object { $_.Current.Name }) -join ' | ')"
-            $marker = @{ Profiles='Profiles'; Features='Features'; WARP='Cloudflare WARP'; About='About' }
-            foreach ($tab in @('Profiles','Features','WARP','About')) {
+            $marker = @{ Profiles='Profiles'; Features='Features'; WARP='Cloudflare WARP'; Network='Network'; About='About' }
+            foreach ($tab in @('Profiles','Features','WARP','Network','About')) {
               $nb = $uiaWin.FindFirst([System.Windows.Automation.TreeScope]::Descendants, (New-Object System.Windows.Automation.AndCondition((New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, $tab)), (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Button)))))
               if (-not $nb) { Write-Error "UIA: no rail button named '$tab' in the app window"; exit 1 }
               $nb.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
@@ -620,6 +620,20 @@ jobs:
                 $connectedGraphics.CopyFromScreen([int]$windowBounds.X,[int]$windowBounds.Y,0,0,$connectedImage.Size)
                 $connectedImage.Save('gui-screenshot-connected.png')
                 $connectedGraphics.Dispose(); $connectedImage.Dispose()
+                # No external measurement services enabled here. Throughput is adapter-local.
+                $networkRail = $win.FindFirst([System.Windows.Automation.TreeScope]::Descendants, (New-Object System.Windows.Automation.AndCondition((New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, 'Network')), (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Button)))))
+                if (-not $networkRail) { throw 'Network rail button missing' }
+                $networkRail.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+                Start-Sleep -Seconds 2
+                $counterHeading = $win.FindFirst([System.Windows.Automation.TreeScope]::Descendants, (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, 'Live tunnel throughput')))
+                if (-not $counterHeading) { throw 'Network throughput heading missing' }
+                $netImage = New-Object System.Drawing.Bitmap ([int]$windowBounds.Width),([int]$windowBounds.Height)
+                $netGraphics = [System.Drawing.Graphics]::FromImage($netImage)
+                $netGraphics.CopyFromScreen([int]$windowBounds.X,[int]$windowBounds.Y,0,0,$netImage.Size)
+                $netImage.Save('gui-network-connected.png'); $netGraphics.Dispose(); $netImage.Dispose()
+                Note 'PASS Network page: local throughput panel visible while demo tunnel connected; external checks remain disabled'
+                $homeRail = $win.FindFirst([System.Windows.Automation.TreeScope]::Descendants, (New-Object System.Windows.Automation.AndCondition((New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, 'Connect')), (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Button)))))
+                $homeRail.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
                 function Test-IPv4InPrefix([string]$prefix, [string]$ip) {
                   $parts = $prefix -split '/'
                   $plen = [int]$parts[1]
@@ -989,6 +1003,8 @@ jobs:
             gui-screenshot.png
             gui-screenshot-profiles.png
             gui-screenshot-features.png
+            gui-screenshot-network.png
+            gui-network-connected.png
             gui-screenshot-warp.png
             layout-*.png
             layout-state-evidence.txt
