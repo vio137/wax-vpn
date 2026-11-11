@@ -1,21 +1,14 @@
-# waX VPN v1.0.5
+# waX VPN v1.0.6
 
-Pin profiles, find them by name or endpoint, and return to recent profiles.
-Pins and the last eight successful tunnel starts stay on this device. Clear
-recent removes that list without deleting profiles or pins. A recent entry
-means the app started a tunnel, not that Internet access was verified.
+Ctrl+F opens Profiles and focuses its search field from any page, including
+while another text field has focus. It never changes the tunnel. The Clear
+button resets the search; Escape leaves the field using normal text-input
+behavior.
 
-Connection details show the active session's configured addresses, DNS and
-peer route-entry count. For a tunnel owned by another app instance, the
-configuration is marked unknown. These details are not a live routing or DNS
-test. Private keys are not shown. Long content scrolls instead of clipping.
-
-The installer no longer calls taskkill by executable name. It verifies the
-installed executable's full path and retains process handles before stopping
-anything. Current versions receive a PID-scoped graceful-quit signal first;
-older versions without that signal use bounded, exact-path native termination.
-An unrelated copy is not sent the session-global quit signal. If the process
-cannot be verified or stopped, installation/uninstallation aborts.
+Profile order and lowercase search terms are cached until profiles or settings
+change. Unchanged frames reuse the filtered index list without cloning it.
+Name and endpoint matches remain separate, so a query cannot match across
+the boundary between two fields. No measured speed improvement is claimed.
 
 ## Compatibility and limits
 
@@ -40,25 +33,6 @@ sampling can miss a shorter flash.
 
 ## Release verification
 
-Stable workflow: https://github.com/vio137/wax-vpn/actions/runs/43100304009
-Source: `35a5f742e15be996369b8995ca66dcdf3ffdbfce`.
-
-The exact 1.0.5 installer passed fresh install, same-version upgrade, uninstall,
-running-GUI upgrade/uninstall and bounded nonresponsive-process termination.
-Unrelated same-name processes survived. Both GUI stop paths consumed the
-PID-scoped quit signal and completed cleanup. Packaged PE import audits passed
-for the GUI, CLI and WireGuardNT DLL. No new visible console window was observed
-in sampled installer checks; shorter flashes can still be missed.
-
-The exact stable runtime gate passed GUI-driven demo connection and handshake,
-tunnel-address ping, 67 split routes, DNS apply/reset, IPv4 MTU, bounded recovery,
-pending-retry disable, manual reconnect, close-to-tray, original-window restore
-and graceful quit. Profile pin/unpin persistence and accessible name/endpoint
-search checks passed. Actual connected, Profiles and installed GUI captures
-were inspected. The limits above still apply.
-
-The published installer was downloaded and checked against its checksum file:
-
-- File: `waX-VPN-Setup-v1.0.5-x64.exe`
-- Size: 11,671,530 bytes
-- SHA256: `f99f1c27895a607c9d94c669650498752623f3d2487a67324d7151cc06484d25`
+Candidate only. Local 42 app tests passed, one existing test ignored. Build
+and workflow lint passed; keyboard search and empty-results pixels inspected.
+Windows runtime and exact stable installer gates are pending.
