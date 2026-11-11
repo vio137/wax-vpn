@@ -746,7 +746,7 @@ fn fmt_duration(d: Duration) -> String {
 }
 
 fn split_profile_label(name: &str) -> String {
-    format!("Editing profile: {name}")
+    format!("Excluded IP ranges for profile: {name}")
 }
 
 // Count only the loaded in-memory list, never all files on disk. A failed
@@ -780,10 +780,10 @@ mod repaint_tests {
     }
     #[test]
     fn split_profile_context_preserves_the_profile_name() {
-        assert_eq!(split_profile_label("Home"), "Editing profile: Home");
-        assert_eq!(split_profile_label("Office - 東京"), "Editing profile: Office - 東京");
+        assert_eq!(split_profile_label("Home"), "Excluded IP ranges for profile: Home");
+        assert_eq!(split_profile_label("Office - 東京"), "Excluded IP ranges for profile: Office - 東京");
         let name = "long profile name ".repeat(20);
-        assert_eq!(split_profile_label(&name), format!("Editing profile: {name}"));
+        assert_eq!(split_profile_label(&name), format!("Excluded IP ranges for profile: {name}"));
     }
 
     #[test]
