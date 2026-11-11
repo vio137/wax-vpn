@@ -4,8 +4,7 @@ Upstream: https://github.com/DGriffin91/egui_software_backend
 Revision: c70e02d3d95c75a82733deb97e516b13a6c86dc6
 Original version: 0.0.3, MIT OR Apache-2.0. Both license texts retained.
 The constify helper is pinned to crates.io 0.0.1; its src/lib.rs was byte-compared
-with this upstream revision and is identical. Source modules are inlined into one
-lib.rs for distribution; module boundaries and cfg guards are preserved.
+with this upstream revision and is identical. Source module boundaries and cfg guards are preserved.
 
 waX adaptation: egui/egui-winit 0.37 texture-delta API; consume deltas after
 presentation; initialize AccessKit; preserve app state through suspend;
