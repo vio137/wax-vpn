@@ -19,9 +19,12 @@ compatible driver. The app is unsigned, so Windows can show a publisher warning.
 
 ## Evidence and limits
 
-Pre-release gate, exact native source 4b0e77c116e02e218dbe3c93759b686f606b9f27:
-https://github.com/vio137/wax-vpn/actions/runs/43087900944
-The stable workflow reruns every required gate before publication.
+Stable gate, source 3f8dc0ced9a95e1b4f27895e808e90f6fc1421d2:
+https://github.com/vio137/wax-vpn/actions/runs/43090210410
+All required stable jobs passed before publication.
+
+Published installer: 11,636,044 bytes. Downloaded SHA-256 matches the published
+checksum: `5f8c713207dafdd76900322295edbf2bd64a99a4df2439ae9e8b95556334dd58`.
 
 - Windows workspace tests passed. Isolated native API tests passed IPv4/IPv6
   MTU readback, per-family DNS set/readback/reset/readback, and removal of a
