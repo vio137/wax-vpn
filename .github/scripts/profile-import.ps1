@@ -146,6 +146,40 @@ Endpoint = 127.0.0.1:51820
  if (-not (ImportProofFind $window 'Find a profile')) { throw 'Keyboard reference did not expand' }
  ImportProofCapture $window 'profile-import-keyboard-reference.png'
  'PASS quick picker accessible open and select, persisted selection without connection, About keyboard reference' | Out-File verify-results.txt -Append -Encoding utf8
+ # A long list must stay bounded and let a late profile be chosen locally.
+ foreach ($n in 1..24) { Copy-Item $fixture (Join-Path (Join-Path $dir 'profiles') ('Office {0:D2}.conf' -f $n)) }
+ (ImportProofFind $window 'Profiles').GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+ Start-Sleep -Milliseconds 250
+ (ImportProofFind $window 'Reload profiles').GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+ Start-Sleep -Milliseconds 250
+ (ImportProofFind $window 'Connect').GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+ Start-Sleep -Milliseconds 250
+ (ImportProofFind $window 'Switch profile').GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+ Start-Sleep -Milliseconds 250
+ $first=ImportProofFind $window 'Chosen profile'
+ if (-not $first) { throw 'Long quick picker first row missing' }
+ $r=$first.Current.BoundingRectangle
+ $button=ImportProofFind $window 'Connect to Chosen profile'
+ if (-not $button -or $button.Current.IsOffscreen) { throw 'Long picker pushed Connect off-screen' }
+ ImportProofCapture $window 'profile-import-long-picker.png'
+ [ImportProofNative]::SetCursorPos([int]($r.X+$r.Width/2),[int]($r.Y+$r.Height/2)) | Out-Null
+ $last=$null
+ for ($i=0;$i -lt 24;$i++) {
+  $last=ImportProofFind $window 'Office 24'
+  if ($last -and -not $last.Current.IsOffscreen) { break }
+  [ImportProofNative]::mouse_event(0x800,0,0,4294967056,[UIntPtr]::Zero)
+  Start-Sleep -Milliseconds 150
+ }
+ ImportProofCapture $window 'profile-import-long-picker-scrolled.png'
+ if (-not $last -or $last.Current.IsOffscreen) { throw 'Long picker could not scroll to final profile' }
+ $last.GetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern).Toggle()
+ Start-Sleep -Milliseconds 350
+ $saved=Get-Content (Join-Path $dir 'settings.json') -Raw | ConvertFrom-Json
+ if ($saved.last_profile -ne 'Office 24') { throw 'Long picker final selection was not saved' }
+ if (Get-NetAdapter -Name 'waX VPN' -ErrorAction SilentlyContinue) { throw 'Long picker connected unexpectedly' }
+ ImportProofCapture $window 'profile-import-long-selected.png'
+ 'PASS 26-profile quick picker bounded, Connect on-screen, scrolled to final row and saved selection without adapter' | Out-File verify-results.txt -Append -Encoding utf8
+
 
 } finally {
  if ($p) {
