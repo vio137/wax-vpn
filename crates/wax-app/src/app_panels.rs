@@ -283,7 +283,8 @@ impl WaxApp {
         });
         ui.add_space(8.0);
         ui.horizontal(|ui| {
-            ui.add(egui::TextEdit::singleline(&mut self.profile_search).hint_text("Find a profile or endpoint").desired_width(260.0));
+            let search_label = ui.label(RichText::new("Find profiles").size(12.0).color(theme::SUB));
+            ui.add(egui::TextEdit::singleline(&mut self.profile_search).hint_text("Profile or endpoint").desired_width(240.0)).labelled_by(search_label.id);
             if !self.profile_search.is_empty() && ui.small_button("Clear").clicked() { self.profile_search.clear(); }
         });
         ui.add_space(8.0);
