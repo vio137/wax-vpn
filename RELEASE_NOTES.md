@@ -1,19 +1,17 @@
-# waX VPN v0.1.26
+# waX VPN v0.1.27
 
-Unsigned Windows x64 address-error checkpoint. Windows may show an unknown-publisher warning. The official WireGuardNT driver is independently signed by its vendor. No kill switch: traffic can use the normal connection if the tunnel drops.
+Unsigned Windows x64 Interface-error checkpoint. Windows may show an unknown-publisher warning. The official WireGuardNT driver is independently signed by its vendor. No kill switch: traffic can use the normal connection if the tunnel drops.
 
 ## Changes
 
-- Invalid Address and AllowedIPs entries now produce fixed IP-address/CIDR guidance instead of echoing the rejected entry. Existing line numbers are kept. The error names Address or AllowedIP as appropriate.
-- Wording only: two error strings changed. The shared IP/prefix parser, acceptance and rejection rules, serialization and saved-profile loading are unchanged. Bare IPv4/IPv6 addresses and CIDR prefixes remain accepted. No crypto, tunnel, DNS, network-service or reconnect-policy change.
+- A config with an [Interface] section but no PrivateKey now reports that section's first header line: line N: [Interface] missing PrivateKey. Mixed-case section names are recognized as before. The existing interface missing PrivateKey fallback remains when no Interface section exists.
+- Wording only: first-header line tracking is used for this error. Acceptance and rejection rules, serialization and saved-profile loading are unchanged, including repeated Interface handling. No crypto, tunnel, DNS, network-service or reconnect-policy change.
 
 ## Verification
 
-Source 2488c0e4ae7b09c93cc2afd91d750ab98d3792d0 / full preview 42931781678 passed all required jobs. The new address_errors_explain_syntax_without_echoing_entries fixture passed with all 33 Windows core tests. It checks invalid hostnames, prefixes and private sentinels with line/field guidance and no rejected-entry echo; IPv4/IPv6 bare addresses, host prefixes and wider CIDR lists still parse with expected values and round-trip. Fixture proof only, not separate GUI screenshots of invalid address imports.
+Source 420657a870154d44d7c6bc4730e802fab38a8e7d / full preview 42936408572 passed all required jobs. The missing_private_key_identifies_first_interface_header_without_payloads fixture passed with all 34 Windows core tests. It checks normal, mixed-case, BOM and leading-comment headers, first-header selection with repeated Interface sections, the no-interface fallback, absence of config payloads in the error and valid round-trips. Fixture proof only, not separate GUI screenshots of missing-key imports.
 
-Exact v0.1.26 run 42933568843 at 2d36a9ba43ddd6a925e5f23d1eee8dc643d7978e passed build, demo-tunnel/GUI verification, fresh-runner install/quit/uninstall and publish. Raw verify-results and installer diagnostics were read. Peer handshake and tunnel-side ping, DNS and IPv4 MTU 1380, split exclusions, owned adapter-loss recovery after 5 seconds, pending-retry disable across 48 samples/12 seconds, manual reconnect with recovery off, original main HWND/PID plus Connect rail restoration, graceful quit/adapter removal, profile/settings warnings and BOM-backed settings GUI startup passed. No console windows observed in 447 samples at about 100 ms; shorter windows could be missed. Crash evidence is a clean 3-second pre-cleanup snapshot. All 14 normal, warning, BOM and installed screenshots were inspected. Installed quit diagnostics show driver open completed at 0 ms, absence confirmed at 1 ms and legacy cleanup finished at 4171 ms. These timings describe this run, not a performance benchmark.
-
-Freshly downloaded unsigned installer: 10,958,944 bytes. SHA256 8a0f52f75407ca6527b8b74900fc116ef10863e02b8b5bf71fbff2921b4337d6 matches the freshly downloaded SHA256SUMS-v0.1.26.txt.
+Full preview: peer handshake and tunnel-side ping, DNS and IPv4 MTU 1380, split exclusions, owned adapter-loss recovery after 5 seconds, pending-retry disable across 48 samples/12 seconds, manual reconnect with recovery off, original main HWND/PID plus Connect rail restoration, graceful quit/adapter removal, profile/settings warnings and BOM-backed settings GUI startup passed. No console windows observed in 413 samples at about 100 ms; shorter windows could be missed. Crash evidence is a clean 3-second pre-cleanup snapshot. All 14 normal, warning, BOM and installed screenshots were inspected. Fresh install/quit/uninstall passed; installed quit diagnostics show driver open 1 ms, absence confirmed 2 ms and legacy cleanup finished at 3631 ms. Exact v0.1.27 gate remains pending at preparation time.
 
 ## Limits and earlier failures
 
