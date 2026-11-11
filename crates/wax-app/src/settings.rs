@@ -40,12 +40,6 @@ pub fn debug_log_path() -> std::path::PathBuf {
 /// Missing settings are a first launch. Other failures must stay visible.
 pub fn load_checked() -> Result<Settings, ()> { load_from(&path()) }
 
-// Compatibility until the GUI handles explicit load/save results.
-pub fn load() -> Settings { load_checked().unwrap_or_else(|_| {
-    let mut value = Settings::default(); value.auto_reconnect = false; value
-}) }
-pub fn save(settings: &Settings) { let _ = save_checked(settings); }
-
 fn load_from(p: &std::path::Path) -> Result<Settings, ()> {
     match std::fs::read_to_string(p) {
         Ok(text) => {
