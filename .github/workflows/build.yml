@@ -24,8 +24,10 @@ permissions:
   actions: read
 
 concurrency:
-  group: wax-build
-  cancel-in-progress: true
+  # Preview runs are isolated; a stale preview cannot block the next gate.
+  # Stable publication stays serialized to prevent concurrent release writes.
+  group: ${{ inputs.stable_version != '' && 'wax-stable-release' || format('wax-gate-{0}', github.run_id) }}
+  cancel-in-progress: false
 
 # Windows binaries must not require a separately installed VC++ redistributable.
 env:
