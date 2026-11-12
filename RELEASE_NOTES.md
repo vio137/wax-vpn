@@ -31,4 +31,13 @@ sampling can miss a shorter flash.
 Local app tests: 49 passed, one manual networking test ignored. Build and
 PowerShell parser passed. Local pixels showed Clear followed by a typed
 Office 23 name/endpoint query, with Office 24 still selected and disconnected.
-Windows execution proof is pending.
+Preview: https://github.com/vio137/wax-vpn/actions/runs/43157848403
+Source: `f34877982f06c88f1754616ef538843425c06eb4`.
+
+All three execution jobs passed. Actual Windows proof passed Clear returning
+focus, typed name/endpoint words with spaces without connecting and repeated
+Clear focus. Quick-picker focus and installed-GUI pixels were inspected.
+Prior local-profile and connection/installer checks passed within the
+compatibility limits above.
+
+Stable publication and downloaded-installer checksum verification are pending.
