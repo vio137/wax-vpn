@@ -58,16 +58,27 @@ impl WaxApp {
 
         // Find is safe while editing: it changes the view, never a tunnel.
         if ctx.input_mut(|i| i.consume_key(egui::Modifiers::CTRL, egui::Key::F)) {
-            self.tab = Tab::Profiles;
-            ctx.memory_mut(|m| m.request_focus(egui::Id::unique("profile-search")));
+            if self.tab == Tab::Connect && self.picker_open && self.profiles.len() > 6 {
+                ctx.memory_mut(|m| m.request_focus(egui::Id::unique("quick-profile-search")));
+            } else {
+                self.tab = Tab::Profiles;
+                ctx.memory_mut(|m| m.request_focus(egui::Id::unique("profile-search")));
+            }
+        }
+
+        // Dismiss the picker even while its search field owns the keyboard.
+        // Consume Escape before TextEdit sees it, then return focus to Switch.
+        if self.tab == Tab::Connect && self.picker_open
+            && ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
+            self.picker_open = false;
+            self.picker_return_focus = true;
         }
 
         // Connection shortcuts only when no text field owns the keyboard.
         if ctx.memory(|m| m.focused().is_none()) {
-            let (space, esc, q, digits) = ctx.input(|i| {
+            let (space, q, digits) = ctx.input(|i| {
                 (
                     i.key_pressed(egui::Key::Space),
-                    i.key_pressed(egui::Key::Escape),
                     i.modifiers.ctrl && i.key_pressed(egui::Key::Q),
                     [
                         i.modifiers.ctrl && i.key_pressed(egui::Key::Num1),
@@ -83,9 +94,6 @@ impl WaxApp {
                 if *hit {
                     self.tab = [Tab::Connect, Tab::Profiles, Tab::Features, Tab::Warp, Tab::About, Tab::Network][idx];
                 }
-            }
-            if esc && self.picker_open {
-                self.picker_open = false;
             }
             if space {
                 match self.state {

@@ -85,6 +85,11 @@ impl WaxApp {
         if name_resp.hovered() && can_switch {
             ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
         }
+        if self.picker_return_focus && can_switch {
+            name_resp.request_focus();
+            self.picker_return_focus = false;
+        }
+        let picker_just_opened = name_resp.clicked() && can_switch && !self.picker_open;
         if name_resp.clicked() && can_switch {
             self.picker_open = !self.picker_open;
             self.picker_search.clear();
@@ -109,7 +114,8 @@ impl WaxApp {
                     ui.horizontal(|ui| {
                         let before = self.picker_search.clone();
                         let search = ui.add_sized([228.0, 24.0], egui::TextEdit::singleline(&mut self.picker_search)
-                            .id_salt("quick-profile-search").hint_text("Profile or endpoint"));
+                            .id(egui::Id::unique("quick-profile-search")).hint_text("Profile or endpoint"));
+                        if picker_just_opened { search.request_focus(); }
                         search.widget_info(|| {
                             let mut info = egui::WidgetInfo::text_edit(true, &before, &self.picker_search, "Profile or endpoint");
                             info.label = Some("Find quick profile".into());
@@ -901,7 +907,7 @@ impl WaxApp {
                 }
             });
             ui.add_space(8.0);
-            ui.add(egui::Label::new(RichText::new("Except Find, shortcuts pause while a text field has focus. Buttons work with Tab and Enter.").size(11.0).color(theme::MUTE)).wrap());
+            ui.add(egui::Label::new(RichText::new("Find searches an open quick picker, otherwise Profiles. Escape closes the picker even while typing. Other shortcuts pause while a text field has focus. Buttons work with Tab and Enter.").size(11.0).color(theme::MUTE)).wrap());
         });
         }
         ui.add_space(10.0);
