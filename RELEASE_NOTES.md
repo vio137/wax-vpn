@@ -37,5 +37,17 @@ Source: `e04344c94d8c2bacc6136c16ca24568e71ad9209`. All three execution jobs
 passed. Actual Windows results passed singular/zero counts, Clear removing
 count, unchanged selection/no adapter, and 26-profile list/Connect bounds.
 Prior profile, loaded-summary, demo tunnel/recovery and installer gates passed.
-Installed-GUI and one-match picker pixels inspected. Stable publication and
-checksum verification are pending. No performance improvement is claimed.
+Installed-GUI and one-match picker pixels inspected.
+
+Stable: https://github.com/vio137/wax-vpn/actions/runs/43168675659
+Source: `5870fb7751e1e4536845eb5a4eb78b56a79d4ca5`. All four jobs passed.
+Actual results passed count/Clear/bounds and prior profile/summary checks,
+demo peer handshake/tunnel-address ping, DNS/MTU restore, split-route checks,
+3-second recovery, recovery-disable with 48 samples over 12 seconds, manual
+reconnect, original HWND/PID restore and graceful quit. No console observed in
+326 samples at about 100 ms; shorter flashes can be missed. Stable installed-GUI
+and one-match picker pixels inspected. Fresh-runner installer checks passed.
+Published installer (11,711,798 bytes) downloaded and independently hashed,
+matching SHA256SUMS-v1.0.24.txt:
+`e46377fe9961f2d33eb6d5fca1a66baa5f7ec55c05ea00ea85e5ae3c7abe5904`.
+No performance improvement is claimed.
