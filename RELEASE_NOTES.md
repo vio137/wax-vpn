@@ -29,11 +29,23 @@ sampling can miss a shorter flash.
 
 ## Release verification
 
-Preview build, runtime and fresh-installer checks passed:
-https://github.com/vio137/wax-vpn/actions/runs/43124621272
-Source: `9b364c1757768eee7a43534b6a122683044db1c1`.
+Exact stable workflow: https://github.com/vio137/wax-vpn/actions/runs/43125943433
+Source: `ff1801fbc75c4ebc8fc12bd5cf6bb956a365c6ca`.
 
-Actual Windows results passed accessible Show and Hide, content appearing and
-disappearing, plus all existing native import, picker and runtime checks.
-Open/hidden pixels were inspected. Exact stable verification and installer
-checksum are pending.
+All four stable jobs passed. Actual Windows results passed UIA Invoke for
+Show and Hide, shortcut content appearing and disappearing, plus the existing
+native file import, short-picker and 26-profile picker checks. Open, hidden
+and installed-app pixels were inspected. Lower help rows require scrolling at
+880x600; no complete screen-reader or clean Windows 10/11 claim is made.
+
+GUI demo connection, tunnel-address ping, DNS apply/reset, IPv4 MTU, split
+routes, bounded recovery, retry disable, original-window restore and graceful
+quit checks passed. Fresh install, upgrade, uninstall, all three native process
+scope checks and all three PE dependency audits passed, subject to the limits
+above. Console sampling can miss shorter flashes.
+
+The published installer was downloaded and matched its checksum file:
+
+- File: `waX-VPN-Setup-v1.0.10-x64.exe`
+- Size: 11,696,349 bytes
+- SHA256: `7aa2447c7627ef710187cb21936cae80ef652d4226c79ac706b4abf377379271`
