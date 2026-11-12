@@ -1,10 +1,12 @@
-# waX VPN v1.0.27
+# waX VPN v1.0.28
 
-Copy summary in the expanded loaded-config card copies its allowlisted values
-and configured-only limits to the system clipboard. It includes profile name,
-addresses and DNS, but no keys or endpoints. Nothing is uploaded by the app;
-clipboard sharing or sync follows the user's system settings. Copy happens
-only when the button is pressed. No networking behavior or saved setting changed.
+Local profile search now matches configured interface addresses, DNS addresses
+and peer route CIDRs, alongside names and endpoints. All words must match one
+profile. Matching is literal case-insensitive text, not CIDR membership, live
+routing or a connection check. Both Profiles and the Connect quick picker use
+the same cache. Key material is never indexed. The cache follows existing
+successful-reload and ranking invalidation. No files, settings or network
+behavior change just by searching.
 
 ## Compatibility and limits
 
@@ -29,23 +31,14 @@ sampling can miss a shorter flash.
 
 ## Release verification
 
-Local app tests passed (53 passed, one manual ignored), including clipboard
-text allowlisting, key/endpoint exclusion and configured-only limits. Build and
-PowerShell syntax passed. Revised preview:
-https://github.com/vio137/wax-vpn/actions/runs/43177728480
-Source: `e8a278adb998c6d06efbbf18e262887e43359b47`. All three execution jobs
-passed. Actual Windows system clipboard contained the allowlisted summary and
-limits without key/endpoint values. Prior summary, cache reload/restoration,
-unchanged files/settings/selection/no adapter, profile/demo/recovery and installer
-checks passed. Summary and installed-GUI pixels inspected. Stable publication
-and checksum verification pending.
+Local app tests: 54 passed, one manual network test ignored. New coverage checks
+IPv4/IPv6 addresses, DNS, route CIDRs, multi-field queries, literal misses,
+key exclusion and reload invalidation. Build and PowerShell syntax passed.
+Windows gate and publication pending.
 
-## Preview failure and correction
+## Design review
 
-The first preview (43175710700, source 95e45143) failed the actual Windows
-clipboard-content check: Copy summary did not update the system clipboard.
-Inspection found the software backend's egui-winit OS clipboard feature was
-disabled, using app-internal fallback text. Enabled its existing arboard feature
-for OS text clipboard support; no third-party crate version changed. Revised
-Windows actual clipboard-content check passed in the revised preview. This also enables OS clipboard integration for other
-text controls on this backend. No network behavior changed.
+Preserved the graphite surfaces, subdued controls and existing row hierarchy.
+The search hint now names the expanded fields; hover text explains the literal,
+configured-only limits. No new decoration or motion. Design reference:
+Unslop by Damir Sokolovsky (@heydamir), CC BY 4.0, used as a review rubric.

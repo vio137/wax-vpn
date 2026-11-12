@@ -473,6 +473,15 @@ Endpoint = 127.0.0.1:51820
  if (-not (ImportProofFind $window '1 match') -or -not (ImportProofFind $window 'Office 23')) { throw 'Multi-word name/endpoint query missed unique profile' }
  if (ImportProofFind $window 'Office 24') { throw 'Multi-word query retained unrelated profile' }
  ImportProofCapture $window 'profile-import-word-search.png'
+ $searchValue.SetValue('OFFICE 23 10.55.0.2/32 10.55.0.1/32')
+ Start-Sleep -Milliseconds 250
+ if (-not (ImportProofFind $window '1 match') -or -not (ImportProofFind $window 'Office 23') -or (ImportProofFind $window 'Office 24')) { throw 'Configured address/route query missed unique profile' }
+ ImportProofCapture $window 'profile-import-ip-search.png'
+ $searchValue.SetValue('Office 23 10.55.0.42')
+ Start-Sleep -Milliseconds 250
+ if (-not (ImportProofFind $window '0 matches')) { throw 'Configured IP search inferred an unconfigured address' }
+ 'PASS configured address and route CIDR search combine with profile name, literal misses do not infer addresses' | Out-File verify-results.txt -Append -Encoding utf8
+
  $searchValue.SetValue('Office 23 no-match-xyz')
  Start-Sleep -Milliseconds 250
  if (-not (ImportProofFind $window '0 matches') -or -not (ImportProofFind $window 'No matching profiles')) { throw 'Multi-word search did not require every word' }

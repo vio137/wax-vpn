@@ -39,6 +39,10 @@ impl ProfileView {
                             .filter_map(|p| p.endpoint.as_ref())
                             .map(|s| s.to_lowercase()),
                     );
+                    // Search only configured display fields. Never index key material.
+                    terms.extend(p.config.interface.addresses.iter().map(ToString::to_string));
+                    terms.extend(p.config.interface.dns.iter().map(ToString::to_string));
+                    terms.extend(p.config.peers.iter().flat_map(|peer| &peer.allowed_ips).map(ToString::to_string));
                     (i, terms)
                 })
                 .collect();
@@ -85,6 +89,31 @@ mod tests {
             config,
         }
     }
+    #[test]
+    fn configured_ip_search_is_literal_key_free_and_refreshes_after_reload() {
+        let mut profiles = vec![profile("Office", "primary.invalid:123"), profile("Travel", "travel.invalid:456")];
+        profiles[0].config.interface.addresses = vec!["10.44.0.2/32".parse().unwrap(), "fd00::2/128".parse().unwrap()];
+        profiles[0].config.interface.dns = vec!["1.1.1.1".parse().unwrap(), "2606:4700:4700::1111".parse().unwrap()];
+        profiles[0].config.peers[0].allowed_ips = vec!["10.55.0.0/24".parse().unwrap()];
+        profiles[0].config.peers[0].preshared_key = Some([8; 32]);
+        let settings = Settings::default();
+        let mut view = ProfileView::default();
+        for query in ["OFFICE 10.44.0.2/32", "fd00::2", "2606:4700:4700::1111", "10.55.0.0/24", "office 1.1.1.1 10.55.0.0"] {
+            assert_eq!(view.indices(&profiles, &settings, query), &[0]);
+        }
+        // CIDRs are literal text, not an IP-membership, routing or live check.
+        for query in ["10.55.0.42", "travel 1.1.1.1", "privatekey", "AAAAAAAAAAAA", "CAgICAgICAgI"] {
+            assert!(view.indices(&profiles, &settings, query).is_empty());
+        }
+        let indexed = format!("{:?}", view.rows);
+        for secret in ["AAAAAAAAAAAA", "CAgICAgICAgI", "private_key", "preshared_key"] { assert!(!indexed.contains(secret)); }
+        profiles[0].config.interface.addresses = vec!["10.44.0.9/32".parse().unwrap()];
+        view.invalidate();
+        assert!(view.indices(&profiles, &settings, "10.44.0.2").is_empty());
+        assert_eq!(view.indices(&profiles, &settings, "10.44.0.9"), &[0]);
+        assert_eq!(view.indices(&profiles, &settings, ""), &[0, 1]);
+    }
+
     #[test]
     fn cached_filter_matches_direct_search_across_query_changes() {
         let mut profiles = vec![
