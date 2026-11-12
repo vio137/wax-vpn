@@ -1,11 +1,11 @@
-# waX VPN v1.0.14
+# waX VPN v1.0.15
 
-Clear pasted config sits beside Check config. It clears the editor and its
-review/import feedback, then returns keyboard focus to the editor. Profile
-name, saved profiles and system clipboard stay unchanged. Clear, Check and
-Import actions are disabled when the editor is empty. This is an editor
-convenience, not a secure memory-erasure feature. No tunnel, DNS, firewall or
-saved-setting behavior changed.
+Profiles has a Pinned only filter that combines with name/endpoint search.
+Unpinning refreshes the filtered list; disabling the filter restores all
+matching profiles. No pinned profiles and no search matches have separate
+empty states. The filter lasts for this app session only and does not change
+the selected profile, profile configuration or the Connect-page picker.
+No tunnel, DNS or firewall behavior changed.
 
 ## Compatibility and limits
 
@@ -30,25 +30,6 @@ sampling can miss a shorter flash.
 
 ## Release verification
 
-Exact stable workflow: https://github.com/vio137/wax-vpn/actions/runs/43139362010
-Source: `9741b584e5bcd3abe3e758d85415a4fe86b308b5`.
-
-All four stable jobs passed. Actual Windows results passed clear-editor and
-feedback, returned editor focus, preserved name/clipboard and disabled empty
-actions without saving. Filled/cleared editor pixels were inspected. Existing
-local syntax review, native imports, keyboard search, bounded 26-profile picker
-and keyboard-help checks passed. Local app tests: 46 passed, one manual
-networking test ignored. Build and PowerShell parser passed.
-
-Existing GUI demo connection, tunnel-address ping, DNS apply/reset, IPv4 MTU,
-split routes, bounded recovery, retry disable, original-window restore and
-graceful quit passed. Fresh install, upgrade, uninstall, all three native
-process-scope checks and three PE audits passed within the limits above.
-331 console-window samples at about 100ms saw no new visible native console;
-shorter flashes can be missed.
-
-The published installer was downloaded and matched its checksum file:
-
-- File: `waX-VPN-Setup-v1.0.14-x64.exe`
-- Size: 11,703,149 bytes
-- SHA256: `a96d202d77557fa957bd28b02053e7df88505aa0d884c24f925d392476c124ee`
+Pending focused Windows and stable-release checks. Local app tests: 47 passed,
+one manual networking test ignored. Build and PowerShell parser passed.
+Pinned and search-empty layouts inspected at 880x600.

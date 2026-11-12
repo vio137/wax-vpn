@@ -207,6 +207,35 @@ Endpoint = 127.0.0.1:51820
  ImportProofCapture $window 'profile-import-keyboard-hidden.png'
  'PASS keyboard reference accessible Show and Hide actions' | Out-File verify-results.txt -Append -Encoding utf8
  'PASS quick picker accessible open and select, persisted selection without connection, About keyboard reference' | Out-File verify-results.txt -Append -Encoding utf8
+ # Pinned-only is a session-local list filter, not a profile selection.
+ (ImportProofFind $window 'Profiles').GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+ Start-Sleep -Milliseconds 250
+ (ImportProofFind $window 'Pin').GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+ Start-Sleep -Milliseconds 250
+ (ImportProofFind $window 'Pinned only').GetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern).Toggle()
+ Start-Sleep -Milliseconds 250
+ if (-not (ImportProofFind $window 'Chosen profile')) { throw 'Pinned filter missed pinned profile' }
+ if (ImportProofFind $window 'Chosen profile - 2') { throw 'Pinned filter retained unpinned profile' }
+ ImportProofCapture $window 'profile-import-pinned-only.png'
+ $search=ImportProofFind $window 'Find profiles'
+ $searchValue=$search.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern)
+ $searchValue.SetValue('no-match-xyz')
+ Start-Sleep -Milliseconds 250
+ if (-not (ImportProofFind $window 'No matching profiles')) { throw 'Pinned filter did not combine with search' }
+ $searchValue.SetValue('')
+ Start-Sleep -Milliseconds 250
+ (ImportProofFind $window 'Unpin').GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+ Start-Sleep -Milliseconds 250
+ if (-not (ImportProofFind $window 'No pinned profiles')) { throw 'Unpin did not refresh pinned filter' }
+ ImportProofCapture $window 'profile-import-no-pinned.png'
+ (ImportProofFind $window 'Pinned only').GetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern).Toggle()
+ Start-Sleep -Milliseconds 250
+ if (-not (ImportProofFind $window 'Chosen profile - 2')) { throw 'Disabling pinned filter did not restore rows' }
+ $saved=Get-Content (Join-Path $dir 'settings.json') -Raw | ConvertFrom-Json
+ if ($saved.last_profile -ne 'Chosen profile') { throw 'Pinned filter changed selection' }
+ if ((Get-FileHash $original -Algorithm SHA256).Hash -ne $originalHash) { throw 'Pinned filter changed profile config' }
+ if (Get-NetAdapter -Name 'waX VPN' -ErrorAction SilentlyContinue) { throw 'Pinned filter connected unexpectedly' }
+ 'PASS pinned-only filter combines with search, refreshes after unpin, restores all rows without selection/config/adapter changes' | Out-File verify-results.txt -Append -Encoding utf8
  # A long list must stay bounded and let a late profile be chosen locally.
  foreach ($n in 1..24) { Copy-Item $fixture (Join-Path (Join-Path $dir 'profiles') ('Office {0:D2}.conf' -f $n)) }
  (ImportProofFind $window 'Profiles').GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()

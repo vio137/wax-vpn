@@ -335,12 +335,14 @@ impl WaxApp {
             }
         });
         ui.add_space(8.0);
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
             let search_label = ui.label(RichText::new("Find profiles").size(12.0).color(theme::SUB));
             ui.add(egui::TextEdit::singleline(&mut self.profile_search)
                 .id(egui::Id::unique("profile-search")).hint_text("Profile or endpoint").desired_width(240.0))
                 .labelled_by(search_label.id).on_hover_text("Ctrl+F to find a profile.");
             if !self.profile_search.is_empty() && ui.small_button("Clear").clicked() { self.profile_search.clear(); }
+            ui.checkbox(&mut self.pinned_only, "Pinned only")
+                .on_hover_text("Show pinned profiles in this list. Search still applies; the Connect picker stays unchanged.");
         });
         ui.add_space(8.0);
         let can_manage = can_manage && self.profiles_readable;
@@ -349,7 +351,7 @@ impl WaxApp {
             ui.add_space(8.0);
         }
         egui::ScrollArea::vertical().max_height(250.0).show(ui, |ui| {
-            let order = self.profile_view.indices(&self.profiles, &self.settings, &self.profile_search);
+            let order = self.profile_view.indices_filtered(&self.profiles, &self.settings, &self.profile_search, self.pinned_only);
             let mut shown = 0;
             for &i in order {
                 let p = &self.profiles[i];
@@ -469,7 +471,8 @@ impl WaxApp {
                 theme::hairline(ui);
             }
             if shown == 0 && !self.profiles.is_empty() {
-                ui.label(RichText::new("No matching profiles").color(theme::SUB));
+                let empty = if self.pinned_only && self.profile_search.trim().is_empty() { "No pinned profiles" } else { "No matching profiles" };
+                ui.label(RichText::new(empty).color(theme::SUB));
             }
             if self.profiles.is_empty() && self.profiles_readable {
                 theme::card_frame().show(ui, |ui| {

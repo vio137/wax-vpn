@@ -7,12 +7,18 @@ pub struct ProfileView {
     raw_query: String,
     filtered: Vec<usize>,
     valid: bool,
+    pinned_only: bool,
 }
 impl ProfileView {
     pub fn invalidate(&mut self) {
         self.valid = false;
     }
     pub fn indices(&mut self, profiles: &[Profile], settings: &Settings, query: &str) -> &[usize] {
+        self.indices_filtered(profiles, settings, query, false)
+    }
+    pub fn indices_filtered(&mut self, profiles: &[Profile], settings: &Settings, query: &str, pinned_only: bool) -> &[usize] {
+        let filter_changed = self.pinned_only != pinned_only;
+        self.pinned_only = pinned_only;
         let query_changed = self.raw_query != query;
         if query_changed {
             self.raw_query.clear();
@@ -40,12 +46,13 @@ impl ProfileView {
                 .sort_by_key(|(i, _)| settings.profile_rank(&profiles[*i].name));
             self.valid = true;
         }
-        if rebuild || query_changed {
+        if rebuild || query_changed || filter_changed {
             self.filtered = self
                 .rows
                 .iter()
-                .filter(|(_, text)| {
-                    self.query.is_empty() || text.iter().any(|term| term.contains(&self.query))
+                .filter(|(i, text)| {
+                    (!self.pinned_only || settings.pinned_profiles.contains(&profiles[*i].name))
+                        && (self.query.is_empty() || text.iter().any(|term| term.contains(&self.query)))
                 })
                 .map(|(i, _)| *i)
                 .collect();
@@ -124,6 +131,25 @@ mod tests {
             );
         }
     }
+    #[test]
+    fn pinned_filter_combines_with_search_and_resets_for_quick_picker() {
+        let profiles = vec![profile("Office", "office.invalid:123"), profile("Travel", "travel.invalid:456")];
+        let mut settings = Settings::default();
+        let mut view = ProfileView::default();
+        assert!(view.indices_filtered(&profiles, &settings, "", true).is_empty());
+        settings.pinned_profiles.insert("Travel".into());
+        view.invalidate();
+        assert_eq!(view.indices_filtered(&profiles, &settings, "", true), &[1]);
+        assert!(view.indices_filtered(&profiles, &settings, "office", true).is_empty());
+        assert_eq!(view.indices_filtered(&profiles, &settings, " TRAVEL.INVALID ", true), &[1]);
+        assert_eq!(view.indices(&profiles, &settings, ""), &[1, 0]);
+        assert_eq!(view.indices_filtered(&profiles, &settings, "", true), &[1]);
+        settings.pinned_profiles.clear();
+        view.invalidate();
+        assert!(view.indices_filtered(&profiles, &settings, "", true).is_empty());
+        assert_eq!(view.indices_filtered(&profiles, &settings, "", false), &[0, 1]);
+    }
+
     #[test]
     fn unchanged_query_reuses_terms_and_filtered_storage() {
         let profiles = vec![profile("Office", "office.invalid:123")];
