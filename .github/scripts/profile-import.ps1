@@ -217,7 +217,12 @@ Endpoint = 127.0.0.1:51820
  if (-not (ImportProofFind $window 'Chosen profile')) { throw 'Pinned filter missed pinned profile' }
  if (ImportProofFind $window 'Chosen profile - 2') { throw 'Pinned filter retained unpinned profile' }
  ImportProofCapture $window 'profile-import-pinned-only.png'
- $search=ImportProofFind $window 'Find profiles'
+ # Find profiles is also the visible label. Ctrl+F identifies the actual edit.
+ [ImportProofNative]::SetForegroundWindow([IntPtr]$window.Current.NativeWindowHandle) | Out-Null
+ [System.Windows.Forms.SendKeys]::SendWait('^f')
+ Start-Sleep -Milliseconds 250
+ $search=[System.Windows.Automation.AutomationElement]::FocusedElement
+ if ($search.Current.ControlType -ne [System.Windows.Automation.ControlType]::Edit) { throw 'Pinned filter search edit did not receive focus' }
  $searchValue=$search.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern)
  $searchValue.SetValue('no-match-xyz')
  Start-Sleep -Milliseconds 250
