@@ -42,7 +42,19 @@ CIDR and peer position, configured-only limits and unchanged local state without
 an adapter. Prior search/clipboard/cache reload/profile/demo/recovery/installer
 checks passed. Configured-route and installed-GUI pixels inspected. The 64-entry
 bound and IPv6 routes are unit-tested, not Windows UI-fixture checked.
-Stable publication and checksum verification pending.
+Stable https://github.com/vio137/wax-vpn/actions/runs/43187434822
+source `76e27441f79b5052b7c4b1cf798e210a58ad699a`: all four jobs passed.
+Actual stable results read: route expand/collapse and limits, unchanged local
+state, prior search/clipboard/cache/profile checks, demo tunnel ping, recovery
+in 4 seconds, disabled recovery in 48 samples over 12 seconds, original HWND/PID
+restore and quit, and fresh install/upgrade/uninstall/process scope.
+336 console samples saw no window; shorter flashes could be missed. Configured
+route and installed-GUI pixels inspected.
+
+Published installer downloaded and matched the published SHA-256:
+`cf198d7dddffe626ff91ad7bc58a77d8494e857c0cd13fa201121d74fcaf0688`
+(11,772,993 bytes).
+https://github.com/vio137/wax-vpn/releases/tag/v1.0.29
 
 Optional layout-state captures remain unverified because their separate harness
 host lacks System.Drawing; the CI-only fix remains deferred for workflow
