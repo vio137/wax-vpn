@@ -30,6 +30,14 @@ sampling can miss a shorter flash.
 
 ## Release verification
 
-Local app tests: 46 passed, one manual networking test ignored. Build passed.
-Actual local pixels inspected after opening and typing, Ctrl+F, Escape and
-Enter reopening. PowerShell parser and Windows gates remain pending.
+Preview: https://github.com/vio137/wax-vpn/actions/runs/43131598900
+Source: `62398e591eaaa76a0e5ac70730add6de3fbc8e1c`.
+All three preview jobs passed. Actual Windows results passed opening focus,
+contextual Ctrl+F, Escape while typing, returned Switch focus and Enter
+reopening with a cleared query. Existing name/endpoint search, empty result,
+Clear, selection without connection, imports, bounded 26-profile picker and
+keyboard-help checks passed. Focused search, dismissed picker, About and
+installed-app pixels inspected. Existing demo tunnel, recovery, restore/quit,
+installer process-scope and PE checks passed within the limits above.
+Local app tests: 46 passed, one manual networking test ignored. Build and
+PowerShell parser passed. Exact stable publication remains pending.
