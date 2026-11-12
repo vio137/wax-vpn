@@ -73,6 +73,53 @@ try {
  $button.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
  Start-Sleep -Milliseconds 300
  if (-not (ImportProofFind $window 'Choose .conf file')) { throw 'First-run action did not open Profiles' }
+ # Local syntax review uses fixed public fixture data and never imports it.
+ $key=[Convert]::ToBase64String([byte[]](1..32))
+ $public=[Convert]::ToBase64String([byte[]](33..64))
+ $inspection=@"
+[Interface]
+PrivateKey = $key
+Address = 10.55.0.2/32
+DNS = 1.1.1.1
+[Peer]
+PublicKey = $public
+AllowedIPs = 0.0.0.0/0, ::/0
+Endpoint = 127.0.0.1:51820
+"@
+ $inputEdit=ImportProofFind $window 'WireGuard configuration to import'
+ if (-not $inputEdit) { throw 'Config review input missing' }
+ $inputValue=$inputEdit.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern)
+ $inputValue.SetValue($inspection)
+ Start-Sleep -Milliseconds 300
+ (ImportProofFind $window 'Check config').GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+ Start-Sleep -Milliseconds 300
+ if (-not (ImportProofFind $window 'Config syntax checked')) { throw 'Valid config review failed' }
+ if (-not (ImportProofFind $window 'Addresses: 1 · DNS servers: 1 · Peers: 1 · Route entries: 2')) { throw 'Config review counts differ' }
+ if (-not (ImportProofFind $window 'Default routes: IPv4 and IPv6')) { throw 'Config review missed default route families' }
+ # Scroll the real panel so result pixels, rather than UIA alone, can be checked.
+ $r=$inputEdit.Current.BoundingRectangle
+ [ImportProofNative]::SetCursorPos([int]($r.X+$r.Width/2),[int]($r.Y+$r.Height/2)) | Out-Null
+ for ($i=0;$i -lt 6;$i++) { [ImportProofNative]::mouse_event(0x800,0,0,4294967056,[UIntPtr]::Zero);Start-Sleep -Milliseconds 60 }
+ Start-Sleep -Milliseconds 200
+ ImportProofCapture $window 'profile-import-check-valid.png'
+ $inputEdit=ImportProofFind $window 'WireGuard configuration to import'
+ $inputValue=$inputEdit.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern)
+ $inputValue.SetValue('invalid-local-fixture')
+ Start-Sleep -Milliseconds 300
+ if (ImportProofFind $window 'Config syntax checked') { throw 'Editing retained stale config review' }
+ (ImportProofFind $window 'Check config').GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+ Start-Sleep -Milliseconds 250
+ if (-not (ImportProofFind $window 'Config could not be checked. Review its sections, keys, addresses and endpoints before importing.')) { throw 'Invalid config review feedback missing' }
+ ImportProofCapture $window 'profile-import-check-invalid.png'
+ if (@(Get-ChildItem (Join-Path $dir 'profiles') -Filter '*.conf' -ErrorAction SilentlyContinue).Count -ne 0) { throw 'Config review saved a profile' }
+ if (Get-NetAdapter -Name 'waX VPN' -ErrorAction SilentlyContinue) { throw 'Config review created a tunnel adapter' }
+ $inputValue.SetValue('')
+ Start-Sleep -Milliseconds 250
+ if ((ImportProofFind $window 'Check config').Current.IsEnabled) { throw 'Empty config review action enabled' }
+ if (ImportProofFind $window 'Config could not be checked. Review its sections, keys, addresses and endpoints before importing.') { throw 'Clearing retained stale config review error' }
+ [ImportProofNative]::SetCursorPos([int]($r.X+$r.Width/2),[int]($r.Y+$r.Height/2)) | Out-Null
+ for ($i=0;$i -lt 8;$i++) { [ImportProofNative]::mouse_event(0x800,0,0,480,[UIntPtr]::Zero);Start-Sleep -Milliseconds 60 }
+ 'PASS local config review counts and IPv4/IPv6 defaults, edit invalidation, generic invalid feedback, empty disabled and no saved profile or adapter' | Out-File verify-results.txt -Append -Encoding utf8
  $dialog=ImportProofOpen $window $p.Id
  ImportProofCapture $dialog 'profile-import-picker.png'
  $cancel=ImportProofFind $dialog 'Cancel'

@@ -1,11 +1,12 @@
-# waX VPN v1.0.12
+# waX VPN v1.0.13
 
-Quick-picker search receives keyboard focus on opening. Ctrl+F searches the
-open picker instead of switching pages; outside it, Ctrl+F still opens Profiles.
-Escape closes the picker even while typing and returns focus to Switch profile.
-Enter can then reopen it with a fresh query. Text-field spaces remain ordinary
-text and do not connect. The About keyboard reference explains this behavior.
-No saved setting, tunnel, DNS or firewall behavior changed.
+Profiles has a local Check config step before import. It uses the same syntax
+and endpoint checks as import, then shows address, DNS, peer and route-entry
+counts plus explicit IPv4/IPv6 default-route families. The review does not save,
+connect or upload a profile. Editing the config clears the previous result;
+invalid input gets a generic message without echoing keys or endpoint values.
+This is a syntax review, not a reachability, routing or leak test.
+No tunnel, DNS or firewall behavior changed.
 
 ## Compatibility and limits
 
@@ -30,26 +31,8 @@ sampling can miss a shorter flash.
 
 ## Release verification
 
-Exact stable workflow: https://github.com/vio137/wax-vpn/actions/runs/43132837961
-Source: `2693a57a407659bdfc6095b78c4219900b5773e0`.
-
-All four stable jobs passed. Actual Windows results passed opening focus,
-contextual Ctrl+F, Escape while typing, returned Switch focus and Enter
-reopening with a cleared query. Existing name/endpoint search, empty result,
-Clear, selection without connection, native imports, bounded 26-profile picker
-and keyboard-help checks passed. Focused search, dismissed picker and installed
-app pixels were inspected. Local app tests: 46 passed, one manual networking
-test ignored. Build and PowerShell parser passed.
-
-Existing GUI demo connection, tunnel-address ping, DNS apply/reset, IPv4 MTU,
-split routes, bounded recovery, retry disable, original-window restore and
-graceful quit passed. Fresh install, upgrade, uninstall, all three native
-process-scope checks and three PE audits passed within the limits above.
-337 console-window samples at about 100ms saw no new visible native console;
-shorter flashes can be missed.
-
-The published installer was downloaded and matched its checksum file:
-
-- File: `waX-VPN-Setup-v1.0.12-x64.exe`
-- Size: 11,700,370 bytes
-- SHA256: `8d6e1820a1171b70163481d6a9ad9eeeecf37d230a12d73edc23b6604221dd7c`
+Pending preview and stable Windows checks. Local core tests: 42 passed.
+Local app tests: 46 passed, one manual networking test ignored. PowerShell
+parser passed. The local valid-result layout was inspected at 880x600 using
+fixed public fixture data. Release verification will be updated only after
+reading the Windows results and inspecting their screenshots.

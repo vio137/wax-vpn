@@ -104,6 +104,7 @@ pub struct WaxApp {
     import_paste: String,
     import_name: String,
     import_error: Option<String>,
+    import_check: Option<Result<profile::ImportSummary, ()>>,
     #[cfg(windows)]
     file_picker: Option<Receiver<profile_file::PickerResult>>,
     tab: Tab,
@@ -221,6 +222,7 @@ impl WaxApp {
             import_paste: String::new(),
             import_name: String::new(),
             import_error: None,
+            import_check: None,
             #[cfg(windows)]
             file_picker: None,
             tab: Tab::Connect,

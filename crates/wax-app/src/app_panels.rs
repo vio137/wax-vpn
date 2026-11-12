@@ -673,9 +673,30 @@ impl WaxApp {
                             resp.widget_info(|| egui::WidgetInfo::labeled(
                                 egui::Role::TextInput, true, "WireGuard configuration to import"
                             ));
+                            if resp.changed() { self.import_check = None; }
                         });
                 });
             ui.add_space(4.0);
+            if ui.add_enabled(!self.import_paste.trim().is_empty(), egui::Button::new("Check config")).on_hover_text("Check locally without saving or connecting. No config is uploaded.").clicked() {
+                self.import_check = Some(profile::inspect_conf(&self.import_paste).map_err(|_| ()));
+            }
+            if let Some(check) = &self.import_check {
+                match check {
+                    Ok(summary) => {
+                        ui.label(RichText::new("Config syntax checked").size(13.0).color(theme::TEXT));
+                        ui.add(egui::Label::new(format!("Addresses: {} · DNS servers: {} · Peers: {} · Route entries: {}", summary.addresses, summary.dns_servers, summary.peers, summary.route_entries)).wrap());
+                        let default_routes = match (summary.default_ipv4, summary.default_ipv6) {
+                            (true, true) => "Default routes: IPv4 and IPv6",
+                            (true, false) => "Default route: IPv4 only",
+                            (false, true) => "Default route: IPv6 only",
+                            (false, false) => "No explicit /0 default route",
+                        };
+                        ui.label(default_routes);
+                        ui.add(egui::Label::new(RichText::new("Local syntax only. Not saved or connected. Reachability and routing are not tested.").size(11.0).color(theme::MUTE)).wrap());
+                    }
+                    Err(()) => { ui.add(egui::Label::new(RichText::new("Config could not be checked. Review its sections, keys, addresses and endpoints before importing.").size(12.0).color(theme::WARN)).wrap()); }
+                }
+            }
             if theme::primary_button(ui, "Import config", !self.import_paste.trim().is_empty()) {
                 let text = self.import_paste.trim().to_string();
                 let name = if self.import_name.trim().is_empty() {
@@ -686,6 +707,7 @@ impl WaxApp {
                 if self.import_text(name, &text) {
                     self.import_paste.clear();
                     self.import_name.clear();
+                    self.import_check = None;
                 }
             }
             if let Some(err) = &self.import_error {

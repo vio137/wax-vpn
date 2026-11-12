@@ -139,6 +139,31 @@ pub fn delete_profile(name: &str) -> Result<(), CoreError> {
     Ok(())
 }
 
+/// Non-secret, local import inspection. Does not read or write files, resolve
+/// endpoints, register a service or create a tunnel.
+#[derive(Debug, PartialEq, Eq)]
+pub struct ImportSummary {
+    pub addresses: usize,
+    pub dns_servers: usize,
+    pub peers: usize,
+    pub route_entries: usize,
+    pub default_ipv4: bool,
+    pub default_ipv6: bool,
+}
+
+pub fn inspect_conf(text: &str) -> Result<ImportSummary, CoreError> {
+    let config = WireGuardConfig::parse(text)?;
+    config.validate_import_endpoints()?;
+    Ok(ImportSummary {
+        addresses: config.interface.addresses.len(),
+        dns_servers: config.interface.dns.len(),
+        peers: config.peers.len(),
+        route_entries: config.peers.iter().map(|p| p.allowed_ips.len()).sum(),
+        default_ipv4: config.peers.iter().flat_map(|p| &p.allowed_ips).any(|ip| ip.addr().is_ipv4() && ip.prefix_len() == 0),
+        default_ipv6: config.peers.iter().flat_map(|p| &p.allowed_ips).any(|ip| ip.addr().is_ipv6() && ip.prefix_len() == 0),
+    })
+}
+
 /// Imports are additive. Exclusive creation avoids a check-then-overwrite race
 /// between GUI/CLI instances and returns the actual canonical filename stem.
 pub fn import_conf(name: &str, text: &str) -> Result<Profile, CoreError> {
@@ -179,6 +204,25 @@ fn import_into(dir: &Path, name: &str, text: &str) -> Result<Profile, CoreError>
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn inspection_matches_import_validation_without_secret_output() {
+        let private = crate::keys::key_to_base64(&[1; 32]);
+        let public = crate::keys::key_to_base64(&[2; 32]);
+        let text = format!("[Interface]\nPrivateKey = {private}\nAddress = 10.0.0.2/32, fd00::2/128\nDNS = 1.1.1.1\n[Peer]\nPublicKey = {public}\nAllowedIPs = 0.0.0.0/0, ::/0\nEndpoint = example.invalid:51820\n");
+        let summary = inspect_conf(&text).unwrap();
+        assert_eq!(summary, ImportSummary { addresses: 2, dns_servers: 1, peers: 1, route_entries: 2, default_ipv4: true, default_ipv6: true });
+        let output = format!("{summary:?}");
+        assert!(!output.contains(&private));
+        assert!(!output.contains(&public));
+        assert!(!output.contains("example.invalid"));
+        assert!(inspect_conf(&text.replace("example.invalid:51820", "broken:port")).is_err());
+        assert!(inspect_conf(&text.replace("Address =", "PostUp = script\nAddress =")).is_err());
+        assert!(inspect_conf("not a config").is_err());
+        let partial = inspect_conf(&text.replace("0.0.0.0/0, ::/0", "10.0.0.1/32")).unwrap();
+        assert!(!partial.default_ipv4 && !partial.default_ipv6);
+        assert_eq!(partial.route_entries, 1);
+    }
+
     use super::*;
     #[test]
     fn exact_creation_never_replaces_an_existing_profile_or_directory() {
