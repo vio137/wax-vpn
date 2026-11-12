@@ -1,6 +1,6 @@
 # waX VPN v1.0.22
 
-Profiles has a collapsed Selected config summary. It shows the loaded profile's
+Profiles has a hidden-by-default config summary with explicit Show and Hide actions. It shows the loaded profile's
 name, addresses, DNS, MTU, peer count and configured route-entry count. Keys are
 not shown. The panel explicitly labels these as configured values, not a live
 connection, routing or leak check. Opening and closing it does not change
@@ -34,4 +34,6 @@ Local app tests: 50 passed, one manual networking test ignored. Build and
 PowerShell parser passed. Summary tests cover IPv4/IPv6 values, missing values,
 multiple peers, route-entry counts, unchanged config and excluded key fields.
 Local collapsed and expanded pixels were inspected.
-Windows execution proof is pending.
+The first Windows preview passed build, installer and prior checks, but the
+summary disclosure Expand action did not expose expected content. Explicit
+Show/Hide buttons replace that interaction. Revised Windows proof is pending.

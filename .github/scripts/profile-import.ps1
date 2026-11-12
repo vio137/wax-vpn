@@ -484,10 +484,12 @@ Endpoint = 127.0.0.1:51820
  # Allowlisted loaded config summary is read-only, explicit about limits and key-free.
  $searchValue.SetValue('no-match-xyz')
  Start-Sleep -Milliseconds 250
- $summary=ImportProofFind $window 'Selected config summary'
+ $summary=ImportProofFind $window 'Show config summary'
  if (-not $summary) { throw 'Selected config summary action missing' }
- $summary.GetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern).Expand()
+ ImportProofCapture $window 'profile-import-summary-before.png'
+ $summary.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
  Start-Sleep -Milliseconds 300
+ ImportProofCapture $window 'profile-import-summary-after.png'
  foreach ($text in @('Loaded config: Office 24','Addresses: 10.55.0.2/32','DNS: Not set','MTU: Automatic','Peers: 1','Route entries: 1','Configured values only. Not a live connection, routing or leak check. Keys are not shown.')) {
   if (-not (ImportProofFind $window $text)) { throw ('Config summary missing expected allowlisted text: '+$text) }
  }
@@ -498,8 +500,8 @@ Endpoint = 127.0.0.1:51820
   if ($line -match '^\s*(PrivateKey|PublicKey|PresharedKey)\s*=\s*(.+?)\s*$' -and $text.Contains($Matches[2])) { throw 'Config summary exposed a key value' }
  }
  ImportProofCapture $window 'profile-import-config-summary.png'
- $summary=ImportProofFind $window 'Selected config summary'
- $summary.GetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern).Collapse()
+ $summary=ImportProofFind $window 'Hide config summary'
+ $summary.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
  Start-Sleep -Milliseconds 250
  if (ImportProofFind $window 'Loaded config: Office 24') { throw 'Config summary did not collapse' }
  if ((Get-FileHash (Join-Path $dir 'settings.json') -Algorithm SHA256).Hash -ne $settingsBefore) { throw 'Config summary changed settings/selection' }
