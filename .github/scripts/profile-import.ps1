@@ -334,7 +334,7 @@ Endpoint = 127.0.0.1:51820
  if (-not $first) { throw 'Profiles virtual list first row missing' }
  $r=$first.Current.BoundingRectangle
  [ImportProofNative]::SetCursorPos([int]($r.X+$r.Width/2),[int]($r.Y+24)) | Out-Null
- ImportProofCapture $window 'profile-list-first.png'
+ ImportProofCapture $window 'profile-import-list-first.png'
  $last=$null
  for ($i=0;$i -lt 32;$i++) {
   $last=ImportProofFind $window 'Office 24'
@@ -350,7 +350,7 @@ Endpoint = 127.0.0.1:51820
  $nodes=$window.FindAll([System.Windows.Automation.TreeScope]::Descendants,[System.Windows.Automation.Condition]::TrueCondition)
  $pin=$nodes | Where-Object { $_.Current.Name -eq 'Pin' -and -not $_.Current.IsOffscreen -and [Math]::Abs($_.Current.BoundingRectangle.Y-$labelY) -lt 25 } | Select-Object -First 1
  if (-not $pin) { throw 'Last profile row Pin action missing' }
- ImportProofCapture $window 'profile-list-last.png'
+ ImportProofCapture $window 'profile-import-list-last.png'
  $pin.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
  Start-Sleep -Milliseconds 300
  $saved=Get-Content (Join-Path $dir 'settings.json') -Raw | ConvertFrom-Json
