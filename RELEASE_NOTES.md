@@ -29,8 +29,20 @@ sampling can miss a shorter flash.
 
 ## Release verification
 
-Pending Windows preview and stable gates. Local app tests: 48 passed, one
-manual networking test ignored. Build and PowerShell parser passed.
-Local one/zero match, Escape/reset/retype and Clear/retype pixels were
-inspected. Windows focus retention, pinned-filter preservation, empty-search
-Escape and no Space connection proof remain pending.
+Preview: https://github.com/vio137/wax-vpn/actions/runs/43148541118
+Source: `89973e77c54a4cfb74a20e437ea5172e833b108b`.
+
+All three preview execution jobs passed. Actual Windows results passed focused
+Profiles Escape/Clear reset, retained typing focus and pinned filter, empty
+search Escape and subsequent Space without a connection. Match counts passed
+for one pinned row, no search matches and unpin refresh. Focused-search,
+pinned and empty-state pixels were inspected. Local app tests: 48 passed,
+one manual networking test ignored. Build and PowerShell parser passed.
+
+Existing native imports, config review/Clear, bounded profile list/picker,
+keyboard help, GUI demo connection, tunnel-address ping, DNS apply/reset,
+IPv4 MTU, split routes, bounded recovery, retry disable, original-window
+restore and graceful quit passed. Installer lifecycle/native process-scope
+checks and PE audits passed within the limits above.
+
+Stable publication and downloaded-installer checksum verification are pending.
