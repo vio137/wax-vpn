@@ -32,4 +32,15 @@ sampling can miss a shorter flash.
 Local app tests: 48 passed, one manual networking test ignored. Build passed.
 Local pixels showed the selected Office 24 row revealed from a hidden pinned
 filter in a 28-profile list; settings file hash stayed unchanged.
-PowerShell parser and Windows execution proof are pending.
+PowerShell parser passed. Preview:
+https://github.com/vio137/wax-vpn/actions/runs/43153197046
+Source: `08773acd2ca20f7a4a295cd150b66a06b4f027e2`.
+
+All three execution jobs passed. Actual Windows proof passed zero-match search
+with Pinned only active, repeated reveal of the exact selected virtual row,
+unchanged config/settings files and no adapter. Selected-row and installed-GUI
+pixels were inspected. Prior import/duplicate/review/Clear, search/counts/pins,
+virtualized lists/picker and connection/installer checks also passed within
+the compatibility limits above.
+
+Stable publication and downloaded-installer checksum verification are pending.
