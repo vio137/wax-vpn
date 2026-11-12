@@ -518,6 +518,18 @@ Endpoint = 127.0.0.1:51820
   if ($line -match '^\s*(PrivateKey|PublicKey|PresharedKey)\s*=\s*(.+?)\s*$' -and $text.Contains($Matches[2])) { throw 'Config summary exposed a key value' }
  }
  ImportProofCapture $window 'profile-import-config-summary.png'
+ if (ImportProofFind $window 'Peer 1: 10.55.0.1/32') { throw 'Configured routes expanded without explicit action' }
+ (ImportProofFind $window 'Show configured routes').GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+ Start-Sleep -Milliseconds 250
+ foreach ($expected in @('Peer 1: 10.55.0.1/32','Loaded AllowedIPs only, before split exclusions. Not current routes or reachability. Up to 64 entries shown.')) {
+  if (-not (ImportProofFind $window $expected)) { throw ('Configured routes missing: '+$expected) }
+ }
+ ImportProofCapture $window 'profile-import-configured-routes.png'
+ (ImportProofFind $window 'Hide configured routes').GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+ Start-Sleep -Milliseconds 200
+ if (ImportProofFind $window 'Peer 1: 10.55.0.1/32') { throw 'Configured routes did not collapse' }
+ 'PASS explicit configured-route expand/collapse, loaded CIDR with peer position and configured-only limits' | Out-File verify-results.txt -Append -Encoding utf8
+
  $beforeCopy=Get-Clipboard -Raw
  (ImportProofFind $window 'Copy summary').GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
  Start-Sleep -Milliseconds 300

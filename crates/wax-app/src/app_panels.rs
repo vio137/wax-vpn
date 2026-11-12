@@ -577,6 +577,21 @@ impl WaxApp {
                     if ui.small_button("Copy summary").on_hover_text("Copy these configured values to your system clipboard, including addresses and DNS. No keys or endpoints. Nothing is uploaded; clipboard sharing follows your system settings.").clicked() {
                         ui.ctx().copy_text(profile_summary::clipboard_text(&profile.name, rows));
                     }
+                    if ui.small_button(if self.profile_routes_open { "Hide configured routes" } else { "Show configured routes" }).clicked() {
+                        self.profile_routes_open = !self.profile_routes_open;
+                    }
+                    if self.profile_routes_open {
+                        ui.add(egui::Label::new(RichText::new("Loaded AllowedIPs only, before split exclusions. Not current routes or reachability. Up to 64 entries shown.").size(11.0).color(theme::MUTE)).wrap());
+                        let (routes, remaining) = profile_summary::route_preview(&profile.config);
+                        if routes.is_empty() {
+                            ui.label(RichText::new("No configured route entries").size(11.5).color(theme::SUB));
+                        } else {
+                            egui::ScrollArea::vertical().id_salt(("configured-routes", selected)).max_height(128.0).show(ui, |ui| {
+                                for route in routes { ui.add(egui::Label::new(RichText::new(route).size(11.5).color(theme::SUB)).wrap()); }
+                            });
+                        }
+                        if remaining > 0 { ui.label(RichText::new(format!("{remaining} more entries not shown")).size(11.0).color(theme::MUTE)); }
+                    }
                 });
             }
         }

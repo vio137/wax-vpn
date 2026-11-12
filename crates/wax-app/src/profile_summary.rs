@@ -25,6 +25,16 @@ pub fn rows(config: &WireGuardConfig) -> Vec<(&'static str, String)> {
     ]
 }
 
+/// Bounded configured route preview. Peer positions are local labels, not keys.
+pub fn route_preview(config: &WireGuardConfig) -> (Vec<String>, usize) {
+    const LIMIT: usize = 64;
+    let total = config.peers.iter().map(|peer| peer.allowed_ips.len()).sum::<usize>();
+    let routes = config.peers.iter().enumerate()
+        .flat_map(|(peer, config)| config.allowed_ips.iter().map(move |cidr| format!("Peer {}: {cidr}", peer + 1)))
+        .take(LIMIT).collect();
+    (routes, total.saturating_sub(LIMIT))
+}
+
 /// Clipboard export is explicit and includes the same allowlist and limits.
 pub fn clipboard_text(name: &str, rows: &[(&str, String)]) -> String {
     let mut text = format!("Loaded config: {name}\nConfigured values only. Not a live connection, routing or leak check. Keys are not shown.\n");
@@ -58,6 +68,22 @@ impl DisplayCache {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn route_preview_is_ordered_bounded_and_contains_only_peer_positions_and_cidrs() {
+        let mut config = WireGuardConfig::parse("[Interface]\nPrivateKey = AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=\n[Peer]\nPublicKey = AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=\nAllowedIPs = 0.0.0.0/0, ::/0\nEndpoint = hidden.invalid:51820\n").unwrap();
+        let mut second = config.peers[0].clone();
+        second.allowed_ips = vec!["10.4.0.0/24".parse().unwrap()];
+        config.peers.push(second);
+        assert_eq!(route_preview(&config), (vec!["Peer 1: 0.0.0.0/0".into(), "Peer 1: ::/0".into(), "Peer 2: 10.4.0.0/24".into()], 0));
+        let text = format!("{:?}", route_preview(&config));
+        for secret in ["AQEBAQE", "AgICAgI", "hidden.invalid", "Endpoint", "Key"] { assert!(!text.contains(secret)); }
+        config.peers[0].allowed_ips = (0..70).map(|i| format!("10.5.{i}.0/24").parse().unwrap()).collect();
+        let (rows, hidden) = route_preview(&config);
+        assert_eq!(rows.len(), 64); assert_eq!(hidden, 7);
+        assert_eq!(rows.last().unwrap(), "Peer 1: 10.5.63.0/24");
+        config.peers.clear(); assert_eq!(route_preview(&config), (vec![], 0));
+    }
+
     #[test]
     fn configured_values_are_explicit_and_never_include_keys() {
         let config = WireGuardConfig::parse("[Interface]\nPrivateKey = AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=\nAddress = 10.4.0.2/32, fd00::2/128\nDNS = 1.1.1.1, 2606:4700:4700::1111\nMTU = 1380\n[Peer]\nPublicKey = AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=\nPresharedKey = AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM=\nAllowedIPs = 0.0.0.0/0, ::/0\nEndpoint = example.invalid:51820\n").unwrap();

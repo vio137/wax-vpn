@@ -1,12 +1,12 @@
-# waX VPN v1.0.28
+# waX VPN v1.0.29
 
-Local profile search now matches configured interface addresses, DNS addresses
-and peer route CIDRs, alongside names and endpoints. All words must match one
-profile. Matching is literal case-insensitive text, not CIDR membership, live
-routing or a connection check. Both Profiles and the Connect quick picker use
-the same cache. Key material is never indexed. The cache follows existing
-successful-reload and ranking invalidation. No files, settings or network
-behavior change just by searching.
+Show configured routes in the expanded loaded-config summary reveals up to 64
+AllowedIPs entries, labeled by peer position, in a bounded 128px scroll area.
+Extra entries are counted explicitly. This is the loaded config before split
+exclusions, not current routes, IP membership, reachability or leak protection.
+Keys and endpoints are excluded. The view opens only on request and can be
+collapsed. Copy summary retains its existing allowlist and does not copy this
+route preview. No files, settings or networking behavior changed.
 
 ## Compatibility and limits
 
@@ -31,39 +31,20 @@ sampling can miss a shorter flash.
 
 ## Release verification
 
-Local app tests: 54 passed, one manual network test ignored. New coverage checks
-IPv4/IPv6 addresses, DNS, route CIDRs, multi-field queries, literal misses,
-key exclusion and reload invalidation. Build and PowerShell syntax passed.
-Preview https://github.com/vio137/wax-vpn/actions/runs/43181431620
-source `bc6194865a07945a282c0e0e3aaa851d6b96aa58`: all three execution jobs
-passed. Actual Windows evidence checked address/route queries in Profiles and
-the quick picker, unique matches, literal misses and unchanged local state with
-no adapter. Prior profile/summary clipboard/cache reload, demo, recovery and
-installer checks passed. Both search views and installed GUI pixels inspected.
-Stable https://github.com/vio137/wax-vpn/actions/runs/43183513122
-source `3cd93209b111931156e4446f35811c7c18aa156f`: all four jobs passed.
-Actual stable evidence read: both configured-IP search fixtures and literal
-misses, unchanged state, prior clipboard/cache/profile checks, demo tunnel ping,
-4-second recovery, disabled recovery in 48 samples over 12 seconds, original
-HWND/PID restore and quit, and fresh install/upgrade/uninstall/process scope.
-334 console samples saw no window; shorter flashes could be missed. Both search
-views and installed-GUI pixels inspected. DNS/IPv6 search cases are locally
-tested, not separately checked by the Windows UI fixture.
+Local app tests: 55 passed, one manual network test ignored. New coverage checks
+ordered peer positions, IPv4/IPv6, empty routes, key/endpoint exclusion and the
+64-entry bound with an explicit remainder count. Build and PowerShell parser
+passed. Actual local screenshot inspected for readable limits and one route.
+Windows expand/collapse and unchanged-state proof, publication and checksum
+verification pending.
 
-Published installer downloaded and matched the published SHA-256:
-`d7a285e75a4efd67e4c84742a8fa6cd6536aceb1f06db613dffd2e95c4b9c9b2`
-(11,770,024 bytes).
-https://github.com/vio137/wax-vpn/releases/tag/v1.0.28
-
-Optional layout-state screenshots remain
-unverified because their separate harness host lacks System.Drawing. A proposed
-CI-only assembly-load fix could not be pushed with the current credential's
-workflow permissions and is not included in this release candidate. Functional
-profile screenshots use their own loaded assembly and remain part of the gate.
+Optional layout-state captures remain unverified because their separate harness
+host lacks System.Drawing; the CI-only fix remains deferred for workflow
+permissions. This candidate does not change the workflow.
 
 ## Design review
 
-Preserved the graphite surfaces, subdued controls and existing row hierarchy.
-The search hint now names the expanded fields; hover text explains the literal,
-configured-only limits. No new decoration or motion. Design reference:
-Unslop by Damir Sokolovsky (@heydamir), CC BY 4.0, used as a review rubric.
+Keep the existing graphite card and text hierarchy. A small explicit action
+reveals factual route content without decorative badges or motion; the route
+list height is capped at 128px. Design reference: Unslop by Damir Sokolovsky
+(@heydamir), CC BY 4.0, used as a review rubric.
