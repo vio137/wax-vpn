@@ -1,0 +1,29 @@
+{
+  "html_url": "https://github.com/srijs/rust-crc32fast/compare/v1.5.4...v1.5.5",
+  "commits": [
+    {
+      "sha": "548781c99892c50b0ba239c28e240b8d15688889",
+      "message": "aarch64: fold with PMULL from 64 bytes (#78)\n\nOn CPUs with PMULL (the aes feature), fold the input with carry-less\nmultiplies, as the x86 code does with PCLMULQDQ, and finish with two\ncrc32x instructions instead of a Barrett reduction. Each fold of a stream\nwaits for the last, so the number of independent 128-bit streams grows\nwith the input: 4 from 64 bytes, 8 from 256 and 16 from 4 KiB.\n\nWhen fewer than a round of input is left, the streams are halved, each of\nthe first half folded into its partner, down to one, taking what remains\nof the input at each level: about log2(N) levels of latency rather than N\ndependent folds. The last 0 to 15 bytes take at most one each of crc32x,\ncrc32w, crc32h and crc32b.\n\nThe fold constants come from x8n at compile time (combine::fold_keys); a\ntest checks them against the x86 constants.\n\nShort inputs, and the PMULL check, stay in State::update: State stays\nzero-sized, which makes hash() of 8 to 48 bytes 18-35% faster than\nstoring the feature in State or marking update #[inline]. EOR3 (SHA3) in\nplace of the two XORs made the 16-stream loop slower (79 against 95 GB/s\nat 64 KiB), so it isn't used.\n\nApple M4, GB/s, three runs (1.5.4 -> this commit):\n\n      8 B   4.0 ->  5.4      1023 B  11.8 ->  66.5\n     32 B  11.7 -> 14.3      4095 B  21.7 ->  68.4\n     64 B  28.1 -> 28-32     4096 B  22.3 ->  96.9\n     96 B  25.8 -> 38.6     64 KiB   29.1 ->  99.8\n    255 B  14.4 -> 60.3      1 MiB   31.7 -> 101.0\n\nCPUs without PMULL take the crc32 chains as before. Tests cover both and\nState's dispatch at lengths around every crossover and stride, and fail\non a wrong fold constant; fuzzing 16 million inputs up to 70 KB under\nAddressSanitizer found nothing. The crate builds on 1.63, where this\nmodule is compiled out, and on 1.89."
+    },
+    {
+      "sha": "0b0c895b2ff244bcc85d8977034851cbd1279c53",
+      "message": "CI: check aarch64 kernel detection on known runners (#79)\n\nA new test, `picks_the_expected_kernel`, compares what detection picks\n(\"none\", \"crc\" or \"pmull\") with `CRC32FAST_EXPECT`, and does nothing\nwhen it is unset. The stable job sets it to \"pmull\" on the macOS\n(Apple Silicon) runner and on a new native Linux arm64 runner, so a\nchange that silently stops using PMULL fails CI instead of passing with\nless coverage. Linux arm64 was only tested under QEMU before."
+    },
+    {
+      "sha": "f81fd96dba5cef51175a620dfdf9b466be62bba9",
+      "message": "CI: check the aarch64 target at the MSRV and on 1.80 (#80)\n\nThe msrv job only built for the runner's x86_64 target, so nothing\nchecked that the aarch64 code compiles on old toolchains. At the MSRV\naarch64 gets the baseline implementation, and 1.80 is the oldest rustc\nthat compiles the aarch64 kernels (where build.rs sets\n`stable_arm_crc32_intrinsics`), so check both, with and without default\nfeatures. Checking needs only the target's standard library."
+    },
+    {
+      "sha": "8a93d2a70c00ab3e72beda42014b18fad8e496ea",
+      "message": "Release 1.5.5"
+    }
+  ],
+  "files": [
+    ".github/workflows/ci.yml",
+    "Cargo.toml",
+    "README.md",
+    "src/combine.rs",
+    "src/lib.rs",
+    "src/specialized/aarch64.rs"
+  ]
+}

@@ -1,10 +1,16 @@
-# waX VPN v1.0.22
+# waX VPN v1.0.23
 
-Profiles has a hidden-by-default config summary with explicit Show and Hide actions. It shows the loaded profile's
-name, addresses, DNS, MTU, peer count and configured route-entry count. Keys are
-not shown. The panel explicitly labels these as configured values, not a live
-connection, routing or leak check. Opening and closing it does not change
-selection, settings, files or the connection.
+Dependency review and one scoped patch update: crc32fast 1.5.4 -> 1.5.5,
+used by image/PNG decoding through eframe. No Windows x64 speedup is claimed.
+No networking/TLS/certificate package was updated.
+
+cargo-audit 0.23.0 scanned 571 lockfile dependencies against RustSec DB commit
+fd6f39814c4d3c359fdbe223d0280dec4933f78f (2026-11-11). It reported zero
+vulnerability entries but six warnings, unchanged after the update: glib0.18.5
+unsoundness and five unmaintained crates. None appears in the default Windows
+x64 target dependency graph; all remain in the cross-platform lockfile.
+This is not a clean-security claim. See docs/dependencies/v1.0.23-review.md
+and raw before/after reports for warnings, deferred updates and scan limits.
 No tunnel, DNS, firewall or service behavior changed.
 
 ## Compatibility and limits
@@ -30,32 +36,7 @@ sampling can miss a shorter flash.
 
 ## Release verification
 
-Local app tests: 50 passed, one manual networking test ignored. Build and
-PowerShell parser passed. Summary tests cover IPv4/IPv6 values, missing values,
-multiple peers, route-entry counts, unchanged config and excluded key fields.
-Local collapsed and expanded pixels were inspected.
-The first Windows preview passed build, installer and prior checks, but the
-summary disclosure Expand action did not expose expected content. Explicit
-Show/Hide buttons replace that interaction.
-
-Revised preview: https://github.com/vio137/wax-vpn/actions/runs/43161693467
-Source: `9196254d9f7a9800d3c3bd218a9b0371adae666c`.
-All three execution jobs passed. Actual Windows proof passed explicit Show/Hide,
-expected loaded values and caveat, absent key values, unchanged profile/settings
-files and no adapter. Summary and installed-GUI pixels were inspected. Prior
-profile and connection/installer checks passed within the limits above.
-
-Stable: https://github.com/vio137/wax-vpn/actions/runs/43162857609
-Source: `b3c9b4e4b1fb8ba1fe59426f9eb6878061d109cd`.
-
-All four stable jobs passed. Actual stable Windows proof passed summary Show/Hide,
-expected values/caveat, no key values, unchanged files/settings/selection and no
-adapter. Stable summary and installed-GUI pixels were inspected. Prior demo
-tunnel, DNS/IPv4 MTU/split, 4s recovery, retry disable (48 samples over 12s), manual
-reconnect, original HWND/PID restore and quit passed. No console windows were
-observed in 335 samples at about 100ms; shorter flashes could be missed.
-Installer lifecycle, native checks and PE audits passed.
-
-Release: https://github.com/vio137/wax-vpn/releases/tag/v1.0.22
-The downloaded 11,711,556-byte installer matches the published SHA256:
-`8d8123ad8111cc0b371b55f26966a1207fba56d17c4b5c763fab2a0eaec7d5f3`.
+Local workspace tests passed after the patch. Windows execution and installer
+proof are pending. Advisory scan covers known RustSec crate-version advisories,
+not custom/vendored code, driver or installer binaries, runtime configuration,
+exploitability or unknown issues.
