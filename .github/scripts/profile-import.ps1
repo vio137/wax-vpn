@@ -481,6 +481,32 @@ Endpoint = 127.0.0.1:51820
  if ($filesAfter -ne $filesBefore) { throw 'Multi-word search changed profile files' }
  if (Get-NetAdapter -Name 'waX VPN' -ErrorAction SilentlyContinue) { throw 'Multi-word search connected unexpectedly' }
  'PASS multi-word Profiles and quick-picker queries combine name/endpoint, require every word, restore whitespace query and keep files/settings/selection unchanged without adapter' | Out-File verify-results.txt -Append -Encoding utf8
+ # Allowlisted loaded config summary is read-only, explicit about limits and key-free.
+ $searchValue.SetValue('no-match-xyz')
+ Start-Sleep -Milliseconds 250
+ $summary=ImportProofFind $window 'Selected config summary'
+ if (-not $summary) { throw 'Selected config summary action missing' }
+ $summary.GetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern).Expand()
+ Start-Sleep -Milliseconds 300
+ foreach ($text in @('Loaded config: Office 24','Addresses: 10.55.0.2/32','DNS: Not set','MTU: Automatic','Peers: 1','Route entries: 1','Configured values only. Not a live connection, routing or leak check. Keys are not shown.')) {
+  if (-not (ImportProofFind $window $text)) { throw ('Config summary missing expected allowlisted text: '+$text) }
+ }
+ $nodes=$window.FindAll([System.Windows.Automation.TreeScope]::Descendants,[System.Windows.Automation.Condition]::TrueCondition)
+ $text=($nodes | ForEach-Object { $_.Current.Name }) -join "`n"
+ $fixtureText=Get-Content $selectedPath -Raw
+ foreach ($line in ($fixtureText -split "`n")) {
+  if ($line -match '^\s*(PrivateKey|PublicKey|PresharedKey)\s*=\s*(.+?)\s*$' -and $text.Contains($Matches[2])) { throw 'Config summary exposed a key value' }
+ }
+ ImportProofCapture $window 'profile-import-config-summary.png'
+ $summary=ImportProofFind $window 'Selected config summary'
+ $summary.GetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern).Collapse()
+ Start-Sleep -Milliseconds 250
+ if (ImportProofFind $window 'Loaded config: Office 24') { throw 'Config summary did not collapse' }
+ if ((Get-FileHash (Join-Path $dir 'settings.json') -Algorithm SHA256).Hash -ne $settingsBefore) { throw 'Config summary changed settings/selection' }
+ $filesAfter=@(Get-ChildItem (Join-Path $dir 'profiles') -File | Sort-Object Name | ForEach-Object { $_.Name+':'+(Get-FileHash $_.FullName -Algorithm SHA256).Hash }) -join '|'
+ if ($filesAfter -ne $filesBefore) { throw 'Config summary changed profile files' }
+ if (Get-NetAdapter -Name 'waX VPN' -ErrorAction SilentlyContinue) { throw 'Config summary connected unexpectedly' }
+ 'PASS loaded config summary expand/collapse, expected allowlisted values, no key values, unchanged files/settings/selection and no adapter' | Out-File verify-results.txt -Append -Encoding utf8
 
 } finally {
  if ($p) {

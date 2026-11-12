@@ -557,6 +557,19 @@ impl WaxApp {
             self.connect_manual();
         }
 
+        if let Some(profile) = self.selected.and_then(|i| self.profiles.get(i)) {
+            ui.add_space(8.0);
+            egui::CollapsingHeader::new("Selected config summary")
+                .id_salt("selected-config-summary")
+                .show(ui, |ui| {
+                    ui.add(egui::Label::new(RichText::new(format!("Loaded config: {}", profile.name)).size(12.0).color(theme::TEXT)).wrap());
+                    ui.add(egui::Label::new(RichText::new("Configured values only. Not a live connection, routing or leak check. Keys are not shown.").size(11.0).color(theme::MUTE)).wrap());
+                    for (label, value) in profile_summary::rows(&profile.config) {
+                        ui.add(egui::Label::new(RichText::new(format!("{label}: {value}")).size(11.5).color(theme::SUB)).wrap());
+                    }
+                });
+        }
+
         if let Some(sel) = self.selected {
             if self.profiles.get(sel).is_some() {
                 if self.split_edit_for != Some(sel) {
