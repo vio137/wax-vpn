@@ -32,9 +32,19 @@ sampling can miss a shorter flash.
 
 ## Release verification
 
-Windows preview and stable gates are pending. Local app tests: 48 passed,
-one manual networking test ignored. Core tests: 43 passed, including complete
-loaded-config equality, original preservation, collision-safe repeated copy
-and Unix 0600 permissions. Build and PowerShell parser passed. Local first-copy
-pixels were inspected. Windows repeated-copy file/settings/no-adapter proof
-remains pending.
+Preview: https://github.com/vio137/wax-vpn/actions/runs/43151256402
+Source: `483d49599c2636084da1dc1bd8bf9e34fc10fb34`.
+
+All three preview execution jobs passed. Actual Windows results passed repeated
+collision-safe copies, unchanged original/selection/settings and no adapter.
+Copy notice and installed-GUI pixels were inspected. Local app tests: 48
+passed, one manual networking test ignored. Core tests: 43 passed, including
+complete config equality, original preservation, repeated naming and Unix
+0600 permissions. Build and PowerShell parser passed.
+
+Existing import/review/Clear, keyboard search/counts, pinned filter, bounded
+lists/picker, GUI demo connection, DNS/IPv4 MTU/split routes, bounded recovery,
+retry disable, original-window restore and quit passed. Installer lifecycle,
+native process-scope checks and PE audits passed within the limits above.
+
+Stable publication and downloaded-installer checksum verification are pending.
