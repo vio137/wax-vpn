@@ -133,11 +133,15 @@ impl WaxApp {
                 }
                 let query = if searchable { self.picker_search.as_str() } else { "" };
                 let order = self.profile_view.indices(&self.profiles, &self.settings, query);
+                let show_match_count = searchable && !query.trim().is_empty();
+                if show_match_count {
+                    ui.label(RichText::new(profile_match_label(order.len())).size(11.0).color(theme::MUTE));
+                }
                 if order.is_empty() {
                     ui.label(RichText::new("No matching profiles").size(13.0).color(theme::SUB));
                 }
                 let mut scroll = egui::ScrollArea::vertical().id_salt("quick-profile-list")
-                    .max_height(if searchable { 72.0 } else { 104.0 }).auto_shrink([false, true]);
+                    .max_height(if show_match_count { 56.0 } else if searchable { 72.0 } else { 104.0 }).auto_shrink([false, true]);
                 if reset_scroll { scroll = scroll.vertical_scroll_offset(0.0); }
                 scroll.show_rows(ui, 32.0, order.len(), |ui, rows| {
                 for &i in &order[rows] {
