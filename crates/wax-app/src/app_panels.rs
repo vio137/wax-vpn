@@ -853,7 +853,10 @@ impl WaxApp {
             }
         });
         ui.add_space(10.0);
-        egui::CollapsingHeader::new("Keyboard shortcuts").id_salt("keyboard-shortcuts").show(ui, |ui| {
+        let help_label = if self.keyboard_help_open { "Hide keyboard shortcuts" } else { "Show keyboard shortcuts" };
+        if ui.button(help_label).clicked() { self.keyboard_help_open = !self.keyboard_help_open; }
+        if self.keyboard_help_open {
+        theme::card_frame().show(ui, |ui| {
             egui::Grid::new("keyboard-shortcut-grid").num_columns(2).spacing([24.0, 8.0]).show(ui, |ui| {
                 for (key, action) in [
                     ("Ctrl+F", "Find a profile"),
@@ -872,6 +875,7 @@ impl WaxApp {
             ui.add_space(8.0);
             ui.add(egui::Label::new(RichText::new("Except Find, shortcuts pause while a text field has focus. Buttons work with Tab and Enter.").size(11.0).color(theme::MUTE)).wrap());
         });
+        }
         ui.add_space(10.0);
         theme::card_frame().show(ui, |ui| {
             ui.label(RichText::new("Built with").size(11.0).color(theme::MUTE));
