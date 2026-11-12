@@ -677,9 +677,17 @@ impl WaxApp {
                         });
                 });
             ui.add_space(4.0);
-            if ui.add_enabled(!self.import_paste.trim().is_empty(), egui::Button::new("Check config")).on_hover_text("Check locally without saving or connecting. No config is uploaded.").clicked() {
-                self.import_check = Some(profile::inspect_conf(&self.import_paste).map_err(|_| ()));
-            }
+            ui.horizontal(|ui| {
+                if ui.add_enabled(!self.import_paste.trim().is_empty(), egui::Button::new("Check config")).on_hover_text("Check locally without saving or connecting. No config is uploaded.").clicked() {
+                    self.import_check = Some(profile::inspect_conf(&self.import_paste).map_err(|_| ()));
+                }
+                if ui.add_enabled(!self.import_paste.is_empty(), egui::Button::new("Clear pasted config")).on_hover_text("Clear this editor and its feedback. Saved profiles, profile name and system clipboard stay unchanged.").clicked() {
+                    self.import_paste.clear();
+                    self.import_check = None;
+                    self.import_error = None;
+                    ui.memory_mut(|memory| memory.request_focus(input_id));
+                }
+            });
             if let Some(check) = &self.import_check {
                 match check {
                     Ok(summary) => {

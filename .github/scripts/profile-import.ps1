@@ -113,8 +113,23 @@ Endpoint = 127.0.0.1:51820
  ImportProofCapture $window 'profile-import-check-invalid.png'
  if (@(Get-ChildItem (Join-Path $dir 'profiles') -Filter '*.conf' -ErrorAction SilentlyContinue).Count -ne 0) { throw 'Config review saved a profile' }
  if (Get-NetAdapter -Name 'waX VPN' -ErrorAction SilentlyContinue) { throw 'Config review created a tunnel adapter' }
- $inputValue.SetValue('')
- Start-Sleep -Milliseconds 250
+ $nameEdit=ImportProofFind $window 'Imported profile name'
+ $nameValue=$nameEdit.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern)
+ $nameValue.SetValue('Keep this name')
+ Set-Clipboard -Value 'wax-local-fixture-marker'
+ $clipboardBefore=Get-Clipboard -Raw
+ (ImportProofFind $window 'Clear pasted config').GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+ Start-Sleep -Milliseconds 300
+ $inputEdit=ImportProofFind $window 'WireGuard configuration to import'
+ if (-not $inputEdit.Current.HasKeyboardFocus) { throw 'Clear pasted config did not return editor focus' }
+ if ($inputEdit.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value -ne '') { throw 'Clear pasted config retained editor text' }
+ if ($nameValue.Current.Value -ne 'Keep this name') { throw 'Clear pasted config changed profile name' }
+ if ((Get-Clipboard -Raw) -ne $clipboardBefore) { throw 'Clear pasted config changed system clipboard' }
+ if ((ImportProofFind $window 'Clear pasted config').Current.IsEnabled) { throw 'Empty config Clear action enabled' }
+ if ((ImportProofFind $window 'Import config').Current.IsEnabled) { throw 'Cleared config Import action enabled' }
+ ImportProofCapture $window 'profile-import-cleared.png'
+ $nameValue.SetValue('')
+ 'PASS Clear pasted config empties editor and feedback, returns editor focus, preserves name and system clipboard, disables empty actions without saving' | Out-File verify-results.txt -Append -Encoding utf8
  if ((ImportProofFind $window 'Check config').Current.IsEnabled) { throw 'Empty config review action enabled' }
  if (ImportProofFind $window 'Config could not be checked. Review its sections, keys, addresses and endpoints before importing.') { throw 'Clearing retained stale config review error' }
  [ImportProofNative]::SetCursorPos([int]($r.X+$r.Width/2),[int]($r.Y+$r.Height/2)) | Out-Null
