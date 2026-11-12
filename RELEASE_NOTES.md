@@ -30,8 +30,15 @@ sampling can miss a shorter flash.
 ## Release verification
 
 Local app tests passed (53 passed, one manual ignored), including clipboard
-text allowlisting, key/endpoint exclusion and configured-only limits. Windows
-clipboard content, unchanged state, installer and publication pending.
+text allowlisting, key/endpoint exclusion and configured-only limits. Build and
+PowerShell syntax passed. Revised preview:
+https://github.com/vio137/wax-vpn/actions/runs/43177728480
+Source: `e8a278adb998c6d06efbbf18e262887e43359b47`. All three execution jobs
+passed. Actual Windows system clipboard contained the allowlisted summary and
+limits without key/endpoint values. Prior summary, cache reload/restoration,
+unchanged files/settings/selection/no adapter, profile/demo/recovery and installer
+checks passed. Summary and installed-GUI pixels inspected. Stable publication
+and checksum verification pending.
 
 ## Preview failure and correction
 
@@ -40,5 +47,5 @@ clipboard-content check: Copy summary did not update the system clipboard.
 Inspection found the software backend's egui-winit OS clipboard feature was
 disabled, using app-internal fallback text. Enabled its existing arboard feature
 for OS text clipboard support; no third-party crate version changed. Revised
-Windows proof is pending. This also enables OS clipboard integration for other
+Windows actual clipboard-content check passed in the revised preview. This also enables OS clipboard integration for other
 text controls on this backend. No network behavior changed.
