@@ -570,8 +570,12 @@ impl WaxApp {
                 theme::card_frame().show(ui, |ui| {
                     ui.add(egui::Label::new(RichText::new(format!("Loaded config: {}", profile.name)).size(12.0).color(theme::TEXT)).wrap());
                     ui.add(egui::Label::new(RichText::new("Configured values only. Not a live connection, routing or leak check. Keys are not shown.").size(11.0).color(theme::MUTE)).wrap());
-                    for (label, value) in self.profile_summary_cache.get(selected, &profile.config) {
+                    let rows = self.profile_summary_cache.get(selected, &profile.config);
+                    for (label, value) in rows {
                         ui.add(egui::Label::new(RichText::new(format!("{label}: {value}")).size(11.5).color(theme::SUB)).wrap());
+                    }
+                    if ui.small_button("Copy summary").on_hover_text("Copy these configured values to your system clipboard, including addresses and DNS. No keys or endpoints. Nothing is uploaded; clipboard sharing follows your system settings.").clicked() {
+                        ui.ctx().copy_text(profile_summary::clipboard_text(&profile.name, rows));
                     }
                 });
             }

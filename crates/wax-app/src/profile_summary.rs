@@ -25,6 +25,15 @@ pub fn rows(config: &WireGuardConfig) -> Vec<(&'static str, String)> {
     ]
 }
 
+/// Clipboard export is explicit and includes the same allowlist and limits.
+pub fn clipboard_text(name: &str, rows: &[(&str, String)]) -> String {
+    let mut text = format!("Loaded config: {name}\nConfigured values only. Not a live connection, routing or leak check. Keys are not shown.\n");
+    for (label, value) in rows {
+        text.push_str(&format!("{label}: {value}\n"));
+    }
+    text
+}
+
 /// Holds only allowlisted display strings, never a config or key material.
 /// The caller invalidates on every successful loaded-profile replacement.
 #[derive(Default)]
@@ -102,6 +111,17 @@ mod tests {
         assert_eq!(cache.get(0, &other), rows(&other));
         cache.invalidate();
         assert_eq!(cache.get(0, &config), rows(&config));
+    }
+
+    #[test]
+    fn clipboard_export_uses_allowlisted_rows_and_explicit_limits() {
+        let config = WireGuardConfig::parse("[Interface]\nPrivateKey = AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=\nAddress = 10.4.0.2/32\n[Peer]\nPublicKey = AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=\nAllowedIPs = 0.0.0.0/0\nEndpoint = private-endpoint.invalid:51820\n").unwrap();
+        let text = clipboard_text("Office", &rows(&config));
+        assert!(text.starts_with("Loaded config: Office\nConfigured values only."));
+        assert!(text.contains("Not a live connection, routing or leak check. Keys are not shown."));
+        assert!(text.contains("Addresses: 10.4.0.2/32\n"));
+        assert!(text.contains("Explicit /0 defaults: IPv4 only\n"));
+        for hidden in ["AQEBAQE", "AgICAgI", "PrivateKey", "PublicKey", "PresharedKey", "private-endpoint.invalid"] { assert!(!text.contains(hidden)); }
     }
 
 }

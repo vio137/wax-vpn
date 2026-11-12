@@ -3186,32 +3186,32 @@ dependencies = ["unicode-ident"]
 
 [[package]]
 name = "wax-app"
-version = "1.0.26"
+version = "1.0.27"
 dependencies = ["eframe","egui","egui_software_backend","embed-resource","log","reqwest","serde","serde_json","tray-icon","wax-core","wax-diagnostics","wax-tunnel","wax-warp","windows-sys 0.52.0","winreg"]
 
 [[package]]
 name = "wax-cli"
-version = "1.0.26"
+version = "1.0.27"
 dependencies = ["clap","serde_json","thiserror 2.0.21","wax-core","wax-diagnostics","wax-tunnel","wax-warp","windows-sys 0.52.0"]
 
 [[package]]
 name = "wax-core"
-version = "1.0.26"
+version = "1.0.27"
 dependencies = ["base64","dirs","ipnet","log","serde","serde_json","thiserror 2.0.21","x25519-dalek"]
 
 [[package]]
 name = "wax-diagnostics"
-version = "1.0.26"
+version = "1.0.27"
 dependencies = ["serde_json","wax-tunnel"]
 
 [[package]]
 name = "wax-tunnel"
-version = "1.0.26"
+version = "1.0.27"
 dependencies = ["ipnet","log","thiserror 2.0.21","wax-core","windows","windows-sys 0.52.0","wireguard-nt"]
 
 [[package]]
 name = "wax-warp"
-version = "1.0.26"
+version = "1.0.27"
 dependencies = ["ipnet","reqwest","serde","serde_json","thiserror 2.0.21","time","wax-core"]
 
 [[package]]

@@ -503,6 +503,20 @@ Endpoint = 127.0.0.1:51820
   if ($line -match '^\s*(PrivateKey|PublicKey|PresharedKey)\s*=\s*(.+?)\s*$' -and $text.Contains($Matches[2])) { throw 'Config summary exposed a key value' }
  }
  ImportProofCapture $window 'profile-import-config-summary.png'
+ $beforeCopy=Get-Clipboard -Raw
+ (ImportProofFind $window 'Copy summary').GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+ Start-Sleep -Milliseconds 300
+ $copied=Get-Clipboard -Raw
+ foreach ($expected in @('Loaded config: Office 24','Configured values only. Not a live connection, routing or leak check. Keys are not shown.','Addresses: 10.55.0.2/32','DNS: Not set','Explicit /0 defaults: None')) {
+  if (-not $copied.Contains($expected)) { throw ('Clipboard summary missing: '+$expected) }
+ }
+ foreach ($line in ($fixtureText -split "`n")) {
+  if ($line -match '^\s*(PrivateKey|PublicKey|PresharedKey)\s*=\s*(.+?)\s*$' -and $copied.Contains($Matches[2])) { throw 'Clipboard summary exposed a key' }
+ }
+ if ($copied -match 'Endpoint|127\.0\.0\.1') { throw 'Clipboard summary exposed endpoint' }
+ Set-Clipboard -Value $beforeCopy
+ 'PASS explicit summary clipboard copy includes allowlisted values and configured-only limits without keys/endpoints' | Out-File verify-results.txt -Append -Encoding utf8
+
  $summary=ImportProofFind $window 'Hide config summary'
  $summary.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
  Start-Sleep -Milliseconds 250
