@@ -28,8 +28,28 @@ ping do not prove Internet reachability. Tray-menu clicks need real Windows
 review. Runner OpenGL rendering/dismissal remain unverified. Console-window
 sampling can miss a shorter flash.
 
-## Release verification
+## Preview verification
 
-Pending focused Windows and stable-release checks. Local app tests: 47 passed,
-one manual networking test ignored. Build and PowerShell parser passed.
-Pinned and search-empty layouts inspected at 880x600.
+Exact preview: https://github.com/vio137/wax-vpn/actions/runs/43142060944
+Source: `0f2c8f45fb490d90f3e49334432b1f1e34a3548c`.
+
+All three preview jobs passed. Actual Windows results passed pinned-only
+filtering with search, refresh after unpin, separate empty state and restored
+rows without selection/config/adapter changes. Pinned and empty-state pixels
+were inspected. Existing local syntax review, editor Clear, native imports,
+keyboard search, bounded 26-profile picker and keyboard-help checks passed.
+Local app tests: 47 passed, one manual networking test ignored. Build and
+PowerShell parser passed.
+
+The first preview failed because the new test selected the search label
+instead of its edit. The test now uses Ctrl+F and verifies the focused edit;
+no product check was removed or relaxed.
+
+Existing GUI demo connection, tunnel-address ping, DNS apply/reset, IPv4 MTU,
+split routes, bounded recovery, retry disable, original-window restore and
+graceful quit passed. Fresh install, upgrade, uninstall, all three native
+process-scope checks and three PE audits passed within the limits above.
+336 console-window samples at about 100ms saw no new visible native console;
+shorter flashes can be missed.
+
+Stable verification and published installer checksum are pending.
