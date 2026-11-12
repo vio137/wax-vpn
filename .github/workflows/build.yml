@@ -534,9 +534,6 @@ jobs:
         run: |
           Write-Host "UIA harness: PowerShell $($PSVersionTable.PSVersion) CLR $($PSVersionTable.CLRVersion)"
           $ErrorActionPreference = 'Continue'
-          # Each Actions step starts a fresh host. Screenshots cannot rely on
-          # System.Drawing having been loaded by an earlier screenshot step.
-          Add-Type -AssemblyName System.Drawing -ErrorAction Stop
           function Note($m) { Write-Host $m; $m | Out-File -FilePath verify-results.txt -Append -Encoding utf8 }
           Add-Type -TypeDefinition @"
           using System;

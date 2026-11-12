@@ -34,10 +34,11 @@ sampling can miss a shorter flash.
 Local app tests: 54 passed, one manual network test ignored. New coverage checks
 IPv4/IPv6 addresses, DNS, route CIDRs, multi-field queries, literal misses,
 key exclusion and reload invalidation. Build and PowerShell syntax passed.
-Windows gate and publication pending. The GUI interaction harness now explicitly
-loads System.Drawing in its own PowerShell host before capturing frames, after
-v1.0.27 gate logs exposed that missing assembly. This is CI-only; no app behavior
-changed. Windows validation of that harness correction is pending.
+Windows gate and publication pending. Optional layout-state screenshots remain
+unverified because their separate harness host lacks System.Drawing. A proposed
+CI-only assembly-load fix could not be pushed with the current credential's
+workflow permissions and is not included in this release candidate. Functional
+profile screenshots use their own loaded assembly and remain part of the gate.
 
 ## Design review
 
