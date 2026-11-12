@@ -32,6 +32,13 @@ sampling can miss a shorter flash.
 
 Local app tests passed (52 passed, one manual ignored), including reuse,
 selection changes and explicit invalidation after same-index replacement.
-Windows same-index reload/restoration, installer and publication pending.
+Build and PowerShell syntax passed.
+Preview: https://github.com/vio137/wax-vpn/actions/runs/43173001910
+Source: `9888c33085f67f1edfd55c7a7d9feb36551bfc86`. All three execution jobs
+passed. Actual Windows results passed selected-config address change at the
+same index, reload refresh, restored original bytes and second reload refresh,
+unchanged selected settings and no adapter. Prior summary/profile/demo/recovery
+and installer checks passed. Reloaded-summary and installed-GUI pixels inspected.
+Stable publication/checksum verification pending.
 An initial test fixture omitted the required Peer section; corrected before
 passing the tests. No app runtime failure was found by that fixture error.
