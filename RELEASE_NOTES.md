@@ -34,7 +34,15 @@ sampling can miss a shorter flash.
 Local app tests: 54 passed, one manual network test ignored. New coverage checks
 IPv4/IPv6 addresses, DNS, route CIDRs, multi-field queries, literal misses,
 key exclusion and reload invalidation. Build and PowerShell syntax passed.
-Windows gate and publication pending. Optional layout-state screenshots remain
+Preview https://github.com/vio137/wax-vpn/actions/runs/43181431620
+source `bc6194865a07945a282c0e0e3aaa851d6b96aa58`: all three execution jobs
+passed. Actual Windows evidence checked address/route queries in Profiles and
+the quick picker, unique matches, literal misses and unchanged local state with
+no adapter. Prior profile/summary clipboard/cache reload, demo, recovery and
+installer checks passed. Both search views and installed GUI pixels inspected.
+Stable publication and checksum verification pending.
+
+Optional layout-state screenshots remain
 unverified because their separate harness host lacks System.Drawing. A proposed
 CI-only assembly-load fix could not be pushed with the current credential's
 workflow permissions and is not included in this release candidate. Functional
