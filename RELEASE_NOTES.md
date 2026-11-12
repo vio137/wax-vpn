@@ -29,20 +29,27 @@ sampling can miss a shorter flash.
 
 ## Release verification
 
-Preview: https://github.com/vio137/wax-vpn/actions/runs/43148541118
+Exact stable workflow: https://github.com/vio137/wax-vpn/actions/runs/43149723610
 Source: `89973e77c54a4cfb74a20e437ea5172e833b108b`.
 
-All three preview execution jobs passed. Actual Windows results passed focused
-Profiles Escape/Clear reset, retained typing focus and pinned filter, empty
-search Escape and subsequent Space without a connection. Match counts passed
-for one pinned row, no search matches and unpin refresh. Focused-search,
-pinned and empty-state pixels were inspected. Local app tests: 48 passed,
-one manual networking test ignored. Build and PowerShell parser passed.
+All four stable jobs passed. Actual Windows results passed focused Profiles
+Escape/Clear reset, retained typing focus and pinned filter, empty-search
+Escape and subsequent Space without a connection. Match counts passed for
+one pinned row, no search matches and unpin refresh. Focused-search,
+empty-state and installed-GUI pixels were inspected.
+Local app tests: 48 passed, one manual networking test ignored. Build and
+PowerShell parser passed.
 
 Existing native imports, config review/Clear, bounded profile list/picker,
 keyboard help, GUI demo connection, tunnel-address ping, DNS apply/reset,
 IPv4 MTU, split routes, bounded recovery, retry disable, original-window
-restore and graceful quit passed. Installer lifecycle/native process-scope
-checks and PE audits passed within the limits above.
+restore and graceful quit passed. Fresh install, upgrade, uninstall, all three
+native process-scope checks and three PE audits passed within the limits
+above. 335 console-window samples at about 100ms saw no new visible native
+console; shorter flashes can be missed.
 
-Stable publication and downloaded-installer checksum verification are pending.
+The published installer was downloaded and matched its checksum file:
+
+- File: `waX-VPN-Setup-v1.0.17-x64.exe`
+- Size: 11,705,022 bytes
+- SHA256: `709fb06ab687c9bf36bd5103e96002429fd4da1b353eb3f4a622563daf9d5b5a`
