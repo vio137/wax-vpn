@@ -31,5 +31,11 @@ sampling can miss a shorter flash.
 ## Release verification
 
 Short local checks: app tests passed (50 passed, one manual ignored), build
-and PowerShell syntax passed. Windows count/clear/bounds checks and stable
-publication are pending. No performance improvement is claimed.
+and PowerShell syntax passed.
+Preview: https://github.com/vio137/wax-vpn/actions/runs/43167217900
+Source: `e04344c94d8c2bacc6136c16ca24568e71ad9209`. All three execution jobs
+passed. Actual Windows results passed singular/zero counts, Clear removing
+count, unchanged selection/no adapter, and 26-profile list/Connect bounds.
+Prior profile, loaded-summary, demo tunnel/recovery and installer gates passed.
+Installed-GUI and one-match picker pixels inspected. Stable publication and
+checksum verification are pending. No performance improvement is claimed.
