@@ -35,8 +35,14 @@ sampling can miss a shorter flash.
 Local app tests: 56 passed, one manual network test ignored. New coverage checks
 lazy creation, storage reuse across unchanged frames, selection refresh, reload
 invalidation, empty routes and the 64-entry bound. Build and PowerShell syntax
-passed. Windows same-index route-change/restoration proof, publication and
-checksum verification pending.
+passed. Preview https://github.com/vio137/wax-vpn/actions/runs/43189387412
+source `eea8fb3a4ef0ee836116e5782fd5dce030db0406`: all three execution jobs
+passed. Actual Windows proof checked the selected route changing from
+10.55.0.1/32 to 10.55.0.7/32 at the same profile index on reload, then the
+restored original route after original file bytes were restored and reloaded.
+Settings remained unchanged; no adapter was created. Prior profile/clipboard/
+cache/search/demo/recovery/installer checks passed. Changed/restored route and
+installed-GUI pixels inspected. Stable publication/checksum verification pending.
 
 Optional layout-state captures remain unverified because their separate harness
 host lacks System.Drawing; the CI-only fix remains deferred for workflow
