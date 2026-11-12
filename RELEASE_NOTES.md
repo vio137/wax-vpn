@@ -29,8 +29,21 @@ sampling can miss a shorter flash.
 
 ## Release verification
 
-Pending Windows preview and stable gates. Local app tests: 47 passed, one
-manual networking test ignored. Build and PowerShell parser passed.
-Exact-layout local screenshots show the first and final rows of a 50-profile
-list. Windows last-row action targeting and existing smoke checks remain
-pending; this is not a completed stable release.
+Preview: https://github.com/vio137/wax-vpn/actions/runs/43145704583
+Source: `a7f3177d4f43302b8c576a4307b5015e28b2f2a1`.
+
+All three preview execution jobs passed. Actual Windows results passed bounded
+visible Profiles rows, scroll to the final profile, correct Pin target and
+unchanged selection/config without an adapter. First/final-row and installed
+GUI pixels were inspected. Existing pinned/search, local syntax review,
+Clear, native imports, keyboard search and bounded quick-picker checks passed.
+Local app tests: 47 passed, one manual networking test ignored. Build and
+PowerShell parser passed. The first preview also passed; its new list image
+names were corrected to match the evidence-upload glob for this preview.
+
+Existing GUI demo connection, tunnel-address ping, DNS apply/reset, IPv4 MTU,
+split routes, bounded recovery, retry disable, original-window restore and
+graceful quit passed. Fresh install, upgrade, uninstall, native process-scope
+checks and PE audits passed within the limits above.
+
+Stable publication and downloaded-installer checksum verification are pending.
