@@ -322,6 +322,17 @@ Endpoint = 127.0.0.1:51820
  (ImportProofFind $window 'Clear').GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
  Start-Sleep -Milliseconds 300
  if (-not (ImportProofFind $window 'Office 01')) { throw 'Quick picker Clear did not restore rows' }
+ $search=ImportProofFind $window 'Find quick profile'
+ if (-not $search -or -not $search.Current.HasKeyboardFocus) { throw 'Quick picker Clear did not return focus to search' }
+ [System.Windows.Forms.SendKeys]::SendWait(' OFFICE 23 127.0.0.1 ')
+ Start-Sleep -Milliseconds 250
+ if (-not (ImportProofFind $window 'Office 23') -or (ImportProofFind $window 'Office 24')) { throw 'Typing after quick picker Clear did not filter the intended profile' }
+ if (Get-NetAdapter -Name 'waX VPN' -ErrorAction SilentlyContinue) { throw 'Typing Space after quick picker Clear connected unexpectedly' }
+ ImportProofCapture $window 'profile-import-picker-clear-focus.png'
+ (ImportProofFind $window 'Clear').GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+ Start-Sleep -Milliseconds 200
+ if (-not (ImportProofFind $window 'Find quick profile').Current.HasKeyboardFocus) { throw 'Repeated quick picker Clear lost editor focus' }
+ 'PASS quick picker Clear restores editor focus, typing with spaces filters without connection, repeated Clear keeps focus' | Out-File verify-results.txt -Append -Encoding utf8
  $saved=Get-Content (Join-Path $dir 'settings.json') -Raw | ConvertFrom-Json
  if ($saved.last_profile -ne 'Chosen profile') { throw 'Quick picker search changed selected profile' }
  if (Get-NetAdapter -Name 'waX VPN' -ErrorAction SilentlyContinue) { throw 'Quick picker search connected unexpectedly' }

@@ -125,6 +125,7 @@ impl WaxApp {
                         reset_scroll = search.changed();
                         if ui.add_enabled(!self.picker_search.is_empty(), egui::Button::new("Clear").min_size(egui::vec2(44.0, 24.0))).clicked() {
                             self.picker_search.clear();
+                            ui.memory_mut(|m| m.request_focus(egui::Id::unique("quick-profile-search")));
                             reset_scroll = true;
                         }
                     });
