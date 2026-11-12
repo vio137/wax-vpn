@@ -294,6 +294,12 @@ Endpoint = 127.0.0.1:51820
  if (ImportProofFind $window 'Office 01') { throw 'Quick picker name filter retained unrelated row' }
  if (-not (ImportProofFind $window '1 match')) { throw 'Quick picker unique search match count missing' }
  ImportProofCapture $window 'profile-import-picker-search.png'
+ $search.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).SetValue('Office 24 10.55.0.2/32 10.55.0.1/32')
+ Start-Sleep -Milliseconds 250
+ if (-not (ImportProofFind $window '1 match') -or -not (ImportProofFind $window 'Office 24') -or (ImportProofFind $window 'Office 23')) { throw 'Quick picker configured address/route query missed unique profile' }
+ ImportProofCapture $window 'profile-import-picker-ip-search.png'
+ 'PASS quick picker configured address and route CIDR search combines with name without changing selection' | Out-File verify-results.txt -Append -Encoding utf8
+
  [System.Windows.Forms.SendKeys]::SendWait('^f')
  Start-Sleep -Milliseconds 250
  $search=ImportProofFind $window 'Find quick profile'
