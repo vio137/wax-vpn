@@ -338,11 +338,21 @@ impl WaxApp {
         ui.horizontal_wrapped(|ui| {
             let search_label = ui.label(RichText::new("Find profiles").size(12.0).color(theme::SUB));
             ui.add(egui::TextEdit::singleline(&mut self.profile_search)
+                // Preserve cursor navigation; keep Escape from dropping focus
+                // before the Profiles-only reset handler sees it.
+                .event_filter(egui::EventFilter { horizontal_arrows: true, vertical_arrows: true, escape: true, ..Default::default() })
                 .id(egui::Id::unique("profile-search")).hint_text("Profile or endpoint").desired_width(240.0))
-                .labelled_by(search_label.id).on_hover_text("Ctrl+F to find a profile.");
-            if !self.profile_search.is_empty() && ui.small_button("Clear").clicked() { self.profile_search.clear(); }
+                .labelled_by(search_label.id).on_hover_text("Ctrl+F to find a profile. Escape clears this search.");
+            if !self.profile_search.is_empty() && ui.small_button("Clear").clicked() {
+                self.profile_search.clear();
+                ui.memory_mut(|m| m.request_focus(egui::Id::unique("profile-search")));
+            }
             ui.checkbox(&mut self.pinned_only, "Pinned only")
                 .on_hover_text("Show pinned profiles in this list. Search still applies; the Connect picker stays unchanged.");
+            if self.pinned_only || !self.profile_search.trim().is_empty() {
+                let count = self.profile_view.indices_filtered(&self.profiles, &self.settings, &self.profile_search, self.pinned_only).len();
+                ui.label(RichText::new(profile_match_label(count)).size(11.0).color(theme::MUTE));
+            }
         });
         ui.add_space(8.0);
         let can_manage = can_manage && self.profiles_readable;
@@ -933,7 +943,7 @@ impl WaxApp {
                     ("Ctrl+3 / Ctrl+4", "Features / WARP"),
                     ("Ctrl+5 / Ctrl+6", "About / Network"),
                     ("Space", "Connect, disconnect or cancel a pending retry"),
-                    ("Escape", "Close the profile picker"),
+                    ("Escape", "Close picker or clear focused Profiles search"),
                     ("Ctrl+Q", "Quit and disconnect"),
                 ] {
                     ui.label(RichText::new(key).monospace().size(12.0).color(theme::TEXT));
@@ -942,7 +952,7 @@ impl WaxApp {
                 }
             });
             ui.add_space(8.0);
-            ui.add(egui::Label::new(RichText::new("Find searches an open quick picker, otherwise Profiles. Escape closes the picker even while typing. Other shortcuts pause while a text field has focus. Buttons work with Tab and Enter.").size(11.0).color(theme::MUTE)).wrap());
+            ui.add(egui::Label::new(RichText::new("Find searches an open quick picker, otherwise Profiles. Escape closes the picker or clears the focused Profiles search, keeping pins. Other shortcuts pause while a text field has focus. Buttons work with Tab and Enter.").size(11.0).color(theme::MUTE)).wrap());
         });
         }
         ui.add_space(10.0);

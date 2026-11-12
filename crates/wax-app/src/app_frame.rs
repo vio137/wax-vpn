@@ -74,6 +74,14 @@ impl WaxApp {
             self.picker_return_focus = true;
         }
 
+        // In Profiles, Escape resets only its focused search. Keep focus so
+        // subsequent typing (including Space) cannot trigger a connection.
+        if self.tab == Tab::Profiles
+            && ctx.memory(|m| m.has_focus(egui::Id::unique("profile-search")))
+            && ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
+            self.profile_search.clear();
+        }
+
         // Connection shortcuts only when no text field owns the keyboard.
         if ctx.memory(|m| m.focused().is_none()) {
             let (space, q, digits) = ctx.input(|i| {

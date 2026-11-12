@@ -832,6 +832,10 @@ fn split_profile_label(name: &str) -> String {
     format!("Excluded IP ranges for profile: {name}")
 }
 
+fn profile_match_label(count: usize) -> String {
+    format!("{count} {}", if count == 1 { "match" } else { "matches" })
+}
+
 // Count only the loaded in-memory list, never all files on disk. A failed
 // reload keeps that list visible, so label it as previous rather than current.
 fn loaded_profiles_label(count: usize, readable: bool) -> String {
@@ -867,6 +871,13 @@ mod repaint_tests {
         assert_eq!(split_profile_label("Office - 東京"), "Excluded IP ranges for profile: Office - 東京");
         let name = "long profile name ".repeat(20);
         assert_eq!(split_profile_label(&name), format!("Excluded IP ranges for profile: {name}"));
+    }
+
+    #[test]
+    fn filtered_match_count_labels_zero_single_and_many() {
+        assert_eq!(profile_match_label(0), "0 matches");
+        assert_eq!(profile_match_label(1), "1 match");
+        assert_eq!(profile_match_label(26), "26 matches");
     }
 
     #[test]

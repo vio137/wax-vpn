@@ -215,6 +215,7 @@ Endpoint = 127.0.0.1:51820
  (ImportProofFind $window 'Pinned only').GetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern).Toggle()
  Start-Sleep -Milliseconds 250
  if (-not (ImportProofFind $window 'Chosen profile')) { throw 'Pinned filter missed pinned profile' }
+ if (-not (ImportProofFind $window '1 match')) { throw 'Pinned match count is not one' }
  if (ImportProofFind $window 'Chosen profile - 2') { throw 'Pinned filter retained unpinned profile' }
  ImportProofCapture $window 'profile-import-pinned-only.png'
  # Find profiles is also the visible label. Ctrl+F identifies the actual edit.
@@ -227,11 +228,37 @@ Endpoint = 127.0.0.1:51820
  $searchValue.SetValue('no-match-xyz')
  Start-Sleep -Milliseconds 250
  if (-not (ImportProofFind $window 'No matching profiles')) { throw 'Pinned filter did not combine with search' }
- $searchValue.SetValue('')
+ if (-not (ImportProofFind $window '0 matches')) { throw 'Search match count is not zero' }
+ [System.Windows.Forms.SendKeys]::SendWait('{ESC}')
  Start-Sleep -Milliseconds 250
+ $focused=[System.Windows.Automation.AutomationElement]::FocusedElement
+ if ($focused.Current.ControlType -ne [System.Windows.Automation.ControlType]::Edit -or $searchValue.Current.Value -ne '') { throw 'Profiles Escape did not clear and retain search focus' }
+ if (-not (ImportProofFind $window 'Chosen profile') -or (ImportProofFind $window 'Chosen profile - 2')) { throw 'Profiles Escape changed the pinned filter' }
+ ImportProofCapture $window 'profile-import-search-escape.png'
+ [System.Windows.Forms.SendKeys]::SendWait('{ESC}')
+ Start-Sleep -Milliseconds 150
+ [System.Windows.Forms.SendKeys]::SendWait(' ')
+ Start-Sleep -Milliseconds 150
+ if ($searchValue.Current.Value -ne ' ') { throw 'Escape on empty Profiles search lost typing focus' }
+ if (Get-NetAdapter -Name 'waX VPN' -ErrorAction SilentlyContinue) { throw 'Space after empty-search Escape connected unexpectedly' }
+ [System.Windows.Forms.SendKeys]::SendWait('^a')
+ [System.Windows.Forms.SendKeys]::SendWait('no-match-xyz')
+ Start-Sleep -Milliseconds 250
+ (ImportProofFind $window 'Clear').GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+ Start-Sleep -Milliseconds 250
+ $focused=[System.Windows.Automation.AutomationElement]::FocusedElement
+ if ($focused.Current.ControlType -ne [System.Windows.Automation.ControlType]::Edit -or $searchValue.Current.Value -ne '') { throw 'Profiles Clear did not return search focus' }
+ [System.Windows.Forms.SendKeys]::SendWait(' ')
+ Start-Sleep -Milliseconds 250
+ if ($searchValue.Current.Value -ne ' ') { throw 'Profiles Clear did not allow immediate continued typing' }
+ if (Get-NetAdapter -Name 'waX VPN' -ErrorAction SilentlyContinue) { throw 'Space in Profiles search connected unexpectedly' }
+ [System.Windows.Forms.SendKeys]::SendWait('{ESC}')
+ Start-Sleep -Milliseconds 250
+ 'PASS Profiles Escape and Clear reset search, retain typing focus and pinned filter without a Space connection' | Out-File verify-results.txt -Append -Encoding utf8
  (ImportProofFind $window 'Unpin').GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
  Start-Sleep -Milliseconds 250
  if (-not (ImportProofFind $window 'No pinned profiles')) { throw 'Unpin did not refresh pinned filter' }
+ if (-not (ImportProofFind $window '0 matches')) { throw 'Unpin did not refresh match count' }
  ImportProofCapture $window 'profile-import-no-pinned.png'
  (ImportProofFind $window 'Pinned only').GetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern).Toggle()
  Start-Sleep -Milliseconds 250
