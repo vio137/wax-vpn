@@ -87,6 +87,7 @@ impl WaxApp {
         }
         if name_resp.clicked() && can_switch {
             self.picker_open = !self.picker_open;
+            self.picker_search.clear();
         }
         ui.add(egui::Label::new(RichText::new(pendpoint).size(13.0).color(theme::SUB).monospace()).truncate()).on_hover_text(pendpoint);
         let (hint_rect, _) = ui.allocate_exact_size(egui::vec2(col_w, 16.0), egui::Sense::hover());
@@ -100,10 +101,37 @@ impl WaxApp {
                 ui.set_max_width(300.0);
                 ui.set_min_width(280.0);
                 let mut picked = None;
-                let order = self.profile_view.indices(&self.profiles, &self.settings, "");
-                egui::ScrollArea::vertical().id_salt("quick-profile-list")
-                    .max_height(104.0).auto_shrink([false, true])
-                    .show_rows(ui, 32.0, order.len(), |ui, rows| {
+                // Search is local and independent of the Profiles page filter.
+                // Keep the popup's overall height bounded at the minimum window size.
+                let searchable = self.profiles.len() > 6;
+                let mut reset_scroll = false;
+                if searchable {
+                    ui.horizontal(|ui| {
+                        let before = self.picker_search.clone();
+                        let search = ui.add_sized([228.0, 24.0], egui::TextEdit::singleline(&mut self.picker_search)
+                            .id_salt("quick-profile-search").hint_text("Profile or endpoint"));
+                        search.widget_info(|| {
+                            let mut info = egui::WidgetInfo::text_edit(true, &before, &self.picker_search, "Profile or endpoint");
+                            info.label = Some("Find quick profile".into());
+                            info
+                        });
+                        reset_scroll = search.changed();
+                        if ui.add_enabled(!self.picker_search.is_empty(), egui::Button::new("Clear").min_size(egui::vec2(44.0, 24.0))).clicked() {
+                            self.picker_search.clear();
+                            reset_scroll = true;
+                        }
+                    });
+                    ui.add_space(4.0);
+                }
+                let query = if searchable { self.picker_search.as_str() } else { "" };
+                let order = self.profile_view.indices(&self.profiles, &self.settings, query);
+                if order.is_empty() {
+                    ui.label(RichText::new("No matching profiles").size(13.0).color(theme::SUB));
+                }
+                let mut scroll = egui::ScrollArea::vertical().id_salt("quick-profile-list")
+                    .max_height(if searchable { 72.0 } else { 104.0 }).auto_shrink([false, true]);
+                if reset_scroll { scroll = scroll.vertical_scroll_offset(0.0); }
+                scroll.show_rows(ui, 32.0, order.len(), |ui, rows| {
                 for &i in &order[rows] {
                     let (name, ep) = {
                         let p = &self.profiles[i];

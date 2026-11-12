@@ -1,9 +1,11 @@
-# waX VPN v1.0.10
+# waX VPN v1.0.11
 
-Keyboard help now uses explicit Show keyboard shortcuts and Hide keyboard
-shortcuts buttons. Both have normal accessible invoke actions, replacing the
-disclosure whose expanded state did not respond to UIA Expand. Help starts
-hidden and keeps its open state while moving between pages during a session.
+The Connect page quick picker can now find a profile by name or endpoint when
+more than six profiles are loaded. Search is case-insensitive and trims outer
+spaces, has an explicit empty result and Clear action, and does not change the
+selected profile or connect. The search is separate from the Profiles page
+filter and resets when opening the picker. Its bounded list keeps Connect
+visible at the minimum window size. Small collections keep the simpler list.
 No saved setting, tunnel, DNS or firewall behavior changed.
 
 ## Compatibility and limits
@@ -29,23 +31,7 @@ sampling can miss a shorter flash.
 
 ## Release verification
 
-Exact stable workflow: https://github.com/vio137/wax-vpn/actions/runs/43125943433
-Source: `ff1801fbc75c4ebc8fc12bd5cf6bb956a365c6ca`.
-
-All four stable jobs passed. Actual Windows results passed UIA Invoke for
-Show and Hide, shortcut content appearing and disappearing, plus the existing
-native file import, short-picker and 26-profile picker checks. Open, hidden
-and installed-app pixels were inspected. Lower help rows require scrolling at
-880x600; no complete screen-reader or clean Windows 10/11 claim is made.
-
-GUI demo connection, tunnel-address ping, DNS apply/reset, IPv4 MTU, split
-routes, bounded recovery, retry disable, original-window restore and graceful
-quit checks passed. Fresh install, upgrade, uninstall, all three native process
-scope checks and all three PE dependency audits passed, subject to the limits
-above. Console sampling can miss shorter flashes.
-
-The published installer was downloaded and matched its checksum file:
-
-- File: `waX-VPN-Setup-v1.0.10-x64.exe`
-- Size: 11,696,349 bytes
-- SHA256: `7aa2447c7627ef710187cb21936cae80ef652d4226c79ac706b4abf377379271`
+Local app tests: 46 passed, one manual networking test ignored. Local build
+and PowerShell parser checks passed. Actual local pixels inspected for a
+matching name, no matches and Clear at 880x600. Windows preview and stable
+release gates are pending; this is not yet a verified stable release.
