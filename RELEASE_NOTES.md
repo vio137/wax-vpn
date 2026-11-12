@@ -32,3 +32,13 @@ sampling can miss a shorter flash.
 Local app tests passed (53 passed, one manual ignored), including clipboard
 text allowlisting, key/endpoint exclusion and configured-only limits. Windows
 clipboard content, unchanged state, installer and publication pending.
+
+## Preview failure and correction
+
+The first preview (43175710700, source 95e45143) failed the actual Windows
+clipboard-content check: Copy summary did not update the system clipboard.
+Inspection found the software backend's egui-winit OS clipboard feature was
+disabled, using app-internal fallback text. Enabled its existing arboard feature
+for OS text clipboard support; no third-party crate version changed. Revised
+Windows proof is pending. This also enables OS clipboard integration for other
+text controls on this backend. No network behavior changed.
