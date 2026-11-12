@@ -30,7 +30,7 @@ opt-in Cloudflare WARP client, reimplemented in Rust. Registration only happens
 when you explicitly accept Cloudflare's Terms of Service in the app or pass
 `--accept-tos` to the CLI. waX VPN is not affiliated with Cloudflare.
 
-The released v1.0.25 has no update checker or telemetry uploader. Tunnel traffic
+The released v1.0.26 has no update checker or telemetry uploader. Tunnel traffic
 and DNS lookups can happen in the background while connected; WARP API calls
 happen only when you request WARP actions. Local diagnostics are not uploaded.
 Optional public-IP, HTTPS latency and manual quick-speed measurements are off
@@ -58,6 +58,13 @@ peers: IPv4 only, IPv6 only, both or none. It does not infer coverage from split
 prefixes. These are configured values, not current routes or leak protection;
 keys remain excluded. Windows proof checked the None row and unchanged local
 state; local tests cover all family combinations and split prefixes.
+
+The loaded summary reuses allowlisted display strings while selection and loaded
+profiles stay unchanged, bounded to one profile and without caching configs or
+keys. Selection change and successful reload refresh the display. Windows proof
+changed and restored a selected fixture at the same index and confirmed both
+reloads refreshed the summary without changing settings or creating an adapter.
+No measured speedup is claimed.
 
 On a fresh install, Import profile opens Profiles. Choose .conf file uses the
 native Windows picker; cancelling leaves profiles alone. Repeated imports keep

@@ -39,6 +39,16 @@ passed. Actual Windows results passed selected-config address change at the
 same index, reload refresh, restored original bytes and second reload refresh,
 unchanged selected settings and no adapter. Prior summary/profile/demo/recovery
 and installer checks passed. Reloaded-summary and installed-GUI pixels inspected.
-Stable publication/checksum verification pending.
+Stable: https://github.com/vio137/wax-vpn/actions/runs/43174042593
+Source: `4a2488390a3c7e589f2afb05218749daaeba4210`. All four jobs passed.
+Actual full results passed same-index reload/restoration cache refresh and prior
+summary/profile checks, demo handshake/tunnel-address ping, DNS/MTU restore,
+split-route checks, 4-second recovery, recovery-disable with 48 samples over
+12 seconds, manual reconnect, original HWND/PID restore and graceful quit.
+No console observed in 341 samples at about 100 ms; shorter flashes can be missed.
+Stable reloaded-summary and installed-GUI pixels inspected. Installer passed.
+Published installer (11,712,294 bytes) downloaded and independently hashed,
+matching SHA256SUMS-v1.0.26.txt:
+`89187ae6e6e3d9c3b074f79750dea2637ebdd9ab46eccb1193af6cbedc2015cf`.
 An initial test fixture omitted the required Peer section; corrected before
 passing the tests. No app runtime failure was found by that fixture error.
