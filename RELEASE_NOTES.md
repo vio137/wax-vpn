@@ -44,4 +44,17 @@ whitespace reset and unchanged files/settings/selection without an adapter.
 Word-search and installed-GUI pixels were inspected. Prior local profile and
 connection/installer checks also passed within the compatibility limits above.
 
-Stable publication and downloaded-installer checksum verification are pending.
+Stable: https://github.com/vio137/wax-vpn/actions/runs/43156571792
+Source: `fea8c74b1ddb05754629e557c266b4e490662239`.
+
+All four stable jobs passed. Actual stable Windows proof passed the new name
+plus endpoint/every-word/whitespace checks and unchanged files/settings/selection
+without an adapter. Stable word-search and installed-GUI pixels were inspected.
+Prior demo tunnel, DNS/IPv4 MTU/split, 4s recovery, retry disable (48 samples over
+12s), manual reconnect, original HWND/PID restore and quit passed. No console
+windows were observed in 337 samples at about 100ms; shorter flashes could be
+missed. Installer lifecycle, native checks and PE audits passed.
+
+Release: https://github.com/vio137/wax-vpn/releases/tag/v1.0.20
+The downloaded 11,708,200-byte installer matches the published SHA256:
+`cccb2268156b23316a603fe083aa918d93c29b9146b54538e924a33ab838f2f6`.
