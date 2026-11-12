@@ -30,7 +30,7 @@ opt-in Cloudflare WARP client, reimplemented in Rust. Registration only happens
 when you explicitly accept Cloudflare's Terms of Service in the app or pass
 `--accept-tos` to the CLI. waX VPN is not affiliated with Cloudflare.
 
-The released v1.0.15 has no update checker or telemetry uploader. Tunnel traffic
+The released v1.0.16 has no update checker or telemetry uploader. Tunnel traffic
 and DNS lookups can happen in the background while connected; WARP API calls
 happen only when you request WARP actions. Local diagnostics are not uploaded.
 Optional public-IP, HTTPS latency and manual quick-speed measurements are off
@@ -65,6 +65,11 @@ Ctrl+F opens Profiles and focuses its search field from any page. Profile
 search reuses cached order and terms while the list and settings stay the same;
 no measured speed improvement is claimed.
 
+The Profiles page also draws only visible rows plus a small buffer in its
+250px list. Windows proof scrolled to the last profile and pinned that exact
+row without changing selection/config or creating an adapter. No measured
+speedup is claimed.
+
 Profiles has a session-only Pinned only filter that combines with search.
 Unpinning refreshes the list, and disabling it restores matching rows without
 changing the selected profile or the Connect-page picker.
@@ -88,11 +93,11 @@ warning; the bundled WireGuardNT driver is independently signed by its vendor.
 The Rust executables avoid a VC++ redistributable dependency by linking
 the C runtime statically and checking packaged PE imports. It is a native app,
 not a .NET app. Windows system libraries are still required; no bare-image compatibility claim
-is made. Released v1.0.15 defaults to CPU software rendering (Windows GDI),
+is made. Released v1.0.16 defaults to CPU software rendering (Windows GDI),
 with GPU rendering available through `--accelerated-graphics`. Windows 10/11 x64
 is required. No separate VC++/.NET/WebView2 installation or first-run driver
 download is required. The bundled WireGuardNT DLL installs its signed kernel
-driver when connecting, with administrator consent. v1.0.15 uses native Windows APIs for administrator detection, MTU, DNS and
+driver when connecting, with administrator consent. v1.0.16 uses native Windows APIs for administrator detection, MTU, DNS and
 retired-rule cleanup, removing PowerShell and net session dependencies. netsh
 is retained only on older Windows builds without the native DNS API; this
 fallback has not been runtime-tested. Installer process stopping now verifies the exact installed path and process
@@ -103,8 +108,8 @@ processes are preserved. Windows networking services are still required.
 The CPU path passed launch, accessible tab input, close-to-tray, no-tray fallback,
 same-window restore and quit on a Windows Server 2025 hosted runner with Hyper-V
 Video. That runner has runtimes installed and is not a clean Windows 10/11 image.
-The reported consumer PC crash remains unverified. Stable v1.0.15 evidence:
-https://github.com/vio137/wax-vpn/actions/runs/43143334939
+The reported consumer PC crash remains unverified. Stable v1.0.16 evidence:
+https://github.com/vio137/wax-vpn/actions/runs/43147167278
 Native IPv4/IPv6 DNS/MTU round-trips passed, but IPv6 tunnel traffic and leak
 behavior remain unverified.
 
