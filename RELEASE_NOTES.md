@@ -36,4 +36,13 @@ multiple peers, route-entry counts, unchanged config and excluded key fields.
 Local collapsed and expanded pixels were inspected.
 The first Windows preview passed build, installer and prior checks, but the
 summary disclosure Expand action did not expose expected content. Explicit
-Show/Hide buttons replace that interaction. Revised Windows proof is pending.
+Show/Hide buttons replace that interaction.
+
+Revised preview: https://github.com/vio137/wax-vpn/actions/runs/43161693467
+Source: `9196254d9f7a9800d3c3bd218a9b0371adae666c`.
+All three execution jobs passed. Actual Windows proof passed explicit Show/Hide,
+expected loaded values and caveat, absent key values, unchanged profile/settings
+files and no adapter. Summary and installed-GUI pixels were inspected. Prior
+profile and connection/installer checks passed within the limits above.
+
+Stable publication and downloaded-installer checksum verification are pending.
