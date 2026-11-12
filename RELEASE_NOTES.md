@@ -40,4 +40,17 @@ Clear focus. Quick-picker focus and installed-GUI pixels were inspected.
 Prior local-profile and connection/installer checks passed within the
 compatibility limits above.
 
-Stable publication and downloaded-installer checksum verification are pending.
+Stable: https://github.com/vio137/wax-vpn/actions/runs/43159028745
+Source: `0cc74a402ad8b263cf34f4a2b2e4333b257f2061`.
+
+All four stable jobs passed. Actual stable Windows proof passed Clear returning
+search focus, spaced typing without connection and repeated Clear focus.
+Stable focus and installed-GUI pixels were inspected. Prior demo tunnel,
+DNS/IPv4 MTU/split, 3s recovery, retry disable (48 samples over 12s), manual
+reconnect, original HWND/PID restore and quit passed. No console windows were
+observed in 321 samples at about 100ms; shorter flashes could be missed.
+Installer lifecycle, native checks and PE audits passed.
+
+Release: https://github.com/vio137/wax-vpn/releases/tag/v1.0.21
+The downloaded 11,708,272-byte installer matches the published SHA256:
+`578565fe0d6a92550f907bf692e74343eb2ffe13a37572cf6f4d8267c631c408`.
