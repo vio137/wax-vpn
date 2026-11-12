@@ -324,16 +324,24 @@ impl WaxApp {
         let mut pin_name: Option<String> = None;
         let mut selection_changed = false;
         let can_manage = matches!(self.state, ConnState::Disconnected | ConnState::Failed(_));
+        let mut duplicate = false;
         ui.horizontal_wrapped(|ui| {
             if ui.add_enabled(can_manage, egui::Button::new("Reload profiles")).clicked() {
                 self.reload_profiles();
             }
             ui.label(RichText::new(loaded_profiles_label(self.profiles.len(), self.profiles_readable))
                 .size(11.5).color(theme::MUTE));
+            duplicate = ui.add_enabled(can_manage && self.profiles_readable && self.selected.is_some(), egui::Button::new("Duplicate selected"))
+                .on_hover_text("Create a local copy of the selected loaded config with the same keys. Selection stays unchanged. Pins, history and split exclusions are not copied. No connection is started.")
+                .clicked();
             if !self.settings.recent_profiles.is_empty() && ui.small_button("Clear recent").on_hover_text("Clear the local recent-profile list. Profiles and pins are kept.").clicked() {
                 self.settings.recent_profiles.clear(); self.save_settings();
             }
         });
+        if duplicate { self.duplicate_selected_profile(); }
+        if let Some(notice) = &self.profile_copy_notice {
+            ui.add(egui::Label::new(RichText::new(notice).size(11.5).color(theme::SUB)).wrap());
+        }
         ui.add_space(8.0);
         ui.horizontal_wrapped(|ui| {
             let search_label = ui.label(RichText::new("Find profiles").size(12.0).color(theme::SUB));

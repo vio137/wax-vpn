@@ -119,6 +119,7 @@ pub struct WaxApp {
     keyboard_help_open: bool,
     profile_search: String,
     pinned_only: bool,
+    profile_copy_notice: Option<String>,
     open_network_settings: bool,
     split_edit: String,
     split_edit_for: Option<usize>,
@@ -238,6 +239,7 @@ impl WaxApp {
             keyboard_help_open: false,
             profile_search: String::new(),
             pinned_only: false,
+            profile_copy_notice: None,
             open_network_settings: false,
             split_edit: String::new(),
             split_edit_for: None,
@@ -500,6 +502,23 @@ impl WaxApp {
             Err(()) => {
                 self.settings.autostart = !self.settings.autostart;
                 self.autostart_notice = Some("Could not verify the startup change. Check Windows Startup settings before relying on it.".into());
+            }
+        }
+    }
+
+    fn duplicate_selected_profile(&mut self) {
+        // Check again at the file-writing boundary. Never change selection,
+        // connection state or per-name app settings when making a local copy.
+        if !self.profiles_readable || !matches!(self.state, ConnState::Disconnected | ConnState::Failed(_)) { return; }
+        let Some(source) = self.selected.and_then(|i| self.profiles.get(i)) else { return; };
+        let name = format!("{} - copy", source.name);
+        match profile::import_conf(&name, &source.config.to_conf_string()) {
+            Ok(copy) => {
+                self.reload_profiles();
+                self.profile_copy_notice = Some(format!("Created '{}'. Same keys; app settings were not copied. Selection unchanged.", copy.name));
+            }
+            Err(_) => {
+                self.profile_copy_notice = Some("Could not create a local copy. Existing profiles were not replaced.".into());
             }
         }
     }

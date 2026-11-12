@@ -386,6 +386,29 @@ Endpoint = 127.0.0.1:51820
  if ((Get-FileHash $original -Algorithm SHA256).Hash -ne $originalHash) { throw 'Virtual list changed profile config' }
  if (Get-NetAdapter -Name 'waX VPN' -ErrorAction SilentlyContinue) { throw 'Virtual list connected unexpectedly' }
  'PASS Profiles bounded visible rows, scroll to final profile, correct Pin target and unchanged selection/config without adapter' | Out-File verify-results.txt -Append -Encoding utf8
+ # Duplicate is a local file operation, not selection or connection.
+ $selectedPath=Join-Path (Join-Path $dir 'profiles') 'Office 24.conf'
+ $selectedHash=(Get-FileHash $selectedPath -Algorithm SHA256).Hash
+ $settingsBefore=(Get-FileHash (Join-Path $dir 'settings.json') -Algorithm SHA256).Hash
+ $wr=$window.Current.BoundingRectangle
+ [ImportProofNative]::SetCursorPos([int]($wr.X+$wr.Width-15),[int]($wr.Y+170)) | Out-Null
+ for ($i=0;$i -lt 12;$i++) { [ImportProofNative]::mouse_event(0x800,0,0,240,[UIntPtr]::Zero);Start-Sleep -Milliseconds 35 }
+ Start-Sleep -Milliseconds 200
+ foreach ($name in @('Office 24 - copy','Office 24 - copy - 2')) {
+  $button=ImportProofFind $window 'Duplicate selected'
+  if (-not $button -or -not $button.Current.IsEnabled) { throw 'Duplicate selected action unavailable' }
+  $button.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+  Start-Sleep -Milliseconds 300
+  if (-not (Test-Path (Join-Path (Join-Path $dir 'profiles') ($name+'.conf')))) { throw 'Duplicate did not create the next collision-safe filename' }
+  if ((Get-FileHash $selectedPath -Algorithm SHA256).Hash -ne $selectedHash) { throw 'Duplicate changed the original profile' }
+  if ((Get-FileHash (Join-Path $dir 'settings.json') -Algorithm SHA256).Hash -ne $settingsBefore) { throw 'Duplicate changed selected profile or app settings' }
+  if (Get-NetAdapter -Name 'waX VPN' -ErrorAction SilentlyContinue) { throw 'Duplicate connected unexpectedly' }
+ }
+ $copyOne=Join-Path (Join-Path $dir 'profiles') 'Office 24 - copy.conf'
+ $copyTwo=Join-Path (Join-Path $dir 'profiles') 'Office 24 - copy - 2.conf'
+ if ((Get-FileHash $copyOne -Algorithm SHA256).Hash -ne (Get-FileHash $copyTwo -Algorithm SHA256).Hash) { throw 'Repeated copies contain different configs' }
+ ImportProofCapture $window 'profile-import-duplicate.png'
+ 'PASS Duplicate selected repeated collision-safe names, unchanged original/selection/settings and no adapter' | Out-File verify-results.txt -Append -Encoding utf8
 
 
 } finally {

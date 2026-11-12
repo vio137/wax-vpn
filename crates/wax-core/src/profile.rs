@@ -247,6 +247,32 @@ mod tests {
     }
 
     #[test]
+    fn local_copy_keeps_loaded_config_and_original_with_collision_safe_names() {
+        let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+        let dir = std::env::temp_dir().join(format!("wax-copy-{}-{stamp}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let config = WireGuardConfig {
+            interface: crate::InterfaceConfig { private_key:[1;32], addresses:vec!["10.55.0.2/32".parse().unwrap()], dns:vec!["1.1.1.1".parse().unwrap()], mtu:Some(1380), listen_port:Some(51820) },
+            peers:vec![crate::PeerConfig { public_key:[2;32], preshared_key:Some([3;32]),
+                allowed_ips:vec!["0.0.0.0/0".parse().unwrap(),"::/0".parse().unwrap()], endpoint:Some("example.invalid:51820".into()), persistent_keepalive:Some(25) }],
+        };
+        let original = import_into(&dir, "Office", &config.to_conf_string()).unwrap();
+        let bytes = fs::read(dir.join("Office.conf")).unwrap();
+        for expected in ["Office - copy", "Office - copy - 2"] {
+            let copy = import_into(&dir, &format!("{} - copy", original.name), &original.config.to_conf_string()).unwrap();
+            assert_eq!(copy.name, expected);
+            assert_eq!(copy.config, original.config);
+            assert_eq!(WireGuardConfig::parse(&fs::read_to_string(dir.join(format!("{expected}.conf"))).unwrap()).unwrap(), original.config);
+            assert_eq!(fs::read(dir.join("Office.conf")).unwrap(), bytes);
+            #[cfg(unix)] {
+                use std::os::unix::fs::PermissionsExt;
+                assert_eq!(fs::metadata(dir.join(format!("{expected}.conf"))).unwrap().permissions().mode() & 0o777, 0o600);
+            }
+        }
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
     fn additive_import_preserves_existing_and_canonicalizes_names() {
         let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
         let dir = std::env::temp_dir().join(format!("wax-import-{}-{stamp}", std::process::id()));

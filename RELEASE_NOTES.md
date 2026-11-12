@@ -1,10 +1,13 @@
-# waX VPN v1.0.17
+# waX VPN v1.0.18
 
-Profiles search now shows a live match count when a query or the Pinned only
-filter is active. Escape clears the focused search and keeps typing focus,
-including when the field is already empty. The Clear button also returns
-focus to search. Pins and the selected profile stay unchanged.
-No tunnel, DNS, firewall, service endpoint or saved-setting behavior changed.
+Profiles has a Duplicate selected action. It creates a local copy of the
+selected loaded WireGuard config using the same keys, with a collision-safe
+name such as Office - copy or Office - copy - 2. It does not replace the
+original, change selection or start a connection. Pins, history and split
+exclusions are not copied. The action is disabled while connecting/connected
+or when the profile list could not be reloaded. A copy is not a new server,
+account or credential.
+No tunnel, DNS, firewall or service behavior changed.
 
 ## Compatibility and limits
 
@@ -29,27 +32,9 @@ sampling can miss a shorter flash.
 
 ## Release verification
 
-Exact stable workflow: https://github.com/vio137/wax-vpn/actions/runs/43149723610
-Source: `89973e77c54a4cfb74a20e437ea5172e833b108b`.
-
-All four stable jobs passed. Actual Windows results passed focused Profiles
-Escape/Clear reset, retained typing focus and pinned filter, empty-search
-Escape and subsequent Space without a connection. Match counts passed for
-one pinned row, no search matches and unpin refresh. Focused-search,
-empty-state and installed-GUI pixels were inspected.
-Local app tests: 48 passed, one manual networking test ignored. Build and
-PowerShell parser passed.
-
-Existing native imports, config review/Clear, bounded profile list/picker,
-keyboard help, GUI demo connection, tunnel-address ping, DNS apply/reset,
-IPv4 MTU, split routes, bounded recovery, retry disable, original-window
-restore and graceful quit passed. Fresh install, upgrade, uninstall, all three
-native process-scope checks and three PE audits passed within the limits
-above. 335 console-window samples at about 100ms saw no new visible native
-console; shorter flashes can be missed.
-
-The published installer was downloaded and matched its checksum file:
-
-- File: `waX-VPN-Setup-v1.0.17-x64.exe`
-- Size: 11,705,022 bytes
-- SHA256: `709fb06ab687c9bf36bd5103e96002429fd4da1b353eb3f4a622563daf9d5b5a`
+Windows preview and stable gates are pending. Local app tests: 48 passed,
+one manual networking test ignored. Core tests: 43 passed, including complete
+loaded-config equality, original preservation, collision-safe repeated copy
+and Unix 0600 permissions. Build and PowerShell parser passed. Local first-copy
+pixels were inspected. Windows repeated-copy file/settings/no-adapter proof
+remains pending.
