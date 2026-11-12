@@ -40,7 +40,20 @@ passed. Actual Windows evidence checked address/route queries in Profiles and
 the quick picker, unique matches, literal misses and unchanged local state with
 no adapter. Prior profile/summary clipboard/cache reload, demo, recovery and
 installer checks passed. Both search views and installed GUI pixels inspected.
-Stable publication and checksum verification pending.
+Stable https://github.com/vio137/wax-vpn/actions/runs/43183513122
+source `3cd93209b111931156e4446f35811c7c18aa156f`: all four jobs passed.
+Actual stable evidence read: both configured-IP search fixtures and literal
+misses, unchanged state, prior clipboard/cache/profile checks, demo tunnel ping,
+4-second recovery, disabled recovery in 48 samples over 12 seconds, original
+HWND/PID restore and quit, and fresh install/upgrade/uninstall/process scope.
+334 console samples saw no window; shorter flashes could be missed. Both search
+views and installed-GUI pixels inspected. DNS/IPv6 search cases are locally
+tested, not separately checked by the Windows UI fixture.
+
+Published installer downloaded and matched the published SHA-256:
+`d7a285e75a4efd67e4c84742a8fa6cd6536aceb1f06db613dffd2e95c4b9c9b2`
+(11,770,024 bytes).
+https://github.com/vio137/wax-vpn/releases/tag/v1.0.28
 
 Optional layout-state screenshots remain
 unverified because their separate harness host lacks System.Drawing. A proposed

@@ -30,7 +30,7 @@ opt-in Cloudflare WARP client, reimplemented in Rust. Registration only happens
 when you explicitly accept Cloudflare's Terms of Service in the app or pass
 `--accept-tos` to the CLI. waX VPN is not affiliated with Cloudflare.
 
-The released v1.0.27 has no update checker or telemetry uploader. Tunnel traffic
+The released v1.0.28 has no update checker or telemetry uploader. Tunnel traffic
 and DNS lookups can happen in the background while connected; WARP API calls
 happen only when you request WARP actions. Local diagnostics are not uploaded.
 Optional public-IP, HTTPS latency and manual quick-speed measurements are off
@@ -47,6 +47,13 @@ in the default Windows x64 graph; all remain in the cross-platform lockfile.
 TLS/certificate updates were held. See
 [the dependency review](docs/dependencies/v1.0.23-review.md) for raw reports,
 scope and limits. No Windows x64 speedup is claimed.
+
+Local search in Profiles and the Connect quick picker matches names, endpoints,
+configured interface addresses, DNS and peer route CIDRs. All words must match
+one profile, as literal case-insensitive text. It does not test CIDR membership,
+current routing or connectivity, and does not index keys. Windows proof checked
+address/route queries in both lists, literal misses and unchanged local state;
+local tests also cover DNS, IPv6 and reload invalidation.
 
 The Connect quick picker shows a local match count while searching, including
 singular and zero results. Clear removes the count and restores rows. The
