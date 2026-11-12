@@ -29,12 +29,12 @@ ping do not prove Internet reachability. Tray-menu clicks need real Windows
 review. Runner OpenGL rendering/dismissal remain unverified. Console-window
 sampling can miss a shorter flash.
 
-## Preview verification
+## Release verification
 
-Exact preview: https://github.com/vio137/wax-vpn/actions/runs/43135233359
-Source: `b244b6f5cd74e368da59c733d8ec59b7485a5ca1`.
+Exact stable workflow: https://github.com/vio137/wax-vpn/actions/runs/43136781119
+Source: `a85190fda31431d33721c5d361001b1167e2d043`.
 
-All three preview jobs passed. Actual Windows results passed local config
+All four stable jobs passed. Actual Windows results passed local config
 review counts and IPv4/IPv6 defaults, edit invalidation, generic invalid
 feedback, empty-disabled state and no saved profile or adapter. Valid and
 invalid result pixels were inspected. Existing native imports, keyboard
@@ -46,7 +46,11 @@ Existing GUI demo connection, tunnel-address ping, DNS apply/reset, IPv4 MTU,
 split routes, bounded recovery, retry disable, original-window restore and
 graceful quit passed. Fresh install, upgrade, uninstall, all three native
 process-scope checks and three PE audits passed within the limits above.
-334 console-window samples at about 100ms saw no new visible native console;
+336 console-window samples at about 100ms saw no new visible native console;
 shorter flashes can be missed.
 
-Stable verification and published installer checksum are pending.
+The published installer was downloaded and matched its checksum file:
+
+- File: `waX-VPN-Setup-v1.0.13-x64.exe`
+- Size: 11,702,404 bytes
+- SHA256: `792a5894cee25246430b38f6f1a4937e8ffa55b1b3936f8e80aa025dc56c11e4`
