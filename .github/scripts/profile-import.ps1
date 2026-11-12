@@ -554,20 +554,27 @@ Endpoint = 127.0.0.1:51820
  if (Get-NetAdapter -Name 'waX VPN' -ErrorAction SilentlyContinue) { throw 'Config summary connected unexpectedly' }
  'PASS loaded config summary expand/collapse, expected allowlisted values, no key values, unchanged files/settings/selection and no adapter' | Out-File verify-results.txt -Append -Encoding utf8
  # Replace a fixture on disk at the same selected name/index, then reload.
+ # Keep configured routes expanded so the same-index cache refresh is observed.
  (ImportProofFind $window 'Show config summary').GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
  Start-Sleep -Milliseconds 200
+ (ImportProofFind $window 'Show configured routes').GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+ Start-Sleep -Milliseconds 200
  $originalBytes=[System.IO.File]::ReadAllBytes($selectedPath)
- $changed=$fixtureText.Replace('10.55.0.2/32','10.55.0.9/32')
+ $changed=$fixtureText.Replace('10.55.0.2/32','10.55.0.9/32').Replace('10.55.0.1/32','10.55.0.7/32')
  if ($changed -eq $fixtureText) { throw 'Summary cache reload fixture unchanged' }
  [System.IO.File]::WriteAllText($selectedPath,$changed,[System.Text.UTF8Encoding]::new($false))
  (ImportProofFind $window 'Reload profiles').GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
  Start-Sleep -Milliseconds 300
  if (-not (ImportProofFind $window 'Loaded config: Office 24') -or -not (ImportProofFind $window 'Addresses: 10.55.0.9/32')) { throw 'Loaded summary cache did not refresh on same-index reload' }
+ if (-not (ImportProofFind $window 'Peer 1: 10.55.0.7/32') -or (ImportProofFind $window 'Peer 1: 10.55.0.1/32')) { throw 'Configured-route cache did not refresh on same-index reload' }
  ImportProofCapture $window 'profile-import-summary-reloaded.png'
  [System.IO.File]::WriteAllBytes($selectedPath,$originalBytes)
  (ImportProofFind $window 'Reload profiles').GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
  Start-Sleep -Milliseconds 300
  if (-not (ImportProofFind $window 'Addresses: 10.55.0.2/32') -or (ImportProofFind $window 'Addresses: 10.55.0.9/32')) { throw 'Loaded summary cache did not refresh after restoration' }
+ if (-not (ImportProofFind $window 'Peer 1: 10.55.0.1/32') -or (ImportProofFind $window 'Peer 1: 10.55.0.7/32')) { throw 'Configured-route cache did not refresh after restoration' }
+ ImportProofCapture $window 'profile-import-routes-restored.png'
+ 'PASS configured-route cache refreshes changed selected route at same index and restored route after reload' | Out-File verify-results.txt -Append -Encoding utf8
  if ((Get-FileHash (Join-Path $dir 'settings.json') -Algorithm SHA256).Hash -ne $settingsBefore) { throw 'Summary reload changed selected settings' }
  if ((Get-FileHash $selectedPath -Algorithm SHA256).Hash -ne $selectedHash) { throw 'Summary reload fixture not restored' }
  if (Get-NetAdapter -Name 'waX VPN' -ErrorAction SilentlyContinue) { throw 'Summary reload connected unexpectedly' }

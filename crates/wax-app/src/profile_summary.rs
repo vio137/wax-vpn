@@ -50,24 +50,58 @@ pub fn clipboard_text(name: &str, rows: &[(&str, String)]) -> String {
 pub struct DisplayCache {
     selected: Option<usize>,
     rows: Vec<(&'static str, String)>,
+    routes: Option<(Vec<String>, usize)>,
 }
 impl DisplayCache {
     pub fn invalidate(&mut self) {
         self.selected = None;
         self.rows.clear();
+        self.routes = None;
     }
     pub fn get(&mut self, selected: usize, config: &WireGuardConfig) -> &[(&'static str, String)] {
         if self.selected != Some(selected) {
             self.rows = rows(config);
+            self.routes = None;
             self.selected = Some(selected);
         }
         &self.rows
+    }
+    /// Lazy and bounded to the selected profile. No key/config object is retained.
+    pub fn routes(&mut self, selected: usize, config: &WireGuardConfig) -> (&[String], usize) {
+        self.get(selected, config);
+        let (routes, remaining) = self.routes.get_or_insert_with(|| route_preview(config));
+        (routes, *remaining)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn route_cache_is_lazy_reuses_display_storage_and_refreshes_selection_and_reload() {
+        let mut config = WireGuardConfig::parse("[Interface]\nPrivateKey = AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=\n[Peer]\nPublicKey = AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=\nAllowedIPs = 10.4.0.0/24\n").unwrap();
+        let mut cache = DisplayCache::default();
+        cache.get(0, &config);
+        assert!(cache.routes.is_none());
+        let (first, remaining) = cache.routes(0, &config);
+        assert_eq!(remaining, 0); assert_eq!(first, &["Peer 1: 10.4.0.0/24"]);
+        let storage = first.as_ptr(); let text = first[0].as_ptr();
+        for _ in 0..20 {
+            cache.get(0, &config);
+            let (routes, _) = cache.routes(0, &config);
+            assert_eq!(routes.as_ptr(), storage); assert_eq!(routes[0].as_ptr(), text);
+        }
+        config.peers[0].allowed_ips = vec!["fd00::/64".parse().unwrap()];
+        assert_eq!(cache.routes(1, &config).0, &["Peer 1: fd00::/64"]);
+        cache.invalidate(); assert!(cache.routes.is_none());
+        config.peers[0].allowed_ips = vec!["10.5.0.0/24".parse().unwrap()];
+        assert_eq!(cache.routes(1, &config).0, &["Peer 1: 10.5.0.0/24"]);
+        config.peers[0].allowed_ips = (0..70).map(|i| format!("10.6.{i}.0/24").parse().unwrap()).collect();
+        cache.invalidate(); let (routes, remaining) = cache.routes(1, &config);
+        assert_eq!(routes.len(), 64); assert_eq!(remaining, 6);
+        config.peers.clear(); cache.invalidate(); assert!(cache.routes(1, &config).0.is_empty());
+    }
+
     #[test]
     fn route_preview_is_ordered_bounded_and_contains_only_peer_positions_and_cidrs() {
         let mut config = WireGuardConfig::parse("[Interface]\nPrivateKey = AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=\n[Peer]\nPublicKey = AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=\nAllowedIPs = 0.0.0.0/0, ::/0\nEndpoint = hidden.invalid:51820\n").unwrap();

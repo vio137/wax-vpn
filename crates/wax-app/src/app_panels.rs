@@ -582,7 +582,7 @@ impl WaxApp {
                     }
                     if self.profile_routes_open {
                         ui.add(egui::Label::new(RichText::new("Loaded AllowedIPs only, before split exclusions. Not current routes or reachability. Up to 64 entries shown.").size(11.0).color(theme::MUTE)).wrap());
-                        let (routes, remaining) = profile_summary::route_preview(&profile.config);
+                        let (routes, remaining) = self.profile_summary_cache.routes(selected, &profile.config);
                         if routes.is_empty() {
                             ui.label(RichText::new("No configured route entries").size(11.5).color(theme::SUB));
                         } else {
