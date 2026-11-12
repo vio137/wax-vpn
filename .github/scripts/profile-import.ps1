@@ -410,6 +410,45 @@ Endpoint = 127.0.0.1:51820
  ImportProofCapture $window 'profile-import-duplicate.png'
  'PASS Duplicate selected repeated collision-safe names, unchanged original/selection/settings and no adapter' | Out-File verify-results.txt -Append -Encoding utf8
 
+ # Show selected resets only session-local filters and reveals a virtualized row.
+ (ImportProofFind $window 'Show selected').GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+ Start-Sleep -Milliseconds 250
+ $unpin=ImportProofFind $window 'Unpin'
+ if (-not $unpin) { throw 'Selected pinned row was not revealed' }
+ $unpin.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+ Start-Sleep -Milliseconds 250
+ $settingsBefore=(Get-FileHash (Join-Path $dir 'settings.json') -Algorithm SHA256).Hash
+ $filesBefore=@(Get-ChildItem (Join-Path $dir 'profiles') -File | Sort-Object Name | ForEach-Object { $_.Name+':'+(Get-FileHash $_.FullName -Algorithm SHA256).Hash }) -join '|'
+ (ImportProofFind $window 'Pinned only').GetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern).Toggle()
+ [ImportProofNative]::SetForegroundWindow([IntPtr]$window.Current.NativeWindowHandle) | Out-Null
+ [System.Windows.Forms.SendKeys]::SendWait('^f')
+ Start-Sleep -Milliseconds 250
+ $search=[System.Windows.Automation.AutomationElement]::FocusedElement
+ if ($search.Current.ControlType -ne [System.Windows.Automation.ControlType]::Edit) { throw 'Show selected fixture search focus missing' }
+ $search.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).SetValue('no-match-xyz')
+ Start-Sleep -Milliseconds 250
+ if (-not (ImportProofFind $window '0 matches')) { throw 'Show selected fixture did not hide selected row' }
+ ImportProofCapture $window 'profile-import-show-selected-hidden.png'
+ foreach ($attempt in 1..2) {
+  (ImportProofFind $window 'Show selected').GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+  Start-Sleep -Milliseconds 300
+  [System.Windows.Forms.SendKeys]::SendWait('^f')
+  Start-Sleep -Milliseconds 200
+  $edit=[System.Windows.Automation.AutomationElement]::FocusedElement
+  if ($edit.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value -ne '') { throw 'Show selected retained search' }
+  $toggle=(ImportProofFind $window 'Pinned only').GetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern)
+  if ($toggle.Current.ToggleState -ne [System.Windows.Automation.ToggleState]::Off) { throw 'Show selected retained Pinned only' }
+  $selected=ImportProofFind $window 'Selected'
+  $label=ImportProofFind $window 'Office 24'
+  if (-not $selected -or $selected.Current.IsOffscreen -or -not $label -or $label.Current.IsOffscreen) { throw 'Show selected did not reveal selected virtual row' }
+  if ([Math]::Abs($selected.Current.BoundingRectangle.Y-$label.Current.BoundingRectangle.Y) -gt 25) { throw 'Show selected revealed wrong row' }
+  if ((Get-FileHash (Join-Path $dir 'settings.json') -Algorithm SHA256).Hash -ne $settingsBefore) { throw 'Show selected changed selection/settings/pins/history' }
+  $filesAfter=@(Get-ChildItem (Join-Path $dir 'profiles') -File | Sort-Object Name | ForEach-Object { $_.Name+':'+(Get-FileHash $_.FullName -Algorithm SHA256).Hash }) -join '|'
+  if ($filesAfter -ne $filesBefore) { throw 'Show selected changed profile files' }
+  if (Get-NetAdapter -Name 'waX VPN' -ErrorAction SilentlyContinue) { throw 'Show selected connected unexpectedly' }
+ }
+ ImportProofCapture $window 'profile-import-show-selected.png'
+ 'PASS Show selected clears temporary filters, reveals selected virtual row repeatedly, keeps files/settings/selection unchanged and no adapter' | Out-File verify-results.txt -Append -Encoding utf8
 
 } finally {
  if ($p) {

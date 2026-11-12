@@ -1,12 +1,9 @@
-# waX VPN v1.0.18
+# waX VPN v1.0.19
 
-Profiles has a Duplicate selected action. It creates a local copy of the
-selected loaded WireGuard config using the same keys, with a collision-safe
-name such as Office - copy or Office - copy - 2. It does not replace the
-original, change selection or start a connection. Pins, history and split
-exclusions are not copied. The action is disabled while connecting/connected
-or when the profile list could not be reloaded. A copy is not a new server,
-account or credential.
+Profiles has a Show selected action. It clears this list's temporary search
+and Pinned only filter, then scrolls to the selected row. Selection, stored
+pins/history/settings, profile files and the connection stay unchanged.
+It does not select a different profile or start a connection.
 No tunnel, DNS, firewall or service behavior changed.
 
 ## Compatibility and limits
@@ -32,31 +29,7 @@ sampling can miss a shorter flash.
 
 ## Release verification
 
-Preview: https://github.com/vio137/wax-vpn/actions/runs/43151256402
-Source: `483d49599c2636084da1dc1bd8bf9e34fc10fb34`.
-
-All three preview execution jobs passed. Actual Windows results passed repeated
-collision-safe copies, unchanged original/selection/settings and no adapter.
-Copy notice and installed-GUI pixels were inspected. Local app tests: 48
-passed, one manual networking test ignored. Core tests: 43 passed, including
-complete config equality, original preservation, repeated naming and Unix
-0600 permissions. Build and PowerShell parser passed.
-
-Existing import/review/Clear, keyboard search/counts, pinned filter, bounded
-lists/picker, GUI demo connection, DNS/IPv4 MTU/split routes, bounded recovery,
-retry disable, original-window restore and quit passed. Installer lifecycle,
-native process-scope checks and PE audits passed within the limits above.
-
-Stable: https://github.com/vio137/wax-vpn/actions/runs/43152192297
-Source: `bef900e0e55dc5bf8fe0106016679829d3a855b6`.
-
-Stable execution, installer and publish gates passed. Actual stable Windows
-proof passed the new copy checks and prior checks above. Stable copy-notice and
-installed-GUI pixels were inspected. Recovery observed a handshake after 3s;
-retry disabling kept the adapter absent in 48 samples over 12s. Original-window
-restore and quit passed. No console windows were observed in 323 samples at
-about 100ms; shorter flashes could be missed.
-
-Release: https://github.com/vio137/wax-vpn/releases/tag/v1.0.18
-The downloaded 11,705,961-byte installer matches the published SHA256:
-`febbff24c556e736f3563ee18e7364869b071c5c6cba6d3a5a654df3d2a4e24a`.
+Local app tests: 48 passed, one manual networking test ignored. Build passed.
+Local pixels showed the selected Office 24 row revealed from a hidden pinned
+filter in a 28-profile list; settings file hash stayed unchanged.
+PowerShell parser and Windows execution proof are pending.

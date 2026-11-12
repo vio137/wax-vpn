@@ -323,6 +323,7 @@ impl WaxApp {
         let mut delete_idx: Option<usize> = None;
         let mut pin_name: Option<String> = None;
         let mut selection_changed = false;
+        let mut show_selected = false;
         let can_manage = matches!(self.state, ConnState::Disconnected | ConnState::Failed(_));
         let mut duplicate = false;
         ui.horizontal_wrapped(|ui| {
@@ -357,6 +358,13 @@ impl WaxApp {
             }
             ui.checkbox(&mut self.pinned_only, "Pinned only")
                 .on_hover_text("Show pinned profiles in this list. Search still applies; the Connect picker stays unchanged.");
+            if ui.add_enabled(self.selected.is_some_and(|i| i < self.profiles.len()), egui::Button::new("Show selected").small())
+                .on_hover_text("Clear this list's search and Pinned only filter, then scroll to the selected profile. Selection and connection stay unchanged.")
+                .clicked() {
+                self.profile_search.clear();
+                self.pinned_only = false;
+                show_selected = true;
+            }
             if self.pinned_only || !self.profile_search.trim().is_empty() {
                 let count = self.profile_view.indices_filtered(&self.profiles, &self.settings, &self.profile_search, self.pinned_only).len();
                 ui.label(RichText::new(profile_match_label(count)).size(11.0).color(theme::MUTE));
@@ -370,8 +378,13 @@ impl WaxApp {
         }
         let order = self.profile_view.indices_filtered(&self.profiles, &self.settings, &self.profile_search, self.pinned_only);
         let shown = order.len();
-        egui::ScrollArea::vertical().id_salt("profiles-list")
-            .max_height(250.0).show_rows(ui, 48.0, shown, |ui, rows| {
+        let mut list = egui::ScrollArea::vertical().id_salt("profiles-list").max_height(250.0);
+        if show_selected {
+            if let Some(row) = self.selected.and_then(|selected| order.iter().position(|&i| i == selected)) {
+                list = list.vertical_scroll_offset(row as f32 * (48.0 + ui.spacing().item_spacing.y));
+            }
+        }
+        list.show_rows(ui, 48.0, shown, |ui, rows| {
                 for &i in &order[rows] {
                     ui.push_id(("profile-row", i), |ui| {
                         let p = &self.profiles[i];
