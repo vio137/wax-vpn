@@ -30,5 +30,11 @@ sampling can miss a shorter flash.
 ## Release verification
 
 Local app tests passed (51 passed, one manual ignored), including single,
-dual-family, multiple-peer and split-prefix cases. Windows summary checks,
-installer and stable publication are pending. No performance claim.
+dual-family, multiple-peer and split-prefix cases. Build and PowerShell syntax passed.
+Preview: https://github.com/vio137/wax-vpn/actions/runs/43170288176
+Source: `fcf9c405ee1d130819d4ed9756889f0fe98d4d62`. All three execution jobs
+passed. Actual Windows summary showed the explicit /0 None row, expanded and
+collapsed, excluded keys and kept files/settings/selection unchanged without
+creating an adapter. Prior profile/demo/recovery and installer checks passed.
+Summary and installed-GUI pixels inspected. Stable publication/checksum
+verification pending. No performance claim.
