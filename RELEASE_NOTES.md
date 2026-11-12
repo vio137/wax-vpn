@@ -36,5 +36,17 @@ Source: `fcf9c405ee1d130819d4ed9756889f0fe98d4d62`. All three execution jobs
 passed. Actual Windows summary showed the explicit /0 None row, expanded and
 collapsed, excluded keys and kept files/settings/selection unchanged without
 creating an adapter. Prior profile/demo/recovery and installer checks passed.
-Summary and installed-GUI pixels inspected. Stable publication/checksum
-verification pending. No performance claim.
+Summary and installed-GUI pixels inspected.
+
+Stable: https://github.com/vio137/wax-vpn/actions/runs/43171320662
+Source: `7a4b38f71a2feb553eef90c623e3968c4ab0395d`. All four jobs passed.
+Actual full results passed explicit-default summary and prior profile checks,
+demo peer handshake/tunnel-address ping, DNS/MTU restore, split-route checks,
+4-second recovery, recovery-disable with 48 samples over 12 seconds, manual
+reconnect, original HWND/PID restore and graceful quit. No console observed in
+336 samples at about 100 ms; shorter flashes can be missed. Stable summary and
+installed-GUI pixels inspected. Fresh-runner installer checks passed.
+Published installer (11,712,549 bytes) downloaded and independently hashed,
+matching SHA256SUMS-v1.0.25.txt:
+`6ff166544c82dec3ed34c1008100cb2b98ba778b72847350f65ae132ff0c3918`.
+No performance claim.
