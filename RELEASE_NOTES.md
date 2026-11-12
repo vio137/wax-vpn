@@ -36,7 +36,13 @@ sampling can miss a shorter flash.
 
 ## Release verification
 
-Local workspace tests passed after the patch. Windows execution and installer
-proof are pending. Advisory scan covers known RustSec crate-version advisories,
+Local workspace tests passed after the patch: 104 passed, one manual test ignored.
+Preview: https://github.com/vio137/wax-vpn/actions/runs/43164420215
+Source: `17920a2c1a2bb29cdcfd808795f0d7bf77485d23`.
+All three execution jobs passed. Actual Windows proof passed prior profile,
+summary, demo connection/recovery and installer gates. Installed-GUI and summary
+pixels were inspected. Stable publication/checksum verification are pending.
+
+Advisory scan covers known RustSec crate-version advisories,
 not custom/vendored code, driver or installer binaries, runtime configuration,
 exploitability or unknown issues.
