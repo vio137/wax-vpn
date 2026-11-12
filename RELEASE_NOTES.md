@@ -31,14 +31,26 @@ sampling can miss a shorter flash.
 
 ## Release verification
 
-Preview: https://github.com/vio137/wax-vpn/actions/runs/43127836342
-Source: `ddc301405d8993bfe57a77f4ee9bba8353871db3`.
-All three preview jobs passed. Actual Windows results passed quick-picker
-name and endpoint search, case/outer-space normalization, empty result,
-Clear, unchanged selection without an adapter, and the existing short and
-26-profile picker, native file import and keyboard-help checks. Search,
-empty-result, cleared-list, final scrolled row and installed-app pixels were
-inspected at 880x600. Existing demo tunnel, recovery, restore/quit, installer,
-native process-scope and PE checks passed within the limits above.
-Local app tests: 46 passed, one manual networking test ignored. Build and
-PowerShell parser passed. Exact stable publication remains pending.
+Exact stable workflow: https://github.com/vio137/wax-vpn/actions/runs/43129396693
+Source: `f58a22d7f9a3203986697fab74942e929625687d`.
+
+All four stable jobs passed. Actual Windows results passed quick-picker name
+and endpoint search, case/outer-space normalization, empty result, Clear,
+unchanged selection without an adapter, and existing short and 26-profile
+picker, native import and keyboard-help checks. Search, empty-result,
+cleared-list, final scrolled row and installed-app pixels were inspected
+at 880x600. Local app tests: 46 passed, one manual networking test ignored.
+Build and PowerShell parser checks passed.
+
+Existing GUI demo connection, tunnel-address ping, DNS apply/reset, IPv4 MTU,
+split routes, bounded recovery, retry disable, original-window restore and
+graceful quit passed. Fresh install, upgrade, uninstall, all three native
+process-scope checks and three PE audits passed within the limits above.
+353 console-window samples at about 100ms saw no new visible native console;
+shorter flashes can be missed.
+
+The published installer was downloaded and matched its checksum file:
+
+- File: `waX-VPN-Setup-v1.0.11-x64.exe`
+- Size: 11,699,831 bytes
+- SHA256: `bf3014cbc4e4da01d9662b21372266e9df3503aa28f9d3acd75e4d95a7a65462`
