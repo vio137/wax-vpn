@@ -493,7 +493,7 @@ Endpoint = 127.0.0.1:51820
  $summary.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
  Start-Sleep -Milliseconds 300
  ImportProofCapture $window 'profile-import-summary-after.png'
- foreach ($text in @('Loaded config: Office 24','Addresses: 10.55.0.2/32','DNS: Not set','MTU: Automatic','Peers: 1','Route entries: 1','Configured values only. Not a live connection, routing or leak check. Keys are not shown.')) {
+ foreach ($text in @('Loaded config: Office 24','Addresses: 10.55.0.2/32','DNS: Not set','MTU: Automatic','Peers: 1','Route entries: 1','Explicit /0 defaults: None','Configured values only. Not a live connection, routing or leak check. Keys are not shown.')) {
   if (-not (ImportProofFind $window $text)) { throw ('Config summary missing expected allowlisted text: '+$text) }
  }
  $nodes=$window.FindAll([System.Windows.Automation.TreeScope]::Descendants,[System.Windows.Automation.Condition]::TrueCondition)

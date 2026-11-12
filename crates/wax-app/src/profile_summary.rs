@@ -6,12 +6,22 @@ pub fn rows(config: &WireGuardConfig) -> Vec<(&'static str, String)> {
         let text = items.collect::<Vec<_>>().join(", ");
         if text.is_empty() { empty.into() } else { text }
     }
+    let routes = config.peers.iter().flat_map(|p| &p.allowed_ips);
+    let ipv4 = routes.clone().any(|ip| ip.addr().is_ipv4() && ip.prefix_len() == 0);
+    let ipv6 = routes.clone().any(|ip| ip.addr().is_ipv6() && ip.prefix_len() == 0);
+    let defaults = match (ipv4, ipv6) {
+        (true, true) => "IPv4 and IPv6",
+        (true, false) => "IPv4 only",
+        (false, true) => "IPv6 only",
+        (false, false) => "None",
+    };
     vec![
         ("Addresses", joined(config.interface.addresses.iter().map(ToString::to_string), "Not set")),
         ("DNS", joined(config.interface.dns.iter().map(ToString::to_string), "Not set")),
         ("MTU", config.interface.mtu.map(|v| v.to_string()).unwrap_or_else(|| "Automatic".into())),
         ("Peers", config.peers.len().to_string()),
         ("Route entries", config.peers.iter().map(|p| p.allowed_ips.len()).sum::<usize>().to_string()),
+        ("Explicit /0 defaults", defaults.into()),
     ]
 }
 
@@ -21,7 +31,7 @@ mod tests {
     #[test]
     fn configured_values_are_explicit_and_never_include_keys() {
         let config = WireGuardConfig::parse("[Interface]\nPrivateKey = AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=\nAddress = 10.4.0.2/32, fd00::2/128\nDNS = 1.1.1.1, 2606:4700:4700::1111\nMTU = 1380\n[Peer]\nPublicKey = AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=\nPresharedKey = AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM=\nAllowedIPs = 0.0.0.0/0, ::/0\nEndpoint = example.invalid:51820\n").unwrap();
-        assert_eq!(rows(&config), vec![("Addresses", "10.4.0.2/32, fd00::2/128".into()), ("DNS", "1.1.1.1, 2606:4700:4700::1111".into()), ("MTU", "1380".into()), ("Peers", "1".into()), ("Route entries", "2".into())]);
+        assert_eq!(rows(&config), vec![("Addresses", "10.4.0.2/32, fd00::2/128".into()), ("DNS", "1.1.1.1, 2606:4700:4700::1111".into()), ("MTU", "1380".into()), ("Peers", "1".into()), ("Route entries", "2".into()), ("Explicit /0 defaults", "IPv4 and IPv6".into())]);
         let text = format!("{:?}", rows(&config));
         for hidden in ["AQEBAQE", "AgICAgI", "AwMDAwM", "PrivateKey", "PublicKey", "PresharedKey", "example.invalid"] { assert!(!text.contains(hidden)); }
         let mut unset = config.clone();
@@ -29,10 +39,25 @@ mod tests {
         unset.interface.dns.clear();
         unset.interface.mtu = None;
         unset.peers.clear();
-        assert_eq!(rows(&unset), vec![("Addresses", "Not set".into()), ("DNS", "Not set".into()), ("MTU", "Automatic".into()), ("Peers", "0".into()), ("Route entries", "0".into())]);
+        assert_eq!(rows(&unset), vec![("Addresses", "Not set".into()), ("DNS", "Not set".into()), ("MTU", "Automatic".into()), ("Peers", "0".into()), ("Route entries", "0".into()), ("Explicit /0 defaults", "None".into())]);
         let mut multiple = config.clone();
         multiple.peers.push(config.peers[0].clone());
-        assert_eq!(rows(&multiple)[3..], [("Peers", "2".into()), ("Route entries", "4".into())]);
+        assert_eq!(rows(&multiple)[3..5], [("Peers", "2".into()), ("Route entries", "4".into())]);
         assert_eq!(config, WireGuardConfig::parse(&config.to_conf_string()).unwrap());
     }
+    #[test]
+    fn explicit_default_families_check_all_peers_and_do_not_infer_split_routes() {
+        let mut config = WireGuardConfig::parse("[Interface]\nPrivateKey = AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=\n[Peer]\nPublicKey = AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=\nAllowedIPs = 0.0.0.0/0\n").unwrap();
+        assert_eq!(rows(&config).last().unwrap().1, "IPv4 only");
+        config.peers[0].allowed_ips = vec!["::/0".parse().unwrap()];
+        assert_eq!(rows(&config).last().unwrap().1, "IPv6 only");
+        let mut peer = config.peers[0].clone();
+        peer.allowed_ips = vec!["0.0.0.0/0".parse().unwrap()];
+        config.peers.push(peer);
+        assert_eq!(rows(&config).last().unwrap().1, "IPv4 and IPv6");
+        config.peers[0].allowed_ips = vec!["0.0.0.0/1".parse().unwrap(), "128.0.0.0/1".parse().unwrap()];
+        config.peers[1].allowed_ips = vec!["::/1".parse().unwrap(), "8000::/1".parse().unwrap()];
+        assert_eq!(rows(&config).last().unwrap().1, "None");
+    }
+
 }
