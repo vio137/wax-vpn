@@ -512,6 +512,26 @@ Endpoint = 127.0.0.1:51820
  if ($filesAfter -ne $filesBefore) { throw 'Config summary changed profile files' }
  if (Get-NetAdapter -Name 'waX VPN' -ErrorAction SilentlyContinue) { throw 'Config summary connected unexpectedly' }
  'PASS loaded config summary expand/collapse, expected allowlisted values, no key values, unchanged files/settings/selection and no adapter' | Out-File verify-results.txt -Append -Encoding utf8
+ # Replace a fixture on disk at the same selected name/index, then reload.
+ (ImportProofFind $window 'Show config summary').GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+ Start-Sleep -Milliseconds 200
+ $originalBytes=[System.IO.File]::ReadAllBytes($selectedPath)
+ $changed=$fixtureText.Replace('10.55.0.2/32','10.55.0.9/32')
+ if ($changed -eq $fixtureText) { throw 'Summary cache reload fixture unchanged' }
+ [System.IO.File]::WriteAllText($selectedPath,$changed,[System.Text.UTF8Encoding]::new($false))
+ (ImportProofFind $window 'Reload profiles').GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+ Start-Sleep -Milliseconds 300
+ if (-not (ImportProofFind $window 'Loaded config: Office 24') -or -not (ImportProofFind $window 'Addresses: 10.55.0.9/32')) { throw 'Loaded summary cache did not refresh on same-index reload' }
+ ImportProofCapture $window 'profile-import-summary-reloaded.png'
+ [System.IO.File]::WriteAllBytes($selectedPath,$originalBytes)
+ (ImportProofFind $window 'Reload profiles').GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+ Start-Sleep -Milliseconds 300
+ if (-not (ImportProofFind $window 'Addresses: 10.55.0.2/32') -or (ImportProofFind $window 'Addresses: 10.55.0.9/32')) { throw 'Loaded summary cache did not refresh after restoration' }
+ if ((Get-FileHash (Join-Path $dir 'settings.json') -Algorithm SHA256).Hash -ne $settingsBefore) { throw 'Summary reload changed selected settings' }
+ if ((Get-FileHash $selectedPath -Algorithm SHA256).Hash -ne $selectedHash) { throw 'Summary reload fixture not restored' }
+ if (Get-NetAdapter -Name 'waX VPN' -ErrorAction SilentlyContinue) { throw 'Summary reload connected unexpectedly' }
+ 'PASS loaded summary cache refreshes changed selected config at same index on reload and restoration, unchanged settings and no adapter' | Out-File verify-results.txt -Append -Encoding utf8
+
 
 } finally {
  if ($p) {

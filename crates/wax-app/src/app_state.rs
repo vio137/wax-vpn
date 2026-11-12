@@ -123,6 +123,7 @@ pub struct WaxApp {
     pinned_only: bool,
     profile_copy_notice: Option<String>,
     profile_summary_open: bool,
+    profile_summary_cache: profile_summary::DisplayCache,
     open_network_settings: bool,
     split_edit: String,
     split_edit_for: Option<usize>,
@@ -244,6 +245,7 @@ impl WaxApp {
             pinned_only: false,
             profile_copy_notice: None,
             profile_summary_open: false,
+            profile_summary_cache: profile_summary::DisplayCache::default(),
             open_network_settings: false,
             split_edit: String::new(),
             split_edit_for: None,
@@ -283,6 +285,7 @@ impl WaxApp {
         match profile::load_profiles_report() {
             Ok(report) => {
                 self.profiles = report.profiles;
+                self.profile_summary_cache.invalidate();
                 self.profile_view.invalidate();
                 self.profiles_notice = profile_notice(report.skipped);
                 self.profiles_readable = true;

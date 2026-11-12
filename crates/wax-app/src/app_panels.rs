@@ -561,7 +561,7 @@ impl WaxApp {
             self.connect_manual();
         }
 
-        if let Some(profile) = self.selected.and_then(|i| self.profiles.get(i)) {
+        if let Some((selected, profile)) = self.selected.and_then(|i| self.profiles.get(i).map(|p| (i, p))) {
             ui.add_space(8.0);
             if ui.small_button(if self.profile_summary_open { "Hide config summary" } else { "Show config summary" }).clicked() {
                 self.profile_summary_open = !self.profile_summary_open;
@@ -570,7 +570,7 @@ impl WaxApp {
                 theme::card_frame().show(ui, |ui| {
                     ui.add(egui::Label::new(RichText::new(format!("Loaded config: {}", profile.name)).size(12.0).color(theme::TEXT)).wrap());
                     ui.add(egui::Label::new(RichText::new("Configured values only. Not a live connection, routing or leak check. Keys are not shown.").size(11.0).color(theme::MUTE)).wrap());
-                    for (label, value) in profile_summary::rows(&profile.config) {
+                    for (label, value) in self.profile_summary_cache.get(selected, &profile.config) {
                         ui.add(egui::Label::new(RichText::new(format!("{label}: {value}")).size(11.5).color(theme::SUB)).wrap());
                     }
                 });

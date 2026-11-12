@@ -25,6 +25,27 @@ pub fn rows(config: &WireGuardConfig) -> Vec<(&'static str, String)> {
     ]
 }
 
+/// Holds only allowlisted display strings, never a config or key material.
+/// The caller invalidates on every successful loaded-profile replacement.
+#[derive(Default)]
+pub struct DisplayCache {
+    selected: Option<usize>,
+    rows: Vec<(&'static str, String)>,
+}
+impl DisplayCache {
+    pub fn invalidate(&mut self) {
+        self.selected = None;
+        self.rows.clear();
+    }
+    pub fn get(&mut self, selected: usize, config: &WireGuardConfig) -> &[(&'static str, String)] {
+        if self.selected != Some(selected) {
+            self.rows = rows(config);
+            self.selected = Some(selected);
+        }
+        &self.rows
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -58,6 +79,29 @@ mod tests {
         config.peers[0].allowed_ips = vec!["0.0.0.0/1".parse().unwrap(), "128.0.0.0/1".parse().unwrap()];
         config.peers[1].allowed_ips = vec!["::/1".parse().unwrap(), "8000::/1".parse().unwrap()];
         assert_eq!(rows(&config).last().unwrap().1, "None");
+    }
+
+    #[test]
+    fn display_cache_reuses_storage_and_refreshes_on_selection_and_reload() {
+        let config = WireGuardConfig::parse("[Interface]\nPrivateKey = AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=\nAddress = 10.4.0.2/32\n[Peer]\nPublicKey = AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=\nAllowedIPs = 10.4.0.0/24\n").unwrap();
+        let mut other = config.clone();
+        other.interface.addresses = vec!["fd00::2/128".parse().unwrap()];
+        let mut cache = DisplayCache::default();
+        assert_eq!(cache.get(0, &config), rows(&config));
+        let storage = cache.rows.as_ptr();
+        let address = cache.rows[0].1.as_ptr();
+        for _ in 0..20 {
+            assert_eq!(cache.get(0, &config), rows(&config));
+            assert_eq!(cache.rows.as_ptr(), storage);
+            assert_eq!(cache.rows[0].1.as_ptr(), address);
+        }
+        assert_eq!(cache.get(1, &other), rows(&other));
+        assert_eq!(cache.get(0, &config), rows(&config));
+        cache.invalidate();
+        assert!(cache.rows.is_empty());
+        assert_eq!(cache.get(0, &other), rows(&other));
+        cache.invalidate();
+        assert_eq!(cache.get(0, &config), rows(&config));
     }
 
 }
