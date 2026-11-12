@@ -161,6 +161,35 @@ Endpoint = 127.0.0.1:51820
  $button=ImportProofFind $window 'Connect to Chosen profile'
  if (-not $button -or $button.Current.IsOffscreen) { throw 'Long picker pushed Connect off-screen' }
  ImportProofCapture $window 'profile-import-long-picker.png'
+ # Type into the actual focused edit. Text-field spaces must never connect.
+ $search=ImportProofFind $window 'Find quick profile'
+ if (-not $search) { throw 'Quick picker search edit missing' }
+ $search.SetFocus()
+ [System.Windows.Forms.SendKeys]::SendWait(' OFFICE 24 ')
+ Start-Sleep -Milliseconds 350
+ if (-not (ImportProofFind $window 'Office 24')) { throw 'Quick picker name filter missed final profile' }
+ if (ImportProofFind $window 'Office 01') { throw 'Quick picker name filter retained unrelated row' }
+ ImportProofCapture $window 'profile-import-picker-search.png'
+ [System.Windows.Forms.SendKeys]::SendWait('^a')
+ [System.Windows.Forms.SendKeys]::SendWait('no-match-xyz')
+ Start-Sleep -Milliseconds 300
+ if (-not (ImportProofFind $window 'No matching profiles')) { throw 'Quick picker empty result missing' }
+ ImportProofCapture $window 'profile-import-picker-empty.png'
+ [System.Windows.Forms.SendKeys]::SendWait('^a')
+ [System.Windows.Forms.SendKeys]::SendWait('127.0.0.1:51820')
+ Start-Sleep -Milliseconds 300
+ if (-not (ImportProofFind $window 'Chosen profile')) { throw 'Quick picker endpoint search missed matching row' }
+ if (ImportProofFind $window 'No matching profiles') { throw 'Quick picker endpoint search kept empty result' }
+ (ImportProofFind $window 'Clear').GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+ Start-Sleep -Milliseconds 300
+ if (-not (ImportProofFind $window 'Office 01')) { throw 'Quick picker Clear did not restore rows' }
+ $saved=Get-Content (Join-Path $dir 'settings.json') -Raw | ConvertFrom-Json
+ if ($saved.last_profile -ne 'Chosen profile') { throw 'Quick picker search changed selected profile' }
+ if (Get-NetAdapter -Name 'waX VPN' -ErrorAction SilentlyContinue) { throw 'Quick picker search connected unexpectedly' }
+ ImportProofCapture $window 'profile-import-picker-cleared.png'
+ 'PASS quick picker name/endpoint search, empty result, Clear and unchanged selection without adapter' | Out-File verify-results.txt -Append -Encoding utf8
+ $first=ImportProofFind $window 'Chosen profile'
+ $r=$first.Current.BoundingRectangle
  [ImportProofNative]::SetCursorPos([int]($r.X+$r.Width/2),[int]($r.Y+$r.Height/2)) | Out-Null
  $last=$null
  for ($i=0;$i -lt 24;$i++) {
