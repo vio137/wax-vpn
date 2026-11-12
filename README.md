@@ -30,7 +30,7 @@ opt-in Cloudflare WARP client, reimplemented in Rust. Registration only happens
 when you explicitly accept Cloudflare's Terms of Service in the app or pass
 `--accept-tos` to the CLI. waX VPN is not affiliated with Cloudflare.
 
-The released v1.0.22 has no update checker or telemetry uploader. Tunnel traffic
+The released v1.0.23 has no update checker or telemetry uploader. Tunnel traffic
 and DNS lookups can happen in the background while connected; WARP API calls
 happen only when you request WARP actions. Local diagnostics are not uploaded.
 Optional public-IP, HTTPS latency and manual quick-speed measurements are off
@@ -39,6 +39,14 @@ and disclose your public IP to it. The local adapter-counter graph is on by
 default and makes no extra network requests. These are current-route
 observations, not leak tests; results stay in memory and are not uploaded as
 analytics or included in diagnostics.
+
+v1.0.23 reviewed dependencies and updated crc32fast 1.5.4 to 1.5.5 only.
+The full lockfile RustSec scan reported zero vulnerability entries and six
+remaining warnings, not a clean-security verdict. No warning package appears
+in the default Windows x64 graph; all remain in the cross-platform lockfile.
+TLS/certificate updates were held. See
+[the dependency review](docs/dependencies/v1.0.23-review.md) for raw reports,
+scope and limits. No Windows x64 speedup is claimed.
 
 On a fresh install, Import profile opens Profiles. Choose .conf file uses the
 native Windows picker; cancelling leaves profiles alone. Repeated imports keep

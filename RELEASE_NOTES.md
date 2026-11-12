@@ -41,7 +41,20 @@ Preview: https://github.com/vio137/wax-vpn/actions/runs/43164420215
 Source: `17920a2c1a2bb29cdcfd808795f0d7bf77485d23`.
 All three execution jobs passed. Actual Windows proof passed prior profile,
 summary, demo connection/recovery and installer gates. Installed-GUI and summary
-pixels were inspected. Stable publication/checksum verification are pending.
+pixels were inspected.
+
+Stable: https://github.com/vio137/wax-vpn/actions/runs/43166024496
+Source: `1069d029c4864fd8441a3c1432c635415bf66dcb`. All four jobs passed.
+Actual artifacts passed demo registration, peer handshake/tunnel-address ping,
+DNS/MTU restore, split-route checks, recovery after 3 seconds, recovery-disable
+with 48 samples over 12 seconds, manual reconnect, original HWND/PID restore,
+and graceful quit. No console was observed in 327 samples at about 100 ms;
+shorter flashes can be missed. All profile and key-free summary checks passed.
+Installed-GUI and summary pixels were inspected. Fresh-runner installer passed.
+
+Published installer (11,711,595 bytes) was downloaded and independently hashed;
+it matches SHA256SUMS-v1.0.23.txt:
+`32ae6de02ed82d29e350f0cc7339b7337065c51728a8c6617e842611ae17f94f`.
 
 Advisory scan covers known RustSec crate-version advisories,
 not custom/vendored code, driver or installer binaries, runtime configuration,
