@@ -1,9 +1,10 @@
-# waX VPN v1.0.19
+# waX VPN v1.0.20
 
-Profiles has a Show selected action. It clears this list's temporary search
-and Pinned only filter, then scrolls to the selected row. Selection, stored
-pins/history/settings, profile files and the connection stay unchanged.
-It does not select a different profile or start a connection.
+Profiles and the quick picker match all whitespace-separated search words
+across the profile name and peer endpoints. For example, Office 23 127.0.0.1
+can find a profile without requiring an exact phrase. Search ignores case;
+whitespace-only queries restore the list. Pinned only still applies to the
+Profiles list, and searches do not select, save or connect a profile.
 No tunnel, DNS, firewall or service behavior changed.
 
 ## Compatibility and limits
@@ -29,30 +30,9 @@ sampling can miss a shorter flash.
 
 ## Release verification
 
-Local app tests: 48 passed, one manual networking test ignored. Build passed.
-Local pixels showed the selected Office 24 row revealed from a hidden pinned
-filter in a 28-profile list; settings file hash stayed unchanged.
-PowerShell parser passed. Preview:
-https://github.com/vio137/wax-vpn/actions/runs/43153197046
-Source: `08773acd2ca20f7a4a295cd150b66a06b4f027e2`.
-
-All three execution jobs passed. Actual Windows proof passed zero-match search
-with Pinned only active, repeated reveal of the exact selected virtual row,
-unchanged config/settings files and no adapter. Selected-row and installed-GUI
-pixels were inspected. Prior import/duplicate/review/Clear, search/counts/pins,
-virtualized lists/picker and connection/installer checks also passed within
-the compatibility limits above.
-
-Stable: https://github.com/vio137/wax-vpn/actions/runs/43154083692
-Source: `470cad859f1e4a7164e2969d6dc6015813684dff`.
-
-All four stable jobs passed. Actual stable Windows proof passed the new repeated
-selected-row reveal and unchanged files/settings/selection/no-adapter checks.
-Stable selected-row and installed-GUI pixels were inspected. Prior demo tunnel,
-DNS/IPv4 MTU/split, bounded recovery, retry disable (48 samples over 12s), manual
-reconnect, original HWND/PID restore and quit passed. No console windows were
-observed in 324 samples at about 100ms; shorter flashes could be missed.
-
-Release: https://github.com/vio137/wax-vpn/releases/tag/v1.0.19
-The downloaded 11,707,077-byte installer matches the published SHA256:
-`55440a973f659046fbcedcd878ae6470c65112cf2bdf5440a51bdba73e2d9c31`.
+Local app tests: 49 passed, one manual networking test ignored. Build and
+PowerShell parser passed. Tests cover Unicode, repeated words, whitespace,
+name/endpoint and multiple peer terms, no cross-profile matches, pins and
+cached repeat queries. Local pixels showed one matching Office 23 row from
+name plus endpoint words in a 28-profile list.
+Windows execution proof is pending.

@@ -3,7 +3,7 @@ use crate::{settings::Settings, Profile};
 #[derive(Default)]
 pub struct ProfileView {
     rows: Vec<(usize, Vec<String>)>,
-    query: String,
+    query: Vec<String>,
     raw_query: String,
     filtered: Vec<usize>,
     valid: bool,
@@ -23,7 +23,7 @@ impl ProfileView {
         if query_changed {
             self.raw_query.clear();
             self.raw_query.push_str(query);
-            self.query = query.trim().to_lowercase();
+            self.query = query.split_whitespace().map(str::to_lowercase).collect();
         }
         let rebuild = !self.valid;
         if rebuild {
@@ -52,7 +52,7 @@ impl ProfileView {
                 .iter()
                 .filter(|(i, text)| {
                     (!self.pinned_only || settings.pinned_profiles.contains(&profiles[*i].name))
-                        && (self.query.is_empty() || text.iter().any(|term| term.contains(&self.query)))
+                        && self.query.iter().all(|word| text.iter().any(|term| term.contains(word)))
                 })
                 .map(|(i, _)| *i)
                 .collect();
@@ -113,15 +113,12 @@ mod tests {
                 .iter()
                 .enumerate()
                 .filter(|(_, p)| {
-                    normalized.is_empty()
-                        || p.name.to_lowercase().contains(&normalized)
-                        || p.config.peers.iter().any(|peer| {
-                            peer.endpoint
-                                .as_deref()
-                                .unwrap_or("")
-                                .to_lowercase()
-                                .contains(&normalized)
-                        })
+                    normalized.split_whitespace().all(|word| {
+                        p.name.to_lowercase().contains(word)
+                            || p.config.peers.iter().any(|peer| {
+                                peer.endpoint.as_deref().unwrap_or("").to_lowercase().contains(word)
+                            })
+                    })
                 })
                 .map(|(i, _)| i)
                 .collect();
@@ -131,6 +128,27 @@ mod tests {
             );
         }
     }
+    #[test]
+    fn words_match_across_fields_without_crossing_profiles() {
+        let mut profiles = vec![profile("München Office 24", "primary.invalid:123"), profile("Travel 24", "backup.invalid:789")];
+        let mut backup = profiles[0].config.peers[0].clone();
+        backup.endpoint = Some("secondary.invalid:456".into());
+        profiles[0].config.peers.push(backup);
+        let mut settings = Settings::default();
+        let mut view = ProfileView::default();
+        for query in ["  OFFICE\t24  primary ", "MÜNCHEN 456", "primary secondary", "24 24 office"] {
+            assert_eq!(view.indices(&profiles, &settings, query), &[0]);
+        }
+        for query in ["office backup", "travel primary", "24 missing"] {
+            assert!(view.indices(&profiles, &settings, query).is_empty());
+        }
+        settings.pinned_profiles.insert("Travel 24".into());
+        view.invalidate();
+        assert!(view.indices_filtered(&profiles, &settings, "office 24", true).is_empty());
+        assert_eq!(view.indices_filtered(&profiles, &settings, "24 backup", true), &[1]);
+        assert_eq!(view.indices(&profiles, &settings, "\t \n"), &[1, 0]);
+    }
+
     #[test]
     fn pinned_filter_combines_with_search_and_resets_for_quick_picker() {
         let profiles = vec![profile("Office", "office.invalid:123"), profile("Travel", "travel.invalid:456")];
@@ -185,9 +203,7 @@ mod tests {
         assert_eq!(view.indices(&profiles, &settings, " OFFICE.INVALID "), &[0]);
         assert_eq!(view.indices(&profiles, &settings, "travel"), &[1]);
         assert!(view.indices(&profiles, &settings, "absent").is_empty());
-        assert!(view
-            .indices(&profiles, &settings, "office office.invalid")
-            .is_empty());
+        assert_eq!(view.indices(&profiles, &settings, "office office.invalid"), &[0]);
         let mut renamed = profiles.clone();
         renamed[1].name = "Away".into();
         view.invalidate();

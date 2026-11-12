@@ -288,7 +288,7 @@ Endpoint = 127.0.0.1:51820
  $search=ImportProofFind $window 'Find quick profile'
  if (-not $search) { throw 'Quick picker search edit missing' }
  if (-not $search.Current.HasKeyboardFocus) { throw 'Quick picker did not focus search on opening' }
- [System.Windows.Forms.SendKeys]::SendWait(' OFFICE 24 ')
+ [System.Windows.Forms.SendKeys]::SendWait(' OFFICE 24 127.0.0.1 ')
  Start-Sleep -Milliseconds 350
  if (-not (ImportProofFind $window 'Office 24')) { throw 'Quick picker name filter missed final profile' }
  if (ImportProofFind $window 'Office 01') { throw 'Quick picker name filter retained unrelated row' }
@@ -449,6 +449,27 @@ Endpoint = 127.0.0.1:51820
  }
  ImportProofCapture $window 'profile-import-show-selected.png'
  'PASS Show selected clears temporary filters, reveals selected virtual row repeatedly, keeps files/settings/selection unchanged and no adapter' | Out-File verify-results.txt -Append -Encoding utf8
+ # Multi-word queries combine name and endpoint fields but must match one profile.
+ [System.Windows.Forms.SendKeys]::SendWait('^f')
+ Start-Sleep -Milliseconds 200
+ $search=[System.Windows.Automation.AutomationElement]::FocusedElement
+ $searchValue=$search.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern)
+ $searchValue.SetValue('  OFFICE  23  127.0.0.1  ')
+ Start-Sleep -Milliseconds 250
+ if (-not (ImportProofFind $window '1 match') -or -not (ImportProofFind $window 'Office 23')) { throw 'Multi-word name/endpoint query missed unique profile' }
+ if (ImportProofFind $window 'Office 24') { throw 'Multi-word query retained unrelated profile' }
+ ImportProofCapture $window 'profile-import-word-search.png'
+ $searchValue.SetValue('Office 23 no-match-xyz')
+ Start-Sleep -Milliseconds 250
+ if (-not (ImportProofFind $window '0 matches') -or -not (ImportProofFind $window 'No matching profiles')) { throw 'Multi-word search did not require every word' }
+ $searchValue.SetValue('   ')
+ Start-Sleep -Milliseconds 250
+ if ((ImportProofFind $window '0 matches') -or (ImportProofFind $window 'No matching profiles')) { throw 'Whitespace-only query did not restore list' }
+ if ((Get-FileHash (Join-Path $dir 'settings.json') -Algorithm SHA256).Hash -ne $settingsBefore) { throw 'Multi-word search changed selection/settings' }
+ $filesAfter=@(Get-ChildItem (Join-Path $dir 'profiles') -File | Sort-Object Name | ForEach-Object { $_.Name+':'+(Get-FileHash $_.FullName -Algorithm SHA256).Hash }) -join '|'
+ if ($filesAfter -ne $filesBefore) { throw 'Multi-word search changed profile files' }
+ if (Get-NetAdapter -Name 'waX VPN' -ErrorAction SilentlyContinue) { throw 'Multi-word search connected unexpectedly' }
+ 'PASS multi-word Profiles and quick-picker queries combine name/endpoint, require every word, restore whitespace query and keep files/settings/selection unchanged without adapter' | Out-File verify-results.txt -Append -Encoding utf8
 
 } finally {
  if ($p) {

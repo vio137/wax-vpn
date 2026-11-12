@@ -114,7 +114,8 @@ impl WaxApp {
                     ui.horizontal(|ui| {
                         let before = self.picker_search.clone();
                         let search = ui.add_sized([228.0, 24.0], egui::TextEdit::singleline(&mut self.picker_search)
-                            .id(egui::Id::unique("quick-profile-search")).hint_text("Profile or endpoint"));
+                            .id(egui::Id::unique("quick-profile-search")).hint_text("Profile or endpoint"))
+                            .on_hover_text("All search words must match the profile name or endpoints. Search stays local.");
                         if picker_just_opened { search.request_focus(); }
                         search.widget_info(|| {
                             let mut info = egui::WidgetInfo::text_edit(true, &before, &self.picker_search, "Profile or endpoint");
@@ -351,7 +352,7 @@ impl WaxApp {
                 // before the Profiles-only reset handler sees it.
                 .event_filter(egui::EventFilter { horizontal_arrows: true, vertical_arrows: true, escape: true, ..Default::default() })
                 .id(egui::Id::unique("profile-search")).hint_text("Profile or endpoint").desired_width(240.0))
-                .labelled_by(search_label.id).on_hover_text("Ctrl+F to find a profile. Escape clears this search.");
+                .labelled_by(search_label.id).on_hover_text("Ctrl+F to find a profile. All search words must match the name or endpoints. Escape clears this search.");
             if !self.profile_search.is_empty() && ui.small_button("Clear").clicked() {
                 self.profile_search.clear();
                 ui.memory_mut(|m| m.request_focus(egui::Id::unique("profile-search")));
