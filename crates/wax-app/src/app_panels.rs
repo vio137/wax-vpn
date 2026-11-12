@@ -350,141 +350,143 @@ impl WaxApp {
             ui.label(RichText::new("Disconnect before switching or deleting profiles").size(11.0).color(theme::MUTE));
             ui.add_space(8.0);
         }
-        egui::ScrollArea::vertical().max_height(250.0).show(ui, |ui| {
-            let order = self.profile_view.indices_filtered(&self.profiles, &self.settings, &self.profile_search, self.pinned_only);
-            let mut shown = 0;
-            for &i in order {
-                let p = &self.profiles[i];
-                shown += 1;
-                let selected = self.selected == Some(i);
-                let ep = p
-                    .config
-                    .peers
-                    .first()
-                    .and_then(|peer| peer.endpoint.as_deref())
-                    .unwrap_or("-");
-                let addr = p
-                    .config
-                    .interface
-                    .addresses
-                    .iter()
-                    .map(|a| a.to_string())
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                let (r, resp) = ui.allocate_exact_size(
-                    egui::vec2(ui.available_width(), 48.0),
-                    egui::Sense::hover(),
-                );
-                let hov = ui
-                    .ctx()
-                    .animate_bool_responsive(resp.id.with("hov"), resp.hovered());
-                if hov > 0.02 || selected {
-                    ui.painter().rect_filled(
-                        r,
-                        egui::CornerRadius::same(8),
-                        theme::alpha(
-                            egui::Color32::WHITE,
-                            (5.0 * hov) as u8 + if selected { 6 } else { 0 },
-                        ),
-                    );
-                }
-                if selected {
-                    ui.painter().rect_filled(
-                        egui::Rect::from_center_size(
-                            egui::pos2(r.left() + 2.0, r.center().y),
-                            egui::vec2(2.5, 24.0),
-                        ),
-                        egui::CornerRadius::same(1),
-                        theme::ACCENT,
-                    );
-                }
-                let mut row_ui = ui.new_child(
-                    egui::UiBuilder::new()
-                        .max_rect(r.shrink2(egui::vec2(14.0, 0.0)))
-                        .layout(Layout::left_to_right(Align::Center)),
-                );
-                // Reserve action space before laying out potentially long text.
-                let text_width = (row_ui.available_width() - 340.0).max(80.0);
-                row_ui.allocate_ui_with_layout(
-                    egui::vec2(text_width, 48.0),
-                    Layout::top_down(Align::Min),
-                    |ui| {
-                        ui.add(egui::Label::new(
-                            RichText::new(&p.name)
-                                .size(13.5)
-                                .color(if selected { theme::TEXT } else { theme::SUB })
-                                .strong(),
-                        ).truncate()).on_hover_text(&p.name);
-                        let tag = if self.settings.pinned_profiles.contains(&p.name) { "Pinned · " } else if self.settings.recent_profiles.contains(&p.name) { "Recent · " } else { "" };
-                        let detail = format!("{tag}{ep}  ·  {addr}");
-                        ui.add(egui::Label::new(
-                            RichText::new(&detail)
-                                .size(10.5)
-                                .color(theme::MUTE)
-                                .monospace(),
-                        ).truncate()).on_hover_text(format!("{detail}\nRecent: the app started a tunnel with this profile. Internet access was not verified."));
-                    },
-                );
-                row_ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    let pinned = self.settings.pinned_profiles.contains(&p.name);
-                    if ui.small_button(if pinned { "Unpin" } else { "Pin" }).on_hover_text("Keep this profile at the top. Saved only on this device.").clicked() { pin_name = Some(p.name.clone()); }
-                    let now = ui.input(|inp| inp.time);
-                    let armed = matches!(self.confirm_delete, Some((idx, t0)) if idx == i && now - t0 < 3.0);
-                    if ui.add_enabled_ui(can_manage, |ui| {
-                        theme::danger_button(ui, if armed { "Confirm delete" } else { "Delete" })
-                    }).inner {
-                        if armed {
-                            delete_idx = Some(i);
-                            self.confirm_delete = None;
-                        } else {
-                            self.confirm_delete = Some((i, now));
+        let order = self.profile_view.indices_filtered(&self.profiles, &self.settings, &self.profile_search, self.pinned_only);
+        let shown = order.len();
+        egui::ScrollArea::vertical().id_salt("profiles-list")
+            .max_height(250.0).show_rows(ui, 48.0, shown, |ui, rows| {
+                for &i in &order[rows] {
+                    ui.push_id(("profile-row", i), |ui| {
+                        let p = &self.profiles[i];
+                        let selected = self.selected == Some(i);
+                        let ep = p
+                            .config
+                            .peers
+                            .first()
+                            .and_then(|peer| peer.endpoint.as_deref())
+                            .unwrap_or("-");
+                        let addr = p
+                            .config
+                            .interface
+                            .addresses
+                            .iter()
+                            .map(|a| a.to_string())
+                            .collect::<Vec<_>>()
+                            .join(", ");
+                        let (r, resp) = ui.allocate_exact_size(
+                            egui::vec2(ui.available_width(), 48.0),
+                            egui::Sense::hover(),
+                        );
+                        let hov = ui
+                            .ctx()
+                            .animate_bool_responsive(resp.id.with("hov"), resp.hovered());
+                        if hov > 0.02 || selected {
+                            ui.painter().rect_filled(
+                                r,
+                                egui::CornerRadius::same(8),
+                                theme::alpha(
+                                    egui::Color32::WHITE,
+                                    (5.0 * hov) as u8 + if selected { 6 } else { 0 },
+                                ),
+                            );
                         }
-                    }
-                    if can_manage
-                        && ui
-                            .add(egui::Button::new(RichText::new("Connect").size(12.0).color(theme::ACCENT))
-                                .fill(theme::alpha(theme::ACCENT, 18))
-                                .stroke(egui::Stroke::new(1.0, theme::alpha(theme::ACCENT, 90)))
-                                .corner_radius(egui::CornerRadius::same(8)))
-                            .clicked()
-                    {
-                        connect_idx = Some(i);
-                    }
-                    let sel_resp = ui.add_enabled(
-                        can_manage,
-                        egui::Button::new(
-                            RichText::new(if selected { "Selected" } else { "Select" })
-                                .size(11.5)
-                                .color(if selected { theme::ACCENT } else { theme::SUB }),
-                        )
-                        .fill(if selected { theme::alpha(theme::ACCENT, 18) } else { theme::alpha(egui::Color32::WHITE, 6) })
-                        .stroke(egui::Stroke::new(1.0, theme::alpha(if selected { theme::ACCENT } else { theme::SUB }, 60)))
-                        .corner_radius(egui::CornerRadius::same(8)),
-                    );
-                    if sel_resp.clicked() && can_manage {
-                        self.selected = Some(i);
-                        self.split_edit_for = None;
-                        self.confirm_delete = None;
-                        selection_changed = true;
-                    }
-                });
-                theme::hairline(ui);
-            }
-            if shown == 0 && !self.profiles.is_empty() {
-                let empty = if self.pinned_only && self.profile_search.trim().is_empty() { "No pinned profiles" } else { "No matching profiles" };
-                ui.label(RichText::new(empty).color(theme::SUB));
-            }
-            if self.profiles.is_empty() && self.profiles_readable {
-                theme::card_frame().show(ui, |ui| {
-                    ui.label(RichText::new("No profiles yet").size(13.0).color(theme::SUB));
-                    ui.label(
-                        RichText::new("Paste a config below, drop a .conf file, or register Cloudflare WARP from the WARP tab.")
-                            .size(11.0)
-                            .color(theme::MUTE),
-                    );
-                });
-            }
+                        if selected {
+                            ui.painter().rect_filled(
+                                egui::Rect::from_center_size(
+                                    egui::pos2(r.left() + 2.0, r.center().y),
+                                    egui::vec2(2.5, 24.0),
+                                ),
+                                egui::CornerRadius::same(1),
+                                theme::ACCENT,
+                            );
+                        }
+                        let mut row_ui = ui.new_child(
+                            egui::UiBuilder::new()
+                                .max_rect(r.shrink2(egui::vec2(14.0, 0.0)))
+                                .layout(Layout::left_to_right(Align::Center)),
+                        );
+                        // Reserve action space before laying out potentially long text.
+                        let text_width = (row_ui.available_width() - 340.0).max(80.0);
+                        row_ui.allocate_ui_with_layout(
+                            egui::vec2(text_width, 48.0),
+                            Layout::top_down(Align::Min),
+                            |ui| {
+                                ui.add(egui::Label::new(
+                                    RichText::new(&p.name)
+                                        .size(13.5)
+                                        .color(if selected { theme::TEXT } else { theme::SUB })
+                                        .strong(),
+                                ).truncate()).on_hover_text(&p.name);
+                                let tag = if self.settings.pinned_profiles.contains(&p.name) { "Pinned · " } else if self.settings.recent_profiles.contains(&p.name) { "Recent · " } else { "" };
+                                let detail = format!("{tag}{ep}  ·  {addr}");
+                                ui.add(egui::Label::new(
+                                    RichText::new(&detail)
+                                        .size(10.5)
+                                        .color(theme::MUTE)
+                                        .monospace(),
+                                ).truncate()).on_hover_text(format!("{detail}\nRecent: the app started a tunnel with this profile. Internet access was not verified."));
+                            },
+                        );
+                        row_ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                            let pinned = self.settings.pinned_profiles.contains(&p.name);
+                            if ui.small_button(if pinned { "Unpin" } else { "Pin" }).on_hover_text("Keep this profile at the top. Saved only on this device.").clicked() { pin_name = Some(p.name.clone()); }
+                            let now = ui.input(|inp| inp.time);
+                            let armed = matches!(self.confirm_delete, Some((idx, t0)) if idx == i && now - t0 < 3.0);
+                            if ui.add_enabled_ui(can_manage, |ui| {
+                                theme::danger_button(ui, if armed { "Confirm delete" } else { "Delete" })
+                            }).inner {
+                                if armed {
+                                    delete_idx = Some(i);
+                                    self.confirm_delete = None;
+                                } else {
+                                    self.confirm_delete = Some((i, now));
+                                }
+                            }
+                            if can_manage
+                                && ui
+                                    .add(egui::Button::new(RichText::new("Connect").size(12.0).color(theme::ACCENT))
+                                        .fill(theme::alpha(theme::ACCENT, 18))
+                                        .stroke(egui::Stroke::new(1.0, theme::alpha(theme::ACCENT, 90)))
+                                        .corner_radius(egui::CornerRadius::same(8)))
+                                    .clicked()
+                            {
+                                connect_idx = Some(i);
+                            }
+                            let sel_resp = ui.add_enabled(
+                                can_manage,
+                                egui::Button::new(
+                                    RichText::new(if selected { "Selected" } else { "Select" })
+                                        .size(11.5)
+                                        .color(if selected { theme::ACCENT } else { theme::SUB }),
+                                )
+                                .fill(if selected { theme::alpha(theme::ACCENT, 18) } else { theme::alpha(egui::Color32::WHITE, 6) })
+                                .stroke(egui::Stroke::new(1.0, theme::alpha(if selected { theme::ACCENT } else { theme::SUB }, 60)))
+                                .corner_radius(egui::CornerRadius::same(8)),
+                            );
+                            if sel_resp.clicked() && can_manage {
+                                self.selected = Some(i);
+                                self.split_edit_for = None;
+                                self.confirm_delete = None;
+                                selection_changed = true;
+                            }
+                        });
+                        ui.painter().line_segment([r.left_bottom(), r.right_bottom()], egui::Stroke::new(1.0, theme::HAIRLINE));
+                    });
+                }
         });
+        if shown == 0 && !self.profiles.is_empty() {
+            let empty = if self.pinned_only && self.profile_search.trim().is_empty() { "No pinned profiles" } else { "No matching profiles" };
+            ui.label(RichText::new(empty).color(theme::SUB));
+        }
+        if self.profiles.is_empty() && self.profiles_readable {
+            theme::card_frame().show(ui, |ui| {
+                ui.label(RichText::new("No profiles yet").size(13.0).color(theme::SUB));
+                ui.label(
+                    RichText::new("Paste a config below, drop a .conf file, or register Cloudflare WARP from the WARP tab.")
+                        .size(11.0)
+                        .color(theme::MUTE),
+                );
+            });
+        }
         if let Some(name) = pin_name {
             if !self.settings.pinned_profiles.remove(&name) { self.settings.pinned_profiles.insert(name); }
             self.save_settings();

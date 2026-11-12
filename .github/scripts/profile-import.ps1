@@ -324,6 +324,41 @@ Endpoint = 127.0.0.1:51820
  if (Get-NetAdapter -Name 'waX VPN' -ErrorAction SilentlyContinue) { throw 'Long picker connected unexpectedly' }
  ImportProofCapture $window 'profile-import-long-selected.png'
  'PASS 26-profile quick picker bounded, Connect on-screen, scrolled to final row and saved selection without adapter' | Out-File verify-results.txt -Append -Encoding utf8
+ # Profiles itself draws only the visible fixed-height rows plus a small buffer.
+ (ImportProofFind $window 'Profiles').GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+ Start-Sleep -Milliseconds 300
+ $nodes=$window.FindAll([System.Windows.Automation.TreeScope]::Descendants,[System.Windows.Automation.Condition]::TrueCondition)
+ $officeRows=@($nodes | Where-Object { $_.Current.Name -match '^Office [0-9]{2}$' })
+ if ($officeRows.Count -gt 8) { throw 'Profiles rendered the entire long list instead of visible rows' }
+ $first=ImportProofFind $window 'Chosen profile'
+ if (-not $first) { throw 'Profiles virtual list first row missing' }
+ $r=$first.Current.BoundingRectangle
+ [ImportProofNative]::SetCursorPos([int]($r.X+$r.Width/2),[int]($r.Y+24)) | Out-Null
+ ImportProofCapture $window 'profile-list-first.png'
+ $last=$null
+ for ($i=0;$i -lt 32;$i++) {
+  $last=ImportProofFind $window 'Office 24'
+  if ($last -and -not $last.Current.IsOffscreen) { break }
+  [ImportProofNative]::mouse_event(0x800,0,0,4294967056,[UIntPtr]::Zero)
+  Start-Sleep -Milliseconds 100
+ }
+ [ImportProofNative]::mouse_event(0x800,0,0,4294967056,[UIntPtr]::Zero)
+ Start-Sleep -Milliseconds 250
+ $last=ImportProofFind $window 'Office 24'
+ if (-not $last -or $last.Current.IsOffscreen) { throw 'Profiles could not scroll to last row' }
+ $labelY=$last.Current.BoundingRectangle.Y
+ $nodes=$window.FindAll([System.Windows.Automation.TreeScope]::Descendants,[System.Windows.Automation.Condition]::TrueCondition)
+ $pin=$nodes | Where-Object { $_.Current.Name -eq 'Pin' -and -not $_.Current.IsOffscreen -and [Math]::Abs($_.Current.BoundingRectangle.Y-$labelY) -lt 25 } | Select-Object -First 1
+ if (-not $pin) { throw 'Last profile row Pin action missing' }
+ ImportProofCapture $window 'profile-list-last.png'
+ $pin.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+ Start-Sleep -Milliseconds 300
+ $saved=Get-Content (Join-Path $dir 'settings.json') -Raw | ConvertFrom-Json
+ if ($saved.pinned_profiles -notcontains 'Office 24' -or $saved.pinned_profiles -contains 'Office 23') { throw 'Virtual row action targeted the wrong profile' }
+ if ($saved.last_profile -ne 'Office 24') { throw 'Virtual row Pin changed selected profile' }
+ if ((Get-FileHash $original -Algorithm SHA256).Hash -ne $originalHash) { throw 'Virtual list changed profile config' }
+ if (Get-NetAdapter -Name 'waX VPN' -ErrorAction SilentlyContinue) { throw 'Virtual list connected unexpectedly' }
+ 'PASS Profiles bounded visible rows, scroll to final profile, correct Pin target and unchanged selection/config without adapter' | Out-File verify-results.txt -Append -Encoding utf8
 
 
 } finally {

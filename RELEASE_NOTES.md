@@ -1,11 +1,10 @@
-# waX VPN v1.0.15
+# waX VPN v1.0.16
 
-Profiles has a Pinned only filter that combines with name/endpoint search.
-Unpinning refreshes the filtered list; disabling the filter restores all
-matching profiles. No pinned profiles and no search matches have separate
-empty states. The filter lasts for this app session only and does not change
-the selected profile, profile configuration or the Connect-page picker.
-No tunnel, DNS or firewall behavior changed.
+The Profiles list now draws only visible rows plus a small buffer instead of
+building every row. The list stays bounded at 250px, with the same search,
+pin, select, connect and delete controls. Stable row IDs keep controls tied
+to their profile while scrolling. No measured speedup is claimed.
+No tunnel, DNS, firewall or saved-setting behavior changed.
 
 ## Compatibility and limits
 
@@ -30,30 +29,8 @@ sampling can miss a shorter flash.
 
 ## Release verification
 
-Exact stable workflow: https://github.com/vio137/wax-vpn/actions/runs/43143334939
-Source: `187de95365b113e424e7e024a24cf9b7a826aa56`.
-
-All four stable jobs passed. Actual Windows results passed pinned-only
-filtering with search, refresh after unpin, separate empty state and restored
-rows without selection/config/adapter changes. Pinned and empty-state pixels
-were inspected. Existing local syntax review, editor Clear, native imports,
-keyboard search, bounded 26-profile picker and keyboard-help checks passed.
-Local app tests: 47 passed, one manual networking test ignored. Build and
-PowerShell parser passed.
-
-The first preview failed because the new test selected the search label
-instead of its edit. The test now uses Ctrl+F and verifies the focused edit;
-no product check was removed or relaxed.
-
-Existing GUI demo connection, tunnel-address ping, DNS apply/reset, IPv4 MTU,
-split routes, bounded recovery, retry disable, original-window restore and
-graceful quit passed. Fresh install, upgrade, uninstall, all three native
-process-scope checks and three PE audits passed within the limits above.
-335 console-window samples at about 100ms saw no new visible native console;
-shorter flashes can be missed.
-
-The published installer was downloaded and matched its checksum file:
-
-- File: `waX-VPN-Setup-v1.0.15-x64.exe`
-- Size: 11,703,686 bytes
-- SHA256: `4c47cfa830c81f1f563244312577be1ab1ee0874920660150848a601962ae373`
+Pending Windows preview and stable gates. Local app tests: 47 passed, one
+manual networking test ignored. Build and PowerShell parser passed.
+Exact-layout local screenshots show the first and final rows of a 50-profile
+list. Windows last-row action targeting and existing smoke checks remain
+pending; this is not a completed stable release.
