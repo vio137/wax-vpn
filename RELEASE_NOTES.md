@@ -47,4 +47,16 @@ lists/picker, GUI demo connection, DNS/IPv4 MTU/split routes, bounded recovery,
 retry disable, original-window restore and quit passed. Installer lifecycle,
 native process-scope checks and PE audits passed within the limits above.
 
-Stable publication and downloaded-installer checksum verification are pending.
+Stable: https://github.com/vio137/wax-vpn/actions/runs/43152192297
+Source: `bef900e0e55dc5bf8fe0106016679829d3a855b6`.
+
+Stable execution, installer and publish gates passed. Actual stable Windows
+proof passed the new copy checks and prior checks above. Stable copy-notice and
+installed-GUI pixels were inspected. Recovery observed a handshake after 3s;
+retry disabling kept the adapter absent in 48 samples over 12s. Original-window
+restore and quit passed. No console windows were observed in 323 samples at
+about 100ms; shorter flashes could be missed.
+
+Release: https://github.com/vio137/wax-vpn/releases/tag/v1.0.18
+The downloaded 11,705,961-byte installer matches the published SHA256:
+`febbff24c556e736f3563ee18e7364869b071c5c6cba6d3a5a654df3d2a4e24a`.

@@ -30,7 +30,7 @@ opt-in Cloudflare WARP client, reimplemented in Rust. Registration only happens
 when you explicitly accept Cloudflare's Terms of Service in the app or pass
 `--accept-tos` to the CLI. waX VPN is not affiliated with Cloudflare.
 
-The released v1.0.17 has no update checker or telemetry uploader. Tunnel traffic
+The released v1.0.18 has no update checker or telemetry uploader. Tunnel traffic
 and DNS lookups can happen in the background while connected; WARP API calls
 happen only when you request WARP actions. Local diagnostics are not uploaded.
 Optional public-IP, HTTPS latency and manual quick-speed measurements are off
@@ -74,6 +74,11 @@ Profiles shows a live match count while search or Pinned only is active.
 Escape clears only the focused Profiles search and keeps typing focus and
 pins; Clear also returns focus to search. Windows proof typed Space after
 resetting an empty search without creating an adapter.
+
+Duplicate selected creates a local, collision-safe copy of the loaded config
+with the same keys. It keeps the original, selection and app settings unchanged
+and does not connect. Pins, history and split exclusions are not copied. A
+copy is not a new server, account or credential.
 
 Profiles has a session-only Pinned only filter that combines with search.
 Unpinning refreshes the list, and disabling it restores matching rows without
