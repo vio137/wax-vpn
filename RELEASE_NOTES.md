@@ -43,4 +43,16 @@ pixels were inspected. Prior import/duplicate/review/Clear, search/counts/pins,
 virtualized lists/picker and connection/installer checks also passed within
 the compatibility limits above.
 
-Stable publication and downloaded-installer checksum verification are pending.
+Stable: https://github.com/vio137/wax-vpn/actions/runs/43154083692
+Source: `470cad859f1e4a7164e2969d6dc6015813684dff`.
+
+All four stable jobs passed. Actual stable Windows proof passed the new repeated
+selected-row reveal and unchanged files/settings/selection/no-adapter checks.
+Stable selected-row and installed-GUI pixels were inspected. Prior demo tunnel,
+DNS/IPv4 MTU/split, bounded recovery, retry disable (48 samples over 12s), manual
+reconnect, original HWND/PID restore and quit passed. No console windows were
+observed in 324 samples at about 100ms; shorter flashes could be missed.
+
+Release: https://github.com/vio137/wax-vpn/releases/tag/v1.0.19
+The downloaded 11,707,077-byte installer matches the published SHA256:
+`55440a973f659046fbcedcd878ae6470c65112cf2bdf5440a51bdba73e2d9c31`.
