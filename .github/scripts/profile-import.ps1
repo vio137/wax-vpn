@@ -131,20 +131,19 @@ Endpoint = 127.0.0.1:51820
  $about=ImportProofFind $window 'About'
  $about.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
  Start-Sleep -Milliseconds 350
- $shortcuts=ImportProofFind $window 'Keyboard shortcuts'
- if (-not $shortcuts) { throw 'Keyboard reference missing' }
- # egui exposes expanded state but its response listens to Click, not an
- # Expand action. Exercise the visible disclosure with a normal mouse click.
- $r=$shortcuts.Current.BoundingRectangle
- [ImportProofNative]::SetForegroundWindow([IntPtr]$window.Current.NativeWindowHandle) | Out-Null
- [ImportProofNative]::SetCursorPos([int]($r.X+$r.Width/2),[int]($r.Y+$r.Height/2)) | Out-Null
- [ImportProofNative]::mouse_event(2,0,0,0,[UIntPtr]::Zero)
- Start-Sleep -Milliseconds 100
- [ImportProofNative]::mouse_event(4,0,0,0,[UIntPtr]::Zero)
+ $shortcuts=ImportProofFind $window 'Show keyboard shortcuts'
+ if (-not $shortcuts) { throw 'Keyboard reference Show action missing' }
+ $shortcuts.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
  for ($i=0;$i -lt 20;$i++) { Start-Sleep -Milliseconds 150; if (ImportProofFind $window 'Find a profile') { break } }
  ImportProofCapture $window 'profile-import-keyboard-reference.png'
- if (-not (ImportProofFind $window 'Find a profile')) { throw 'Keyboard reference did not expand' }
- ImportProofCapture $window 'profile-import-keyboard-reference.png'
+ if (-not (ImportProofFind $window 'Find a profile')) { throw 'Keyboard reference did not open accessibly' }
+ $hide=ImportProofFind $window 'Hide keyboard shortcuts'
+ if (-not $hide) { throw 'Keyboard reference Hide action missing' }
+ $hide.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+ Start-Sleep -Milliseconds 250
+ if (ImportProofFind $window 'Find a profile') { throw 'Keyboard reference did not hide accessibly' }
+ ImportProofCapture $window 'profile-import-keyboard-hidden.png'
+ 'PASS keyboard reference accessible Show and Hide actions' | Out-File verify-results.txt -Append -Encoding utf8
  'PASS quick picker accessible open and select, persisted selection without connection, About keyboard reference' | Out-File verify-results.txt -Append -Encoding utf8
  # A long list must stay bounded and let a late profile be chosen locally.
  foreach ($n in 1..24) { Copy-Item $fixture (Join-Path (Join-Path $dir 'profiles') ('Office {0:D2}.conf' -f $n)) }

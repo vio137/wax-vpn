@@ -1,9 +1,10 @@
-# waX VPN v1.0.9
+# waX VPN v1.0.10
 
-Long quick-picker lists now scroll inside a bounded area instead of growing
-the whole Connect page. Only the visible rows and a small buffer are drawn.
-Profile order, full-text hover, selection and saved choice stay the same.
-No measured speed improvement is claimed. No networking behavior changed.
+Keyboard help now uses explicit Show keyboard shortcuts and Hide keyboard
+shortcuts buttons. Both have normal accessible invoke actions, replacing the
+disclosure whose expanded state did not respond to UIA Expand. Help starts
+hidden and keeps its open state while moving between pages during a session.
+No saved setting, tunnel, DNS or firewall behavior changed.
 
 ## Compatibility and limits
 
@@ -28,24 +29,11 @@ sampling can miss a shorter flash.
 
 ## Release verification
 
-Exact stable workflow: https://github.com/vio137/wax-vpn/actions/runs/43122392479
-Source: `eff79ce5ed407039f03c35245169dc2bc819139e`.
+Preview build, runtime and fresh-installer checks passed:
+https://github.com/vio137/wax-vpn/actions/runs/43124621272
+Source: `9b364c1757768eee7a43534b6a122683044db1c1`.
 
-All four stable jobs passed. Actual Windows evidence passed the 26-profile
-bounded picker, Connect remaining on-screen, scrolling to Office 24 and saved
-selection without an adapter. Stable scrolled-list pixels show Office 24 fully
-inside the list; selected-profile and installed-app pixels were inspected too.
-
-Existing native-file import, cancellation, duplicate/source preservation,
-quick selection, keyboard help, GUI demo connection, tunnel-address ping, DNS
-apply/reset, IPv4 MTU, split routes, bounded recovery, retry disable, original
-window restore and graceful quit checks passed. Fresh install, upgrade,
-uninstall, all three native process-scope checks and all three PE dependency
-audits passed, subject to the limits above. Console sampling can miss shorter
-flashes. UIA ExpandCollapse support for keyboard help is not verified.
-
-The published installer was downloaded and matched its checksum file:
-
-- File: `waX-VPN-Setup-v1.0.9-x64.exe`
-- Size: 11,695,271 bytes
-- SHA256: `aec387ec6e610c14e0163d8add8fe748093c60a54b4c08dd411959e9ffce1017`
+Actual Windows results passed accessible Show and Hide, content appearing and
+disappearing, plus all existing native import, picker and runtime checks.
+Open/hidden pixels were inspected. Exact stable verification and installer
+checksum are pending.
