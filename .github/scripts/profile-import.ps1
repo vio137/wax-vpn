@@ -164,12 +164,28 @@ Endpoint = 127.0.0.1:51820
  # Type into the actual focused edit. Text-field spaces must never connect.
  $search=ImportProofFind $window 'Find quick profile'
  if (-not $search) { throw 'Quick picker search edit missing' }
- $search.SetFocus()
+ if (-not $search.Current.HasKeyboardFocus) { throw 'Quick picker did not focus search on opening' }
  [System.Windows.Forms.SendKeys]::SendWait(' OFFICE 24 ')
  Start-Sleep -Milliseconds 350
  if (-not (ImportProofFind $window 'Office 24')) { throw 'Quick picker name filter missed final profile' }
  if (ImportProofFind $window 'Office 01') { throw 'Quick picker name filter retained unrelated row' }
  ImportProofCapture $window 'profile-import-picker-search.png'
+ [System.Windows.Forms.SendKeys]::SendWait('^f')
+ Start-Sleep -Milliseconds 250
+ $search=ImportProofFind $window 'Find quick profile'
+ if (-not $search -or -not $search.Current.HasKeyboardFocus) { throw 'Ctrl+F left the open quick picker' }
+ [System.Windows.Forms.SendKeys]::SendWait('{ESC}')
+ Start-Sleep -Milliseconds 250
+ if (ImportProofFind $window 'Find quick profile') { throw 'Escape did not dismiss the focused quick picker' }
+ $switch=ImportProofFind $window 'Switch profile'
+ if (-not $switch.Current.HasKeyboardFocus) { throw 'Escape did not return focus to Switch profile' }
+ ImportProofCapture $window 'profile-import-picker-escape.png'
+ [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
+ Start-Sleep -Milliseconds 250
+ $search=ImportProofFind $window 'Find quick profile'
+ if (-not $search -or -not $search.Current.HasKeyboardFocus) { throw 'Enter did not reopen and focus quick search' }
+ if ($search.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value -ne '') { throw 'Reopening quick search did not reset query' }
+ 'PASS quick picker autofocus, contextual Ctrl+F, Escape while typing, returned Switch focus and Enter reopen' | Out-File verify-results.txt -Append -Encoding utf8
  [System.Windows.Forms.SendKeys]::SendWait('^a')
  [System.Windows.Forms.SendKeys]::SendWait('no-match-xyz')
  Start-Sleep -Milliseconds 300
