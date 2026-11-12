@@ -14,6 +14,14 @@ public static class ImportProofNative {
  [DllImport("user32.dll")] public static extern void mouse_event(uint flags,uint x,uint y,uint data,UIntPtr extra);
 }
 '@
+# Bounded retry only for a just-written local fixture's sharing violation.
+# Content/hash assertions remain unchanged after the file becomes readable.
+function ImportProofHash($path) {
+ for ($retry=0; $retry -lt 20; $retry++) {
+  try { return (Get-FileHash $path -Algorithm SHA256 -ErrorAction Stop).Hash }
+  catch [System.IO.IOException] { if ($retry -eq 19) { throw }; Start-Sleep -Milliseconds 100 }
+ }
+}
 function ImportProofFind($root,$name) {
  $root.FindFirst([System.Windows.Automation.TreeScope]::Descendants,(New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty,$name)))
 }
@@ -166,7 +174,7 @@ Endpoint = 127.0.0.1:51820
   [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
   for ($i=0;$i -lt 40;$i++) { Start-Sleep -Milliseconds 150; $files=@(Get-ChildItem (Join-Path $dir 'profiles') -Filter '*.conf' -ErrorAction SilentlyContinue);if ($files.Count -eq $attempt) { break } }
   if ($files.Count -ne $attempt) { throw "Native picker import count mismatch on attempt $attempt" }
-  if ($attempt -eq 1) { $original=$files[0].FullName;$originalHash=(Get-FileHash $original -Algorithm SHA256).Hash }
+  if ($attempt -eq 1) { $original=$files[0].FullName;$originalHash=ImportProofHash $original }
   if ((Get-FileHash $original -Algorithm SHA256).Hash -ne $originalHash) { throw 'Duplicate import overwrote the original profile' }
  }
  if ((Get-FileHash $fixture -Algorithm SHA256).Hash -ne $fixtureHash) { throw 'Import modified the selected source file' }
@@ -436,7 +444,17 @@ Endpoint = 127.0.0.1:51820
  $unpin=ImportProofFind $window 'Unpin'
  if (-not $unpin) { throw 'Selected pinned row was not revealed' }
  $unpin.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
- Start-Sleep -Milliseconds 250
+ # Wait for the prior mutation's actual persisted state, not a fixed sleep.
+ $unpinSaved=$false
+ for ($wait=0; $wait -lt 30; $wait++) {
+  Start-Sleep -Milliseconds 100
+  try {
+   $persisted=Get-Content (Join-Path $dir 'settings.json') -Raw | ConvertFrom-Json
+   if ($persisted.pinned_profiles -notcontains 'Office 24' -and $persisted.last_profile -eq 'Office 24') { $unpinSaved=$true; break }
+  } catch [System.IO.IOException] { }
+ }
+ if (-not $unpinSaved) { throw 'Preceding Unpin did not persist expected state before Show selected fixture' }
+ $settingsSnapshot=Get-Content (Join-Path $dir 'settings.json') -Raw
  $settingsBefore=(Get-FileHash (Join-Path $dir 'settings.json') -Algorithm SHA256).Hash
  $filesBefore=@(Get-ChildItem (Join-Path $dir 'profiles') -File | Sort-Object Name | ForEach-Object { $_.Name+':'+(Get-FileHash $_.FullName -Algorithm SHA256).Hash }) -join '|'
  (ImportProofFind $window 'Pinned only').GetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern).Toggle()
@@ -462,7 +480,12 @@ Endpoint = 127.0.0.1:51820
   $label=ImportProofFind $window 'Office 24'
   if (-not $selected -or $selected.Current.IsOffscreen -or -not $label -or $label.Current.IsOffscreen) { throw 'Show selected did not reveal selected virtual row' }
   if ([Math]::Abs($selected.Current.BoundingRectangle.Y-$label.Current.BoundingRectangle.Y) -gt 25) { throw 'Show selected revealed wrong row' }
-  if ((Get-FileHash (Join-Path $dir 'settings.json') -Algorithm SHA256).Hash -ne $settingsBefore) { throw 'Show selected changed selection/settings/pins/history' }
+  if ((Get-FileHash (Join-Path $dir 'settings.json') -Algorithm SHA256).Hash -ne $settingsBefore) {
+   $afterSnapshot=Get-Content (Join-Path $dir 'settings.json') -Raw
+   Write-Host ("Show selected before: "+$settingsSnapshot)
+   Write-Host ("Show selected after: "+$afterSnapshot)
+   throw 'Show selected changed selection/settings/pins/history'
+  }
   $filesAfter=@(Get-ChildItem (Join-Path $dir 'profiles') -File | Sort-Object Name | ForEach-Object { $_.Name+':'+(Get-FileHash $_.FullName -Algorithm SHA256).Hash }) -join '|'
   if ($filesAfter -ne $filesBefore) { throw 'Show selected changed profile files' }
   if (Get-NetAdapter -Name 'waX VPN' -ErrorAction SilentlyContinue) { throw 'Show selected connected unexpectedly' }

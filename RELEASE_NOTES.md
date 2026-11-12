@@ -53,3 +53,20 @@ permissions. This candidate does not change the workflow.
 Preserved the existing graphite card, route labels, explicit limits and 128px
 scroll bound. No visual decoration, spacing or motion changes. Design reference:
 Unslop by Damir Sokolovsky (@heydamir), CC BY 4.0, used as a review rubric.
+
+## First stable-gate attempt
+
+Run 43191637387 attempt 1 stopped publication when the local import fixture
+could not hash the just-imported Chosen profile.conf because another process
+held the file. The log does not identify that process. Route-cache checks had
+not run in this attempt. Demo tunnel ping, GUI/recovery/restore/quit, startup and
+fresh installer checks passed. Retried the failed gate once on identical source
+without weakening assertions. Attempt 2 passed import but stopped at the
+Show selected unchanged-settings hash assertion, after a preceding Unpin.
+The log lacks snapshots to distinguish delayed preceding persistence from a new
+change. Route-cache checks had not run. The revised fixture now waits for the
+expected persisted Unpin state before taking its baseline and prints before/
+after settings if the unchanged-state assertion fails. A bounded sharing-
+violation retry wraps the initial imported-file hash read, preserving the content
+assertions. No app or networking code changed for these harness corrections.
+Revised Windows proof pending.
