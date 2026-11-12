@@ -35,8 +35,14 @@ Local app tests: 55 passed, one manual network test ignored. New coverage checks
 ordered peer positions, IPv4/IPv6, empty routes, key/endpoint exclusion and the
 64-entry bound with an explicit remainder count. Build and PowerShell parser
 passed. Actual local screenshot inspected for readable limits and one route.
-Windows expand/collapse and unchanged-state proof, publication and checksum
-verification pending.
+Preview https://github.com/vio137/wax-vpn/actions/runs/43185438033
+source `c47e21be3676d7413c0988969a9b5fa5b734eb2a`: all three execution jobs
+passed. Actual Windows proof checked explicit route expand/collapse, the loaded
+CIDR and peer position, configured-only limits and unchanged local state without
+an adapter. Prior search/clipboard/cache reload/profile/demo/recovery/installer
+checks passed. Configured-route and installed-GUI pixels inspected. The 64-entry
+bound and IPv6 routes are unit-tested, not Windows UI-fixture checked.
+Stable publication and checksum verification pending.
 
 Optional layout-state captures remain unverified because their separate harness
 host lacks System.Drawing; the CI-only fix remains deferred for workflow
