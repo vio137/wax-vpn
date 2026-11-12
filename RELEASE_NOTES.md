@@ -45,4 +45,17 @@ expected loaded values and caveat, absent key values, unchanged profile/settings
 files and no adapter. Summary and installed-GUI pixels were inspected. Prior
 profile and connection/installer checks passed within the limits above.
 
-Stable publication and downloaded-installer checksum verification are pending.
+Stable: https://github.com/vio137/wax-vpn/actions/runs/43162857609
+Source: `b3c9b4e4b1fb8ba1fe59426f9eb6878061d109cd`.
+
+All four stable jobs passed. Actual stable Windows proof passed summary Show/Hide,
+expected values/caveat, no key values, unchanged files/settings/selection and no
+adapter. Stable summary and installed-GUI pixels were inspected. Prior demo
+tunnel, DNS/IPv4 MTU/split, 4s recovery, retry disable (48 samples over 12s), manual
+reconnect, original HWND/PID restore and quit passed. No console windows were
+observed in 335 samples at about 100ms; shorter flashes could be missed.
+Installer lifecycle, native checks and PE audits passed.
+
+Release: https://github.com/vio137/wax-vpn/releases/tag/v1.0.22
+The downloaded 11,711,556-byte installer matches the published SHA256:
+`8d8123ad8111cc0b371b55f26966a1207fba56d17c4b5c763fab2a0eaec7d5f3`.

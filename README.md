@@ -30,7 +30,7 @@ opt-in Cloudflare WARP client, reimplemented in Rust. Registration only happens
 when you explicitly accept Cloudflare's Terms of Service in the app or pass
 `--accept-tos` to the CLI. waX VPN is not affiliated with Cloudflare.
 
-The released v1.0.21 has no update checker or telemetry uploader. Tunnel traffic
+The released v1.0.22 has no update checker or telemetry uploader. Tunnel traffic
 and DNS lookups can happen in the background while connected; WARP API calls
 happen only when you request WARP actions. Local diagnostics are not uploaded.
 Optional public-IP, HTTPS latency and manual quick-speed measurements are off
@@ -74,6 +74,12 @@ Profiles shows a live match count while search or Pinned only is active.
 Escape clears only the focused Profiles search and keeps typing focus and
 pins; Clear also returns focus to search. Windows proof typed Space after
 resetting an empty search without creating an adapter.
+
+Show config summary in Profiles displays the loaded profile's name, addresses,
+DNS, MTU and peer/route-entry counts. Hide closes the panel. Keys are not shown;
+these are configured values, not live connection, routing or leak checks.
+Windows proof checked exact values, key absence and unchanged files/settings
+without creating an adapter.
 
 Clear in the Connect-page quick picker returns typing focus to its search.
 Windows proof cleared and immediately typed name/endpoint words with spaces,
