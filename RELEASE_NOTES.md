@@ -35,4 +35,13 @@ PowerShell parser passed. Tests cover Unicode, repeated words, whitespace,
 name/endpoint and multiple peer terms, no cross-profile matches, pins and
 cached repeat queries. Local pixels showed one matching Office 23 row from
 name plus endpoint words in a 28-profile list.
-Windows execution proof is pending.
+Preview: https://github.com/vio137/wax-vpn/actions/runs/43155412781
+Source: `d06638d43660d2142c5ee7f2a92eb5e122303bc2`.
+
+All three execution jobs passed. Actual Windows proof passed multi-word name
+plus endpoint queries in Profiles and quick picker, every-word requirement,
+whitespace reset and unchanged files/settings/selection without an adapter.
+Word-search and installed-GUI pixels were inspected. Prior local profile and
+connection/installer checks also passed within the compatibility limits above.
+
+Stable publication and downloaded-installer checksum verification are pending.
