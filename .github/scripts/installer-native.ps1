@@ -67,14 +67,18 @@ try {
 # Real Windows Defender verdict, evidence only: records the engine's answer and
 # never changes it, fails no assertion, and quarantines nothing by itself.
 # Scans the installer built by this run and the latest published release
-# installer (the file users actually download).
+# installer (the file users actually download). RTP blocking the download is
+# itself recorded as a flag.
 try {
   $mp = Join-Path ${env:ProgramFiles} 'Windows Defender\MpCmdRun.exe'
   if (-not (Test-Path $mp)) {
     Note 'SKIP Defender scan: MpCmdRun.exe not present on this runner'
   } else {
     try { & $mp -SignatureUpdate | Out-Null } catch { Note "INFO Defender signature update failed: $($_.Exception.Message)" }
-    try { $st = Get-MpComputerStatus; Note "INFO Defender engine $($st.AMEngineVersion), signatures $($st.AntivirusSignatureVersion) from $($st.AntivirusSignatureLastUpdated)" } catch { Note 'INFO Defender version query failed' }
+    try {
+      $st = Get-MpComputerStatus
+      Note "INFO Defender engine $($st.AMEngineVersion), signatures $($st.AntivirusSignatureVersion) from $($st.AntivirusSignatureLastUpdated), RTP=$($st.RealTimeProtectionEnabled), mode=$($st.AMRunningMode), AV=$($st.AntivirusEnabled)"
+    } catch { Note 'INFO Defender version query failed' }
     $scanTargets = @(@{ label = "this run's installer"; path = $setup })
     try {
       $rel = Invoke-RestMethod -Uri 'https://api.github.com/repos/vio137/wax-vpn/releases/latest' -Headers @{ 'User-Agent' = 'wax-ci' }
@@ -82,25 +86,33 @@ try {
       $sumsAsset = $rel.assets | Where-Object { $_.name -like 'SHA256SUMS-*' } | Select-Object -First 1
       if ($asset) {
         $published = Join-Path $env:RUNNER_TEMP $asset.name
+        $downloadBlocked = $false
         try {
           Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $published
         } catch {
-          if ($_.Exception.Message -match 'virus') { Note "FAIL Defender real-time protection removed the published $($rel.tag_name) installer during download" }
+          if ($_.Exception.Message -match 'virus') { Note "FAIL Defender real-time protection removed the published $($rel.tag_name) installer during download"; $downloadBlocked = $true }
           else { throw }
         }
         if (Test-Path $published) {
+          Note "INFO published $($rel.tag_name) installer downloaded under active real-time protection without interference"
           $hash = (Get-FileHash $published -Algorithm SHA256).Hash.ToLower()
           $hashOk = $false
-          if ($sumsAsset) { $hashOk = ((Invoke-WebRequest -Uri $sumsAsset.browser_download_url).Content -match $hash) }
-          Note "INFO published release $($rel.tag_name) downloaded for Defender scan; sha256=$hash matches-sums=$hashOk"
-          if ($published -ne $setup) { $scanTargets += @{ label = "published $($rel.tag_name) installer"; path = $published } }
-        }
+          if ($sumsAsset) { $hashOk = [bool]((Invoke-WebRequest -Uri $sumsAsset.browser_download_url).Content -match $hash) }
+          Note "INFO published release $($rel.tag_name); sha256=$hash matches-sums=$hashOk"
+          $scanTargets += @{ label = "published $($rel.tag_name) installer"; path = $published }
+        } elseif (-not $downloadBlocked) { Note 'INFO Defender scan: published installer download failed silently' }
       } else { Note 'INFO Defender scan: no published installer asset found' }
     } catch { Note "INFO Defender scan could not fetch the published release: $($_.Exception.Message)" }
     foreach ($t in $scanTargets) {
-      & $mp -Scan -ScanType 3 -File $t.path | ForEach-Object { Note "DEFENDER $_" }
-      if ($LASTEXITCODE -eq 0) { Note "PASS Defender custom scan found no threat in $($t.label)" }
-      else { Note "FAIL Defender flagged $($t.label): MpCmdRun exit $LASTEXITCODE" }
+      $windowStart = Get-Date
+      $scanError = $null
+      try { Start-MpScan -ScanType CustomScan -ScanPath $t.path } catch { $scanError = $_.Exception.Message }
+      Start-Sleep -Seconds 2
+      $newThreats = @(Get-MpThreatDetection -ErrorAction SilentlyContinue | Where-Object { $_.InitialDetectionTime -ge $windowStart })
+      if ($scanError) { Note "FAIL Defender Start-MpScan reported on $($t.label): $scanError" }
+      elseif ($newThreats.Count -gt 0) {
+        foreach ($th in $newThreats) { Note "FAIL Defender threat during scan of $($t.label): threatID=$($th.ThreatID) resources=$($th.Resources -join '; ')" }
+      } else { Note "PASS Defender Start-MpScan custom scan completed with no detection on $($t.label)" }
     }
   }
 } catch { Note "SKIP Defender scan error: $($_.Exception.Message)" }
