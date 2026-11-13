@@ -15,6 +15,20 @@ InstallDir "$PROGRAMFILES64\waX VPN"
 InstallDirRegKey HKLM "Software\waX VPN" "InstallDir"
 RequestExecutionLevel admin
 
+; File/product metadata on the installer itself. Unsigned executables with no
+; VERSIONINFO are a common antivirus ML false-positive trigger, and the
+; v1.0.29 installer was flagged by Windows Defender under exactly that profile.
+!searchparse /noerrors "${WAX_VERSION}" "" WAX_VMAJ "." WAX_VMIN "." WAX_VPATCH
+!searchreplace WAX_VPATCH_CLEAN "${WAX_VPATCH}" "-preview" ""
+VIProductVersion "${WAX_VMAJ}.${WAX_VMIN}.${WAX_VPATCH_CLEAN}.0"
+VIAddVersionKey "ProductName" "waX VPN"
+VIAddVersionKey "CompanyName" "vio137"
+VIAddVersionKey "FileDescription" "waX VPN Setup"
+VIAddVersionKey "FileVersion" "${WAX_VERSION}"
+VIAddVersionKey "ProductVersion" "${WAX_VERSION}"
+VIAddVersionKey "LegalCopyright" "MIT License"
+VIAddVersionKey "OriginalFilename" "waX-VPN-Setup-${WAX_VERSION}-x64.exe"
+
 !define MUI_ABORTWARNING
 !define MUI_ICON "payload\wax.ico"
 !define MUI_UNICON "payload\wax.ico"
