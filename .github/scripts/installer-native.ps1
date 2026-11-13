@@ -63,3 +63,44 @@ try {
   if (Test-Path (Join-Path $dir 'uninstall.exe')) { $p=Start-Process (Join-Path $dir 'uninstall.exe') -ArgumentList '/S' -PassThru; $null=$p.WaitForExit(30000) }
   Remove-Item $fixture -Recurse -Force -ErrorAction SilentlyContinue
 }
+
+# Real Windows Defender verdict, evidence only: records the engine's answer and
+# never changes it, fails no assertion, and quarantines nothing by itself.
+# Scans the installer built by this run and the latest published release
+# installer (the file users actually download).
+try {
+  $mp = Join-Path ${env:ProgramFiles} 'Windows Defender\MpCmdRun.exe'
+  if (-not (Test-Path $mp)) {
+    Note 'SKIP Defender scan: MpCmdRun.exe not present on this runner'
+  } else {
+    try { & $mp -SignatureUpdate | Out-Null } catch { Note "INFO Defender signature update failed: $($_.Exception.Message)" }
+    try { $st = Get-MpComputerStatus; Note "INFO Defender engine $($st.AMEngineVersion), signatures $($st.AntivirusSignatureVersion) from $($st.AntivirusSignatureLastUpdated)" } catch { Note 'INFO Defender version query failed' }
+    $scanTargets = @(@{ label = "this run's installer"; path = $setup })
+    try {
+      $rel = Invoke-RestMethod -Uri 'https://api.github.com/repos/vio137/wax-vpn/releases/latest' -Headers @{ 'User-Agent' = 'wax-ci' }
+      $asset = $rel.assets | Where-Object { $_.name -like 'waX-VPN-Setup-*-x64.exe' } | Select-Object -First 1
+      $sumsAsset = $rel.assets | Where-Object { $_.name -like 'SHA256SUMS-*' } | Select-Object -First 1
+      if ($asset) {
+        $published = Join-Path $env:RUNNER_TEMP $asset.name
+        try {
+          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $published
+        } catch {
+          if ($_.Exception.Message -match 'virus') { Note "FAIL Defender real-time protection removed the published $($rel.tag_name) installer during download" }
+          else { throw }
+        }
+        if (Test-Path $published) {
+          $hash = (Get-FileHash $published -Algorithm SHA256).Hash.ToLower()
+          $hashOk = $false
+          if ($sumsAsset) { $hashOk = ((Invoke-WebRequest -Uri $sumsAsset.browser_download_url).Content -match $hash) }
+          Note "INFO published release $($rel.tag_name) downloaded for Defender scan; sha256=$hash matches-sums=$hashOk"
+          if ($published -ne $setup) { $scanTargets += @{ label = "published $($rel.tag_name) installer"; path = $published } }
+        }
+      } else { Note 'INFO Defender scan: no published installer asset found' }
+    } catch { Note "INFO Defender scan could not fetch the published release: $($_.Exception.Message)" }
+    foreach ($t in $scanTargets) {
+      & $mp -Scan -ScanType 3 -File $t.path | ForEach-Object { Note "DEFENDER $_" }
+      if ($LASTEXITCODE -eq 0) { Note "PASS Defender custom scan found no threat in $($t.label)" }
+      else { Note "FAIL Defender flagged $($t.label): MpCmdRun exit $LASTEXITCODE" }
+    }
+  }
+} catch { Note "SKIP Defender scan error: $($_.Exception.Message)" }
