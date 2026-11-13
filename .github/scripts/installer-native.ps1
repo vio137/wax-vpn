@@ -80,31 +80,29 @@ try {
       Note "INFO Defender engine $($st.AMEngineVersion), signatures $($st.AntivirusSignatureVersion) from $($st.AntivirusSignatureLastUpdated), RTP=$($st.RealTimeProtectionEnabled), mode=$($st.AMRunningMode), AV=$($st.AntivirusEnabled)"
     } catch { Note 'INFO Defender version query failed' }
     $scanTargets = @(@{ label = "this run's installer"; path = $setup })
-    try {
-      $rels = @(Invoke-RestMethod -Uri 'https://api.github.com/repos/vio137/wax-vpn/releases?per_page=10' -Headers @{ 'User-Agent' = 'wax-ci' } | Where-Object { -not $_.prerelease -and -not $_.draft } | Select-Object -First 2)
-      foreach ($rel in $rels) {
-        $asset = $rel.assets | Where-Object { $_.name -like 'waX-VPN-Setup-*-x64.exe' } | Select-Object -First 1
-        $sumsAsset = $rel.assets | Where-Object { $_.name -like 'SHA256SUMS-*' } | Select-Object -First 1
-        if (-not $asset) { Note "INFO Defender scan: no installer asset on $($rel.tag_name)"; continue }
-        $published = Join-Path $env:RUNNER_TEMP $asset.name
-        $downloadBlocked = $false
-        try {
-          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $published
-        } catch {
-          if ($_.Exception.Message -match 'virus') { Note "FAIL Defender real-time protection removed the published $($rel.tag_name) installer during download"; $downloadBlocked = $true }
-          else { throw }
-        }
-        if (Test-Path $published) {
-          if ($st -and $st.RealTimeProtectionEnabled) { Note "INFO published $($rel.tag_name) installer downloaded under active real-time protection without interference" }
-          else { Note "INFO published $($rel.tag_name) installer downloaded; NOTE real-time protection is OFF on this runner, so the download proves nothing" }
-          $hash = (Get-FileHash $published -Algorithm SHA256).Hash.ToLower()
-          $hashOk = $false
-          if ($sumsAsset) { $hashOk = [bool]((Invoke-WebRequest -Uri $sumsAsset.browser_download_url).Content -match $hash) }
-          Note "INFO published release $($rel.tag_name); sha256=$hash matches-sums=$hashOk"
-          $scanTargets += @{ label = "published $($rel.tag_name) installer"; path = $published }
-        } elseif (-not $downloadBlocked) { Note "INFO Defender scan: $($rel.tag_name) installer download failed silently" }
+    $publishedReleases = @(
+      @{ tag = 'v1.0.30'; file = 'waX-VPN-Setup-v1.0.30-x64.exe'; sha = '16d14753f225d27b7659add9a00614679e1ccc4e6fcac84e6d723a3ab92a1ed3' },
+      @{ tag = 'v1.0.29'; file = 'waX-VPN-Setup-v1.0.29-x64.exe'; sha = 'cf198d7dddffe626ff91ad7bc58a77d8494e857c0cd13fa201121d74fcaf0688' }
+    )
+    Note "INFO Defender scan: fetching $($publishedReleases.Count) published release installers for A/B scan"
+    foreach ($rel in $publishedReleases) {
+      $url = "https://github.com/vio137/wax-vpn/releases/download/$($rel.tag)/$($rel.file)"
+      $published = Join-Path $env:RUNNER_TEMP $rel.file
+      $downloadBlocked = $false
+      try {
+        Invoke-WebRequest -Uri $url -OutFile $published
+      } catch {
+        if ($_.Exception.Message -match 'virus') { Note "FAIL Defender real-time protection removed the published $($rel.tag) installer during download"; $downloadBlocked = $true }
+        else { Note "INFO Defender scan: $($rel.tag) installer download failed: $($_.Exception.Message)" }
       }
-    } catch { Note "INFO Defender scan could not fetch published releases: $($_.Exception.Message)" }
+      if (Test-Path $published) {
+        if ($st -and $st.RealTimeProtectionEnabled) { Note "INFO published $($rel.tag) installer downloaded under active real-time protection without interference" }
+        else { Note "INFO published $($rel.tag) installer downloaded; NOTE real-time protection is OFF on this runner, so the download proves nothing" }
+        $hash = (Get-FileHash $published -Algorithm SHA256).Hash.ToLower()
+        Note "INFO published release $($rel.tag); sha256=$hash matches-release=$($hash -eq $rel.sha)"
+        $scanTargets += @{ label = "published $($rel.tag) installer"; path = $published }
+      } elseif (-not $downloadBlocked) { Note "INFO Defender scan: $($rel.tag) installer download failed silently" }
+    }
     foreach ($t in $scanTargets) {
       $windowStart = Get-Date
       $scanError = $null
