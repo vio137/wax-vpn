@@ -47,7 +47,11 @@ enum Commands {
         no_wait: bool,
     },
     /// Disconnect the running tunnel
-    Disconnect,
+    Disconnect {
+        /// Never fail: note cleanup problems and exit successfully. Installer use only.
+        #[arg(long, hide = true)]
+        best_effort: bool,
+    },
     /// Tunnel status and counters
     Status,
     /// Cloudflare WARP commands (opt-in)
@@ -102,12 +106,44 @@ fn fmt_bytes(n: u64) -> String {
     format!("{v:.1} {}", UNITS[i])
 }
 
+/// Hard time limits for cleanup steps that call Windows driver and service
+/// APIs with no timeout of their own. A stuck call must fail, never freeze
+/// the caller: the installer waits on these commands.
+#[cfg(windows)]
+const INSTALLER_STOP_DEADLINE_SECS: u64 = 30;
+const DISCONNECT_DEADLINE_SECS: u64 = 45;
+
+/// Run `work` on a worker thread and fail if it does not finish in time.
+/// On timeout the blocked worker is abandoned; process exit reclaims it.
+fn run_with_deadline<R, F>(seconds: u64, label: &str, work: F) -> Result<R, String>
+where
+    R: Send + 'static,
+    F: FnOnce() -> Result<R, String> + Send + 'static,
+{
+    use std::sync::mpsc;
+    let (sender, receiver) = mpsc::channel();
+    std::thread::spawn(move || {
+        let _ = sender.send(work());
+    });
+    match receiver.recv_timeout(std::time::Duration::from_secs(seconds)) {
+        Ok(result) => result,
+        Err(mpsc::RecvTimeoutError::Timeout) => Err(format!(
+            "{label} did not finish within {seconds}s; a driver or Windows service call is stuck"
+        )),
+        Err(mpsc::RecvTimeoutError::Disconnected) => {
+            Err(format!("{label} worker stopped unexpectedly"))
+        }
+    }
+}
+
 fn run() -> Result<(), String> {
     let cli = Cli::parse();
     match cli.command {
         Commands::InstallerStop { directory } => {
             #[cfg(windows)]
-            installer_stop::stop(&directory)?;
+            run_with_deadline(INSTALLER_STOP_DEADLINE_SECS, "stopping the installed app", move || {
+                installer_stop::stop(&directory)
+            })?;
             #[cfg(not(windows))]
             { let _ = directory; return Err("Installer cleanup requires Windows".into()); }
         }
@@ -175,9 +211,19 @@ fn run() -> Result<(), String> {
         Commands::Diagnostics => {
             println!("{}", wax_diagnostics::report(env!("WAX_BUILD_VERSION"), wax_tunnel::is_elevated(), Tunnel::existing_status()));
         }
-        Commands::Disconnect => {
-            Tunnel::force_disconnect().map_err(|e| e.to_string())?;
-            println!("Disconnected.");
+        Commands::Disconnect { best_effort } => {
+            // Driver, DNS and firewall calls have no timeout of their own and
+            // can block on a wedged Windows service; bound the whole cleanup
+            // so a stuck call can never freeze a terminal or the installer.
+            match run_with_deadline(DISCONNECT_DEADLINE_SECS, "disconnect cleanup", || {
+                Tunnel::force_disconnect().map_err(|e| e.to_string())
+            }) {
+                Ok(()) => println!("Disconnected."),
+                Err(e) if best_effort => {
+                    println!("Cleanup did not finish: {e}. Continuing without it.");
+                }
+                Err(e) => return Err(e),
+            }
         }
         Commands::Status => match Tunnel::existing_status().map_err(|e| e.to_string())? {
             Some(stats) => {
@@ -369,3 +415,28 @@ mod warp_profile_guard_tests {
         std::fs::remove_dir_all(dir).unwrap();
     }
                          }
+
+#[cfg(test)]
+mod deadline_tests {
+    use super::*;
+    #[test]
+    fn deadline_returns_finished_work() {
+        let value: Result<u32, String> = run_with_deadline(5, "test", || Ok(7));
+        assert_eq!(value.unwrap(), 7);
+    }
+    #[test]
+    fn deadline_interrupts_stuck_work() {
+        let started = std::time::Instant::now();
+        let result: Result<(), String> = run_with_deadline(1, "test", || {
+            std::thread::sleep(std::time::Duration::from_secs(60));
+            Ok(())
+        });
+        assert!(result.is_err());
+        assert!(started.elapsed() < std::time::Duration::from_secs(10));
+    }
+    #[test]
+    fn deadline_propagates_work_errors() {
+        let result: Result<(), String> = run_with_deadline(5, "test", || Err("inner".to_string()));
+        assert_eq!(result.unwrap_err(), "inner");
+    }
+}

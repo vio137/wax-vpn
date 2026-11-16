@@ -80,6 +80,10 @@ Section "waX VPN" SecMain
     SetOutPath "$PLUGINSDIR"
     File /oname=wax-installer.exe "payload\wax.exe"
     File /oname=wireguard.dll "payload\wireguard.dll"
+    ; Both cleanup steps are time-bounded inside the helper (30s stop, 45s
+    ; cleanup). A stuck driver or Windows service call fails the step instead
+    ; of freezing setup here, which is what produced "Installation Aborted".
+    DetailPrint "Stopping any running waX VPN app..."
     nsExec::Exec '"$PLUGINSDIR\wax-installer.exe" installer-stop "$INSTDIR"'
     Pop $0
     ${If} $0 != 0
@@ -88,8 +92,9 @@ Section "waX VPN" SecMain
         SetErrorLevel 1
         Abort
     ${EndIf}
-    IfFileExists "$INSTDIR\wax.exe" 0 +3
-        nsExec::Exec '"$PLUGINSDIR\wax-installer.exe" disconnect'
+    IfFileExists "$INSTDIR\wax.exe" 0 +4
+        DetailPrint "Cleaning up leftover tunnel state..."
+        nsExec::Exec '"$PLUGINSDIR\wax-installer.exe" disconnect --best-effort'
         Pop $0
     SetOutPath "$INSTDIR"
 
@@ -138,7 +143,7 @@ Section "Uninstall"
         SetErrorLevel 1
         Abort
     ${EndIf}
-    nsExec::Exec '"$INSTDIR\wax.exe" disconnect'
+    nsExec::Exec '"$INSTDIR\wax.exe" disconnect --best-effort'
     Pop $0
     Sleep 1000
 

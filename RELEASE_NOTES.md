@@ -1,28 +1,38 @@
-# waX VPN v1.0.30
+# waX VPN v1.0.31
 
-Windows Defender flagged the v1.0.29 installer during download on one user PC
-(severe trojan verdict on the partial download). The published v1.0.29 file is
-unchanged and its SHA-256 still matches the value below; the flag was a
-false-positive style heuristic verdict, not a tampered file. Investigation
-found the installer and both app binaries carried no Windows version metadata
-at all, which is a well-known machine-learning false-positive trigger for
-unsigned NSIS installers. This release embeds CompanyName, ProductName,
-FileDescription, FileVersion and related fields into both executables
-(waX VPN.exe, wax.exe) and into the installer itself. Nothing else about the
-binaries' behavior changed. The build remains unsigned, so SmartScreen and
-some antivirus products may still warn; metadata lowers false-positive odds
-but cannot guarantee every engine stays quiet. If an antivirus still flags
-this build, verify the SHA-256 below against the published value first, then
-report the product and exact detection name.
+Fix: the installer could freeze right after "Extract: wireguard.dll... 100%"
+and then show "Installation Aborted - Setup was not completed successfully"
+when cancelled. Reported on a user PC on 2026-11-16.
 
-Also included: the configured-route preview now reuses its bounded display
-strings while the selected loaded profile stays unchanged, instead of
-formatting them each frame. The cache is lazy, created only when routes are
-expanded, and retains at most 64 route labels for one selected profile plus a
-remainder count. It retains no config object or keys. Selection change and
-successful profile reload invalidate it. Failed reload keeps the existing
-loaded snapshot under the existing warning. No measured speedup is claimed.
-No UI layout, saved settings, clipboard export or networking behavior changed.
+Root cause: after extracting its files, setup runs two hidden cleanup commands
+from the bundled helper (wax-installer.exe): stop a running waX VPN app, then
+clean up leftover tunnel state. Stopping the app was already time-bounded, but
+the cleanup step called the WireGuard-NT driver, the DNS configuration API and
+the Windows Firewall COM service with no time limit. On a PC where one of
+those driver or service calls sticks (a leftover or mid-teardown tunnel
+adapter, a wedged firewall or network service, or antivirus interference with
+the freshly extracted helper), the cleanup never returned, the installer
+waited on it forever, and the setup log showed nothing after the extract
+lines. Cancelling the frozen setup produced "Installation Aborted".
+
+Changes:
+
+- Both cleanup commands now run under hard deadlines inside the helper:
+  30 seconds for stopping the installed app, 45 seconds for leftover tunnel
+  cleanup. A stuck call fails the step instead of freezing setup.
+- Leftover-state cleanup is now best-effort for setup and uninstall: a failed
+  or timed-out cleanup is noted and installation continues, since leftover
+  tunnel state never blocks new files from being written.
+- The setup log now narrates these steps ("Stopping any running waX VPN
+  app...", "Cleaning up leftover tunnel state..."), so a future stall names
+  the step it is stuck on.
+- The app's own `wax disconnect` command gains the same 45-second bound, so a
+  stuck driver call can no longer hang an interactive terminal either.
+
+No VPN, UI, profile, firewall or networking behavior changed apart from the
+bounded cleanup described above. The build remains unsigned, so SmartScreen
+and some antivirus products may still warn; verify the SHA-256 in
+SHA256SUMS-v1.0.31.txt against the downloaded file.
 
 ## Compatibility and limits
 
@@ -39,29 +49,14 @@ No kill switch is provided. Traffic can use the normal connection when the
 tunnel is off. Live WARP registration is not verified.
 
 The release gate runs on a hosted Windows Server 2025 runner with installed
-runtimes and a virtual display, not a clean Windows 10/11 PC. It does not prove
-the reported consumer-PC crash is fixed. A peer handshake and tunnel-address
-ping do not prove Internet reachability. Tray-menu clicks need real Windows
-review. Runner OpenGL rendering/dismissal remain unverified. Console-window
-sampling can miss a shorter flash.
+runtimes and a virtual display, not a clean Windows 10/11 PC. The gate covers
+fresh install, running-app upgrade, uninstall and bounded-cleanup fixtures; it
+cannot reproduce every consumer-PC driver or antivirus state, including the
+exact stuck state reported for this fix. The 30s/45s deadlines bound the
+failure regardless of its cause.
 
 ## Release verification
 
-Metadata build verified locally before publication: the installer script
-compiles for both stable and preview versions and the produced installer
-carries the full VERSIONINFO block (CompanyName, ProductName, FileDescription,
-FileVersion, OriginalFilename, LegalCopyright) with the correct numeric
-1.0.30.0 version. The Rust resource build scripts compile and generate the
-matching VERSIONINFO for both executables. Hosted-gate results (Windows tests,
-demo tunnel, GUI fixture, installer smoke, published checksum match) are added
-to this release after the stable run completes.
-
-Optional layout-state captures remain unverified because their separate harness
-host lacks System.Drawing; the CI-only fix remains deferred for workflow
-permissions. This candidate does not change the workflow.
-
-## Design review
-
-Preserved the existing graphite card, route labels, explicit limits and 128px
-scroll bound. No visual decoration, spacing or motion changes. Design reference:
-Unslop by Damir Sokolovsky (@heydamir), CC BY 4.0, used as a review rubric.
+Hosted-gate results (Windows tests, demo tunnel, GUI fixture, installer smoke,
+published checksum match) are added to this release after the stable run
+completes.
