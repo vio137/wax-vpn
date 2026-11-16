@@ -57,6 +57,10 @@ failure regardless of its cause.
 
 ## Release verification
 
-Hosted-gate results (Windows tests, demo tunnel, GUI fixture, installer smoke,
-published checksum match) are added to this release after the stable run
-completes.
+Hosted-gate results (stable run 43826517343, Windows Server 2025, November
+16, 2026): build passed; workspace tests passed, including the new cleanup
+deadline tests; demo-tunnel and GUI verification passed; fresh-runner install,
+running-app upgrade, quit and uninstall passed; the bounded-cleanup fixtures
+passed; the published installer SHA-256 matches SHA256SUMS-v1.0.31.txt
+(93a0cc9b2de0646a2e57e92a3dc2d999db151d13502b510d3db7a496fa094afb).
+
